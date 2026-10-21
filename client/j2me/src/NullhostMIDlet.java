@@ -20,10 +20,10 @@ import javax.microedition.io.file.FileSystemRegistry;
  */
 public class NullhostMIDlet extends MIDlet implements CommandListener {
 
-    private static final String APP_VERSION = "1.0.0";
+    private static final String APP_VERSION = "1.1.0";
     private static final String CLIENT_ID = "j2me-universal";
     private static final String MOBILE_SECRET = "nullhost_secret_mobile_app_key_2026";
-    private static final String DEFAULT_SERVER = "https://nullhost.gelaxiz.fi";
+    private static final String DEFAULT_SERVER = "https://nullhost.cc";
 
     private Display display;
 
@@ -188,7 +188,7 @@ public class NullhostMIDlet extends MIDlet implements CommandListener {
             } else {
                 FileConnection fc = (FileConnection) Connector.open(dirUrl, Connector.READ);
                 if (fc.isDirectory()) {
-                    Enumeration list = fc.list("*", true);
+                    Enumeration list = fc.list();
                     while (list.hasMoreElements()) {
                         String name = (String) list.nextElement();
                         currentEntries.addElement(dirUrl + name);
@@ -456,7 +456,7 @@ public class NullhostMIDlet extends MIDlet implements CommandListener {
 
     private String authenticateApp() throws Exception {
         long ts = (System.currentTimeMillis() / 1000L) + timeOffset;
-        String nonce = Long.toHexString(System.currentTimeMillis()) + "abcd";
+        String nonce = Long.toString(System.currentTimeMillis(), 16) + "abcd";
         String payload = CLIENT_ID + ":" + ts + ":" + nonce;
         String signature = CryptoHelper.hmacSha256Hex(MOBILE_SECRET, payload);
 

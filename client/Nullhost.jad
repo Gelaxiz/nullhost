@@ -7,5 +7,5 @@ MIDlet-Description: Fast, anonymous, ephemeral file hosting for Symbian and Java
 MicroEdition-Configuration: CLDC-1.1
 MicroEdition-Profile: MIDP-2.0
 MIDlet-Jar-URL: Nullhost.jar
-MIDlet-Jar-Size: 16711
+MIDlet-Jar-Size: 16559
 MIDlet-Permissions: javax.microedition.io.Connector.http, javax.microedition.io.Connector.file.read
