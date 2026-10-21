@@ -15,9 +15,11 @@ Universal Java ME application compatible with virtually any mobile phone support
   - About Nullhost (with live JVM heap memory and screen resolution display)
 
 ## Compilation & Packaging
-Compiled against MIDP 2.0 and JSR-75 stubs:
+Compiled against MIDP 2.0 and JSR-75 standard APIs:
 ```bash
-python3 tools/package_apps.py
+mkdir -p build
+javac -source 1.6 -target 1.6 -cp microemulator.jar:microemu-jsr-75.jar -d build src/*.java
+jar cfm Nullhost.jar Manifest.mf -C build .
 ```
 Output:
 - `client/Nullhost.jar`
