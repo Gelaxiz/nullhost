@@ -111,27 +111,19 @@ def prevent_uploaded_content_indexing(response):
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 init_db()
 
-ADMIN_TOTP_FILE = os.path.join(os.path.dirname(__file__), '.admin_totp_secret')
-for sensitive_file in (SECRET_KEY_FILE, ADMIN_TOTP_FILE, LOCAL_ENV_FILE):
+for sensitive_file in (SECRET_KEY_FILE, LOCAL_ENV_FILE):
     if os.path.exists(sensitive_file):
         os.chmod(sensitive_file, 0o600)
 
 def get_admin_totp_secret():
-    if os.path.exists(ADMIN_TOTP_FILE):
-        with open(ADMIN_TOTP_FILE, 'r') as f:
-            secret = f.read().strip()
-            if secret:
-                return secret
-    secret = base64.b32encode(os.urandom(20)).decode('utf-8')
-    with open(ADMIN_TOTP_FILE, 'w') as f:
-        f.write(secret)
-    os.chmod(ADMIN_TOTP_FILE, 0o600)
-    return secret
+    return os.environ.get('ADMIN_TOTP_SECRET', '').strip()
 
 def verify_admin_totp(code):
     if not code:
         return False
     secret = get_admin_totp_secret()
+    if not secret:
+        return False
     totp = pyotp.TOTP(secret)
     return totp.verify(str(code).strip(), valid_window=1)
 
@@ -1975,7 +1967,6 @@ def admin_gate():
     now = time.time()
     last_failed = admin_login_attempts.get(ip, 0)
     cooldown_remaining = max(0, int(10 - (now - last_failed)))
-    totp_secret = get_admin_totp_secret()
     
     if request.method == 'POST':
         action = request.form.get('action')
@@ -1984,7 +1975,7 @@ def admin_gate():
             return redirect(url_for('index'))
             
         if cooldown_remaining > 0:
-            return render_template('admin_login.html', error=f"cooldown active. please wait {cooldown_remaining} seconds.", cooldown=cooldown_remaining, totp_secret=totp_secret), 429
+            return render_template('admin_login.html', error=f"cooldown active. please wait {cooldown_remaining} seconds.", cooldown=cooldown_remaining), 429
             
         totp_code = request.form.get('totp_code', '')
         if verify_admin_totp(totp_code):
@@ -1994,11 +1985,11 @@ def admin_gate():
             return redirect(url_for('admin_dashboard'))
         else:
             admin_login_attempts[ip] = time.time()
-            return render_template('admin_login.html', error="incorrect 6-digit authenticator code.", cooldown=10, totp_secret=totp_secret), 429
+            return render_template('admin_login.html', error="incorrect 6-digit authenticator code.", cooldown=10), 429
             
     if session.get('is_admin'):
         return redirect(url_for('admin_dashboard'))
-    return render_template('admin_login.html', cooldown=cooldown_remaining, totp_secret=totp_secret)
+    return render_template('admin_login.html', cooldown=cooldown_remaining)
 
 @app.route('/gelaxiz_admin_gate', methods=['GET', 'POST'])
 def gelaxiz_admin_gate_redirect():
@@ -2032,7 +2023,7 @@ def admin_dashboard():
         'tomb_count': tomb_count,
         'total_size_mb': round(total_size / 1048576, 2) if total_size else 0
     }
-    return render_template('admin_dashboard.html', stats=stats, items=items, accounts=accounts, tombstones=tombstones, now=int(time.time()), totp_secret=get_admin_totp_secret(), q=q)
+    return render_template('admin_dashboard.html', stats=stats, items=items, accounts=accounts, tombstones=tombstones, now=int(time.time()), q=q)
 
 @app.route('/admin/update_tombstone_reason/<tomb_id>', methods=['POST'])
 def admin_update_tombstone_reason(tomb_id):
@@ -2042,27 +2033,6 @@ def admin_update_tombstone_reason(tomb_id):
         with get_db() as conn:
             conn.execute("UPDATE tombstones SET reason = ? WHERE id = ?", (new_reason, tomb_id))
             conn.commit()
-    return redirect(url_for('admin_dashboard'))
-
-@app.route('/admin/totp_qr.png')
-def admin_totp_qr():
-    if not session.get('is_admin'):
-        return abort(403)
-    secret = get_admin_totp_secret()
-    uri = pyotp.totp.TOTP(secret).provisioning_uri(name="SysAdmin", issuer_name="Nullhost")
-    img = qrcode.make(uri)
-    buf = io.BytesIO()
-    img.save(buf, format='PNG')
-    buf.seek(0)
-    return send_file(buf, mimetype='image/png')
-
-@app.route('/admin/reset_totp_secret', methods=['POST'])
-def admin_reset_totp_secret():
-    if not session.get('is_admin'): return abort(403)
-    secret = base64.b32encode(os.urandom(10)).decode('utf-8')
-    with open(ADMIN_TOTP_FILE, 'w') as f:
-        f.write(secret)
-    os.chmod(ADMIN_TOTP_FILE, 0o600)
     return redirect(url_for('admin_dashboard'))
 
 @app.route('/admin/delete_item/<item_id>', methods=['POST'])

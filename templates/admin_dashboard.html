@@ -215,24 +215,6 @@
     {% endif %}
 </div>
 
-<hr>
 
-<!-- 2FA -->
-<div class="section">
-    <h3>2fa / totp</h3>
-    <div class="totp-card">
-        <div style="flex:1; min-width:220px;">
-            <p class="meta" style="margin-bottom:10px;">portal protected by totp. use google authenticator, authy, or any totp app.</p>
-            <p class="meta"><strong style="color:var(--text-2);">secret:</strong> <code>{{ totp_secret }}</code></p>
-            <form action="/admin/reset_totp_secret" method="post" class="form-inline" style="margin-top:10px;" onsubmit="return confirm('generating a new secret invalidates your current 2FA app. continue?');">
-                <button type="submit" class="btn-small">regenerate secret</button>
-            </form>
-        </div>
-        <div class="totp-qr">
-            <div class="totp-qr-label">qr code</div>
-            <img src="/admin/totp_qr.png" alt="2FA QR Code">
-        </div>
-    </div>
-</div>
 
 {% endblock %}
