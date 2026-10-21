@@ -1,11 +1,11 @@
 MIDlet-Name: Nullhost
-MIDlet-Version: 1.1.0
+MIDlet-Version: 1.2.0
 MIDlet-Vendor: Gelaxiz
 MIDlet-Icon: /icon.png
 MIDlet-1: Nullhost, /icon.png, org.gelaxiz.nullhost.NullhostMIDlet
-MIDlet-Description: Fast, anonymous, ephemeral file hosting for Symbian and Java ME
+MIDlet-Description: Direct, fast file & photo uploader for Symbian and Java ME
 MicroEdition-Configuration: CLDC-1.1
 MicroEdition-Profile: MIDP-2.0
 MIDlet-Jar-URL: Nullhost.jar
-MIDlet-Jar-Size: 16559
+MIDlet-Jar-Size: 18475
 MIDlet-Permissions: javax.microedition.io.Connector.http, javax.microedition.io.Connector.file.read

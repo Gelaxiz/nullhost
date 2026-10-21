@@ -8,23 +8,26 @@
     <meta name="theme-color" content="#090a0d">
     {% if legacy_mode %}
     <meta name="HandheldFriendly" content="true">
-    <meta name="MobileOptimized" content="width">
+    <meta name="MobileOptimized" content="360">
     <style type="text/css">
         html, body {
             margin: 0;
             padding: 0;
+            width: 100%;
             min-height: 100%;
-            background-color: #0c0d10;
-            color: #d8dadf;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            font-size: 14px;
+            background-color: #0c0d10 !important;
+            color: #d8dadf !important;
+            font-family: Arial, Helvetica, sans-serif;
+            font-size: 15px;
             line-height: 1.4;
         }
         body {
-            max-width: 680px;
+            width: 100%;
+            max-width: 600px;
             margin: 0 auto;
-            padding: 12px 14px 28px;
+            padding: 10px 12px 32px;
             box-sizing: border-box;
+            background-color: #0c0d10 !important;
         }
         a {
             color: #38bdf8;
@@ -126,22 +129,27 @@
             color: #ffffff;
             border: 1px solid #323742;
             border-radius: 6px;
-            padding: 8px 10px;
-            margin: 4px 0 12px;
+            padding: 10px 12px;
+            margin: 4px 0 14px;
             display: block;
+            min-height: 42px;
         }
         input[type="submit"], button.btn {
-            background: #2563eb;
+            background: #00a6e2;
             color: #ffffff;
-            border: 1px solid #3b82f6;
+            border: 1px solid #00a6e2;
             border-radius: 6px;
-            padding: 8px 16px;
-            font-weight: 600;
+            padding: 12px 18px;
+            font-size: 16px;
+            font-weight: bold;
             cursor: pointer;
-            display: inline-block;
+            display: block;
+            width: 100%;
+            min-height: 46px;
+            text-align: center;
         }
         input[type="submit"]:hover, button.btn:hover {
-            background: #1d4ed8;
+            background: #008cc0;
         }
         .theme-toggle { display: none; }
     </style>

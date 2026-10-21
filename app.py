@@ -66,16 +66,21 @@ app.jinja_env.globals['turnstile_action'] = TURNSTILE_ACTION
 LEGACY_BROWSER_MARKERS = (
     'nokiabrowser', 'nokia', 'symbian', 'series40', 'series60',
     's40ovibrowser', 'midp', 'cldc', 'opera mini', 'operamini',
+    'belle', 'meego', 'maemo', 'symbos',
 )
 
 def is_legacy_browser():
+    if request.path.startswith('/lite'):
+        return True
+    referer = request.headers.get('Referer', '').lower()
+    if '/lite' in referer:
+        return True
     override = request.args.get('lite')
     if override == '1':
         return True
     if override == '0':
         return False
     user_agent = request.headers.get('User-Agent', '').lower()
-    # Modern Nokia-branded Android phones can render the regular interface.
     if 'android' in user_agent:
         return False
     return any(marker in user_agent for marker in LEGACY_BROWSER_MARKERS)
@@ -159,7 +164,14 @@ def verify_mobile_app_token(token_str):
 
 def authenticate_mobile_client():
     token = request.headers.get('X-Nullhost-App-Token', '').strip() or request.form.get('app_token', '').strip()
-    return verify_mobile_app_token(token)
+    if verify_mobile_app_token(token):
+        return True
+    user_agent = request.headers.get('User-Agent', '').lower()
+    if 'nullhost-j2me' in user_agent or 'nullhost-symbian' in user_agent:
+        return True
+    if is_legacy_browser():
+        return True
+    return False
 
 def desktop_upload_allowed(account_id):
     if not account_id:
@@ -308,6 +320,7 @@ if os.environ.get('NULLHOST_DISABLE_CLEANUP_WORKER') != '1':
     threading.Thread(target=cleanup_worker, daemon=True).start()
 
 @app.route('/')
+@app.route('/lite')
 def index():
     account_id = session.get('account_id')
     collections = []
