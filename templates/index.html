@@ -1,0 +1,1110 @@
+{% extends "base.html" %}
+{% block content %}
+
+<h1>nullhost</h1>
+<p class="meta">temporary file and paste hosting.</p>
+
+{% if not logged_in %}
+<div class="alert">
+    anonymous uploads expire in 1 day and are tied to your session.
+    <a href="/a">[create account]</a>
+</div>
+{% endif %}
+
+<hr>
+
+<!-- Search -->
+<div class="section">
+    <h3>find</h3>
+    <form action="/search" method="get">
+        <input type="text" name="id" placeholder="8-letter code or custom link...">
+        <div class="btn-row">
+            <button type="submit">search</button>
+        </div>
+    </form>
+</div>
+
+<hr>
+
+<!-- File upload -->
+<div class="section">
+    <h3>upload file</h3>
+    <p class="meta">max 10 gb · multiple files automatically create a collection · chunked in 95 mb slices.</p>
+
+    <form id="file-upload-form" action="/upload" method="post" enctype="multipart/form-data" class="drop-zone">
+        <div class="upload-source-picker">
+            <div class="upload-type-selector" role="tablist" aria-label="Upload source">
+                <button type="button" class="upload-type-btn active" id="btn-mode-files" role="tab" aria-selected="true">
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
+                    <span>files</span>
+                </button>
+                <button type="button" class="upload-type-btn" id="btn-mode-folder" role="tab" aria-selected="false">
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
+                    <span>folder</span>
+                </button>
+            </div>
+
+            <div class="upload-picker-box" id="box-picker-files">
+                <button type="button" class="btn-select-source" id="btn-select-files">
+                    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
+                    <span>choose files</span>
+                </button>
+                <span class="upload-picker-hint">or drop files here · up to 10 gb</span>
+            </div>
+
+            <div class="upload-picker-box" id="box-picker-folder" style="display:none;">
+                <button type="button" class="btn-select-source" id="btn-select-folder">
+                    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
+                    <span>select folder…</span>
+                </button>
+                <span class="upload-picker-hint">or drop a folder here · automatically creates collection</span>
+            </div>
+
+            <input type="file" id="file-input" name="file" multiple required class="visually-hidden-file-input" aria-hidden="true" tabindex="-1">
+            <input type="file" id="folder-input" name="folder" webkitdirectory directory mozdirectory multiple class="visually-hidden-file-input" aria-hidden="true" tabindex="-1">
+
+            <div id="selection-summary" class="selection-summary" style="display:none;">
+                <span class="selection-summary-icon" id="selection-summary-icon">📁</span>
+                <div class="selection-summary-text">
+                    <strong id="selection-summary-title"></strong>
+                    <span id="selection-summary-meta"></span>
+                </div>
+                <button type="button" id="btn-clear-selection" class="btn-small" aria-label="Change selection">change</button>
+            </div>
+        </div>
+
+        <label>expiry</label>
+        <select name="expiry" id="expiry_file" onchange="window.nullhostMotion.setReveal(document.getElementById('custom_expiry_file'), this.value === 'custom');">
+            <option value="3600">1 hour</option>
+            <option value="86400" selected>1 day</option>
+            {% if logged_in %}
+            <option value="604800">1 week</option>
+            <option value="2592000">1 month</option>
+            <option value="15552000">6 months</option>
+            <option value="infinity">never</option>
+            {% endif %}
+            <option value="custom">custom (days)</option>
+        </select>
+        <div id="custom_expiry_file" class="anim-reveal" style="margin-top:6px;">
+            <input type="number" name="custom_expiry_days" min="1" placeholder="number of days">
+        </div>
+
+        <button type="button" class="adv-toggle" aria-expanded="false" aria-controls="adv-file">
+            <span>advanced options</span>
+        </button>
+
+        <div id="adv-file" class="adv-section anim-reveal" aria-hidden="true">
+            <label>custom filename</label>
+            <input type="text" name="custom_filename" placeholder="e.g. document.pdf">
+
+            <label>link format</label>
+            <div class="radio-group">
+                <label class="inline"><input type="radio" name="url_format" value="both" checked onclick="window.nullhostMotion.setReveal(document.getElementById('custom_id_file'), false)"> numbers &amp; letters (default)</label>
+                <label class="inline"><input type="radio" name="url_format" value="numbers" onclick="window.nullhostMotion.setReveal(document.getElementById('custom_id_file'), false)"> numbers only</label>
+                <label class="inline"><input type="radio" name="url_format" value="letters" onclick="window.nullhostMotion.setReveal(document.getElementById('custom_id_file'), false)"> letters only</label>
+                <label class="inline"><input type="radio" name="url_format" value="custom" onclick="window.nullhostMotion.setReveal(document.getElementById('custom_id_file'), true)"> custom link</label>
+            </div>
+            <div id="custom_id_file" class="custom-link-block anim-reveal">
+                <span class="custom-link-label">custom link</span>
+                <input type="text" name="custom_id" placeholder="e.g. my-file (alphanumeric &amp; dashes)">
+                <span class="custom-link-hint">your link will be nullhost.gelaxiz.xyz/v/<em>your-link</em></span>
+            </div>
+
+            {% if collections %}
+            <label for="collection_file">add to collection</label>
+            <select name="collection_id" id="collection_file">
+                <option value="">no collection</option>
+                {% for collection in collections %}
+                <option value="{{ collection['id'] }}" {% if request.args.get('collection') == collection['id'] %}selected{% endif %}>{{ collection['name'] }}</option>
+                {% endfor %}
+            </select>
+            <label for="collection_folder_file">collection folder</label>
+            <input type="text" name="collection_folder" id="collection_folder_file" placeholder="optional, e.g. photos/day-1">
+            {% endif %}
+
+            <label>password (optional)</label>
+            <input type="password" name="password">
+
+            <label>burn limit — views before deletion (0 = off)</label>
+            <input type="number" name="burn_limit" value="0" min="0">
+
+            <div class="advanced-choice">
+                <label class="inline"><input type="checkbox" name="dynamic_expiry"> extend expiration when viewed</label>
+                <button type="button" class="help-toggle" aria-expanded="false" aria-controls="dynamic-expiry-help-file" aria-label="How dynamic expiration works">?</button>
+            </div>
+            <p id="dynamic-expiry-help-file" class="field-help" hidden>Each raw view or download adds 3 days, up to 180 days after upload. Opening the info page does not extend it.</p>
+
+            <div style="margin-top:12px;">
+                <label class="inline"><input type="checkbox" name="scrub_exif" checked> strip exif / location metadata from images</label>
+            </div>
+            {% if logged_in %}
+            <div style="margin-top:8px;">
+                <label class="inline"><input type="checkbox" name="is_public"> make public in repository</label>
+            </div>
+            {% endif %}
+        </div>
+
+        <div class="turnstile-wrap upload-verification" data-turnstile-gate hidden>
+            <strong>one quick check before uploading</strong>
+            <span class="meta">Complete this verification and the upload will start automatically.</span>
+            <div class="cf-turnstile" data-turnstile-target data-action="turnstile-spin-v2"></div>
+        </div>
+
+        <div class="btn-row">
+            <button type="submit" id="file-upload-btn" class="primary">upload</button>
+            <span class="meta" style="margin:0;">by uploading you agree to the <a href="/tos">tos</a>.</span>
+        </div>
+
+        <div id="progress-container" class="anim-reveal" style="margin-top:14px;">
+            <progress id="upload-progress" value="0" max="100"></progress>
+            <div style="display:flex; justify-content:space-between; align-items:baseline; margin-top:6px; gap:8px;">
+                <div class="progress-label" id="progress-text" style="margin-top:0;">0%</div>
+                <div class="progress-label" id="progress-speed" style="margin-top:0; font-variant-numeric:tabular-nums; color:var(--text-1); font-weight:600; text-align:right;"></div>
+            </div>
+            <div class="progress-label" id="progress-chunks" style="margin-top:4px; font-size:0.75rem; color:var(--text-3); font-variant-numeric:tabular-nums;"></div>
+
+            <!-- Immediate Share Link Dropdown -->
+            <details id="early-link-details" class="early-link-details" style="display:none;">
+                <summary id="early-link-summary" class="early-link-summary">
+                    <span class="early-link-badge">LIVE LINK</span>
+                    <span class="early-link-title" id="early-link-title">Get share link straight away</span>
+                    <span class="early-link-icon" aria-hidden="true">▾</span>
+                </summary>
+                <div class="early-link-panel">
+                    <div class="early-link-desc" id="early-link-desc">
+                        Link is registered and active now. You can copy it immediately. If the upload stops or is cancelled, whatever partial content was transferred will be served at this link.
+                    </div>
+                    <div class="early-link-input-row">
+                        <input type="text" id="early-link-url" readonly spellcheck="false" class="early-link-input" aria-label="Share link ready immediately">
+                        <button type="button" id="early-link-copy-btn" class="early-link-copy-btn">copy link</button>
+                    </div>
+                    <div class="early-link-links-row">
+                        <a id="early-link-view-anchor" href="#" target="_blank" rel="noopener" class="early-link-sublink">open overview ↗</a>
+                        <a id="early-link-raw-anchor" href="#" target="_blank" rel="noopener" class="early-link-sublink">raw ↗</a>
+                        <a id="early-link-dl-anchor" href="#" target="_blank" rel="noopener" class="early-link-sublink">download ↗</a>
+                        <button type="button" id="early-link-stop-btn" class="early-link-stop-btn" title="Stop upload and keep what was transferred so far">stop &amp; keep partial</button>
+                    </div>
+                </div>
+            </details>
+        </div>
+    </form>
+</div>
+
+<div id="collection-created-toast" class="collection-created-toast" role="status" aria-live="polite" hidden>
+    <span id="collection-created-message"></span>
+    <button type="button" id="name-created-collection" class="btn-small">give it a name</button>
+    <button type="button" id="copy-created-collection" class="btn-small">copy info page</button>
+    <a id="open-created-collection" class="btn-small" href="#">open link</a>
+</div>
+
+<hr>
+
+<!-- Paste -->
+<div class="section">
+    <h3>create paste</h3>
+    <form id="paste-upload-form" action="/upload" method="post">
+        <textarea name="paste_content" required placeholder="enter text here..."></textarea>
+
+        <label>expiry</label>
+        <select name="expiry" id="expiry_paste" onchange="window.nullhostMotion.setReveal(document.getElementById('custom_expiry_paste'), this.value === 'custom');">
+            <option value="3600">1 hour</option>
+            <option value="86400" selected>1 day</option>
+            {% if logged_in %}
+            <option value="604800">1 week</option>
+            <option value="2592000">1 month</option>
+            <option value="15552000">6 months</option>
+            <option value="infinity">never</option>
+            {% endif %}
+            <option value="custom">custom (days)</option>
+        </select>
+        <div id="custom_expiry_paste" class="anim-reveal" style="margin-top:6px;">
+            <input type="number" name="custom_expiry_days" min="1" placeholder="number of days">
+        </div>
+
+        <button type="button" class="adv-toggle" aria-expanded="false" aria-controls="adv-paste">
+            <span>advanced options</span>
+        </button>
+
+        <div id="adv-paste" class="adv-section anim-reveal" aria-hidden="true">
+            <label>link format</label>
+            <div class="radio-group">
+                <label class="inline"><input type="radio" name="url_format" value="both" checked onclick="window.nullhostMotion.setReveal(document.getElementById('custom_id_paste'), false)"> numbers &amp; letters (default)</label>
+                <label class="inline"><input type="radio" name="url_format" value="numbers" onclick="window.nullhostMotion.setReveal(document.getElementById('custom_id_paste'), false)"> numbers only</label>
+                <label class="inline"><input type="radio" name="url_format" value="letters" onclick="window.nullhostMotion.setReveal(document.getElementById('custom_id_paste'), false)"> letters only</label>
+                <label class="inline"><input type="radio" name="url_format" value="custom" onclick="window.nullhostMotion.setReveal(document.getElementById('custom_id_paste'), true)"> custom link</label>
+            </div>
+            <div id="custom_id_paste" class="custom-link-block anim-reveal">
+                <span class="custom-link-label">custom link</span>
+                <input type="text" name="custom_id" placeholder="e.g. my-paste (alphanumeric &amp; dashes)">
+                <span class="custom-link-hint">your link will be nullhost.gelaxiz.xyz/v/<em>your-link</em></span>
+            </div>
+
+            {% if collections %}
+            <label for="collection_paste">add to collection</label>
+            <select name="collection_id" id="collection_paste">
+                <option value="">no collection</option>
+                {% for collection in collections %}
+                <option value="{{ collection['id'] }}" {% if request.args.get('collection') == collection['id'] %}selected{% endif %}>{{ collection['name'] }}</option>
+                {% endfor %}
+            </select>
+            <label for="collection_folder_paste">collection folder</label>
+            <input type="text" name="collection_folder" id="collection_folder_paste" placeholder="optional, e.g. notes">
+            {% endif %}
+
+            <label>password (optional)</label>
+            <input type="password" name="password">
+
+            <label>burn limit — views before deletion (0 = off)</label>
+            <input type="number" name="burn_limit" value="0" min="0">
+
+            <div class="advanced-choice">
+                <label class="inline"><input type="checkbox" name="dynamic_expiry"> extend expiration when viewed</label>
+                <button type="button" class="help-toggle" aria-expanded="false" aria-controls="dynamic-expiry-help-paste" aria-label="How dynamic expiration works">?</button>
+            </div>
+            <p id="dynamic-expiry-help-paste" class="field-help" hidden>Each raw view or download adds 3 days, up to 180 days after upload. Opening the info page does not extend it.</p>
+
+            {% if logged_in %}
+            <div style="margin-top:12px;">
+                <label class="inline"><input type="checkbox" name="is_public"> make public in repository</label>
+            </div>
+            {% endif %}
+        </div>
+
+        <div class="turnstile-wrap upload-verification" data-turnstile-gate hidden>
+            <strong>one quick check before creating the paste</strong>
+            <span class="meta">Complete this verification and your paste will be created automatically.</span>
+            <div class="cf-turnstile" data-turnstile-target data-action="turnstile-spin-v2"></div>
+        </div>
+
+        <div class="btn-row">
+            <button type="submit" id="paste-upload-btn" class="primary">create paste</button>
+            <span class="meta" style="margin:0;">by uploading you agree to the <a href="/tos">tos</a>.</span>
+        </div>
+    </form>
+</div>
+
+<script>
+    var turnstileSiteKey = {{ turnstile_site_key|tojson }};
+    var turnstileAction = {{ turnstile_action|tojson }};
+
+    function waitForTurnstile() {
+        return new Promise(function(resolve, reject) {
+            var attempts = 0;
+            function check() {
+                if (window.turnstile && window.turnstile.render) return resolve();
+                if (++attempts > 100) return reject(new Error('Verification could not load. Check your connection and try again.'));
+                setTimeout(check, 100);
+            }
+            check();
+        });
+    }
+
+    async function verifyBeforeSubmit(form) {
+        if (!{{ turnstile_enabled|tojson }}) {
+            return '';
+        }
+        // Clear any stale turnstile response inputs
+        form.querySelectorAll('input[name="cf-turnstile-response"]').forEach(function(el) { el.remove(); });
+        var gate = form.querySelector('[data-turnstile-gate]');
+        if (!gate) return '';
+        gate.hidden = false;
+        gate.scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'center' });
+        await waitForTurnstile();
+        return new Promise(function(resolve, reject) {
+            var target = gate.querySelector('[data-turnstile-target]');
+            if (target.dataset.widgetId && window.turnstile) {
+                try { window.turnstile.remove(target.dataset.widgetId); } catch(e) {}
+            }
+            delete target.dataset.widgetId;
+            target.replaceChildren();
+
+            target.dataset.widgetId = window.turnstile.render(target, {
+                sitekey: turnstileSiteKey,
+                action: turnstileAction,
+                theme: 'auto',
+                callback: function(token) {
+                    var hiddenInput = document.createElement('input');
+                    hiddenInput.type = 'hidden';
+                    hiddenInput.name = 'cf-turnstile-response';
+                    hiddenInput.value = token;
+                    form.appendChild(hiddenInput);
+                    gate.hidden = true;
+                    resolve(token);
+                },
+                'error-callback': function() {
+                    delete target.dataset.widgetId;
+                    reject(new Error('Verification failed to load. Please try again.'));
+                },
+                'expired-callback': function() {
+                    if (target.dataset.widgetId && window.turnstile) {
+                        try { window.turnstile.reset(target.dataset.widgetId); } catch(e) {}
+                    }
+                }
+            });
+        });
+    }
+
+    function clearTurnstileGate(form) {
+        if (!form) return;
+        form.querySelectorAll('input[name="cf-turnstile-response"]').forEach(function(el) { el.remove(); });
+        var gate = form.querySelector('[data-turnstile-gate]');
+        if (!gate) return;
+        var target = gate.querySelector('[data-turnstile-target]');
+        if (target && target.dataset.widgetId && window.turnstile) {
+            try { window.turnstile.remove(target.dataset.widgetId); } catch(e) {}
+        }
+        if (target) {
+            delete target.dataset.widgetId;
+            target.replaceChildren();
+        }
+        gate.hidden = true;
+    }
+
+    document.querySelectorAll('.adv-toggle').forEach(function(toggle) {
+        toggle.addEventListener('click', function() {
+            var panel = document.getElementById(toggle.getAttribute('aria-controls'));
+            var isOpen = toggle.getAttribute('aria-expanded') === 'true';
+            toggle.setAttribute('aria-expanded', String(!isOpen));
+            if (window.nullhostMotion) {
+                window.nullhostMotion.setReveal(panel, !isOpen);
+            } else {
+                panel.setAttribute('aria-hidden', String(isOpen));
+                panel.classList.toggle('is-open', !isOpen);
+            }
+        });
+    });
+
+    document.querySelectorAll('.help-toggle').forEach(function(toggle) {
+        toggle.addEventListener('click', function() {
+            var help = document.getElementById(toggle.getAttribute('aria-controls'));
+            var isOpen = toggle.getAttribute('aria-expanded') === 'true';
+            toggle.setAttribute('aria-expanded', String(!isOpen));
+            help.hidden = isOpen;
+        });
+    });
+
+    /* File & Folder selection state */
+    var selectedFiles = null;
+    var isFolderUpload = false;
+    var folderName = '';
+    var activeUploadMode = 'files';
+    var fileInput = document.getElementById('file-input');
+    var folderInput = document.getElementById('folder-input');
+    var tabFiles = document.getElementById('btn-mode-files');
+    var tabFolder = document.getElementById('btn-mode-folder');
+    var boxPickerFiles = document.getElementById('box-picker-files');
+    var boxPickerFolder = document.getElementById('box-picker-folder');
+    var btnSelectFiles = document.getElementById('btn-select-files');
+    var btnSelectFolder = document.getElementById('btn-select-folder');
+    var clearSelectionBtn = document.getElementById('btn-clear-selection');
+    var selectionSummary = document.getElementById('selection-summary');
+    var selectionSummaryTitle = document.getElementById('selection-summary-title');
+    var selectionSummaryMeta = document.getElementById('selection-summary-meta');
+    var selectionSummaryIcon = document.getElementById('selection-summary-icon');
+
+    function setUploadMode(mode) {
+        activeUploadMode = mode;
+        if (mode === 'folder') {
+            if (tabFiles) { tabFiles.classList.remove('active'); tabFiles.setAttribute('aria-selected', 'false'); }
+            if (tabFolder) { tabFolder.classList.add('active'); tabFolder.setAttribute('aria-selected', 'true'); }
+            if (boxPickerFiles) boxPickerFiles.style.display = 'none';
+            if (boxPickerFolder) boxPickerFolder.style.display = (!selectedFiles || !selectedFiles.length) ? 'flex' : 'none';
+            if (fileInput) fileInput.removeAttribute('required');
+        } else {
+            if (tabFolder) { tabFolder.classList.remove('active'); tabFolder.setAttribute('aria-selected', 'false'); }
+            if (tabFiles) { tabFiles.classList.add('active'); tabFiles.setAttribute('aria-selected', 'true'); }
+            if (boxPickerFolder) boxPickerFolder.style.display = 'none';
+            if (boxPickerFiles) boxPickerFiles.style.display = (!selectedFiles || !selectedFiles.length) ? 'flex' : 'none';
+            if (fileInput && (!selectedFiles || !selectedFiles.length)) {
+                fileInput.setAttribute('required', 'required');
+            }
+        }
+    }
+
+    if (tabFiles) {
+        tabFiles.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            setUploadMode('files');
+        });
+    }
+
+    if (tabFolder) {
+        tabFolder.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            setUploadMode('folder');
+        });
+    }
+
+    if (btnSelectFiles && fileInput) {
+        btnSelectFiles.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            fileInput.click();
+        });
+    }
+
+    if (btnSelectFolder && folderInput) {
+        btnSelectFolder.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            folderInput.click();
+        });
+    }
+
+    function formatBytes(bytes) {
+        if (!bytes || bytes <= 0) return '0 B';
+        if (bytes < 1024) return bytes + ' B';
+        if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+        if (bytes < 1024 * 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+        return (bytes / (1024 * 1024 * 1024)).toFixed(2) + ' GB';
+    }
+
+    function formatSpeed(bytesPerSec) {
+        if (!bytesPerSec || bytesPerSec <= 0) return '0 B/s';
+        if (bytesPerSec < 1024) return bytesPerSec.toFixed(0) + ' B/s';
+        if (bytesPerSec < 1024 * 1024) return (bytesPerSec / 1024).toFixed(1) + ' KB/s';
+        if (bytesPerSec < 1024 * 1024 * 1024) return (bytesPerSec / (1024 * 1024)).toFixed(1) + ' MB/s';
+        return (bytesPerSec / (1024 * 1024 * 1024)).toFixed(2) + ' GB/s';
+    }
+
+    function showSelectionSummary(icon, title, meta) {
+        if (!selectionSummary) return;
+        if (selectionSummaryIcon) selectionSummaryIcon.textContent = icon;
+        if (selectionSummaryTitle) selectionSummaryTitle.textContent = title;
+        if (selectionSummaryMeta) selectionSummaryMeta.textContent = meta;
+        if (boxPickerFiles) boxPickerFiles.style.display = 'none';
+        if (boxPickerFolder) boxPickerFolder.style.display = 'none';
+        selectionSummary.style.display = 'flex';
+    }
+
+    function clearSelection() {
+        selectedFiles = null;
+        isFolderUpload = false;
+        folderName = '';
+        if (fileInput) {
+            fileInput.value = '';
+            if (activeUploadMode === 'files') fileInput.setAttribute('required', 'required');
+            else fileInput.removeAttribute('required');
+        }
+        if (folderInput) folderInput.value = '';
+        if (selectionSummary) selectionSummary.style.display = 'none';
+        setUploadMode(activeUploadMode);
+    }
+
+    if (clearSelectionBtn) {
+        clearSelectionBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            clearSelection();
+        });
+    }
+
+    if (folderInput) {
+        folderInput.addEventListener('change', function() {
+            if (!folderInput.files || !folderInput.files.length) return;
+            selectedFiles = Array.from(folderInput.files);
+            isFolderUpload = true;
+            if (fileInput) {
+                fileInput.value = '';
+                fileInput.removeAttribute('required');
+            }
+            var firstRel = selectedFiles[0].webkitRelativePath || '';
+            folderName = firstRel ? firstRel.split('/')[0] : 'folder';
+            var totalBytes = selectedFiles.reduce(function(acc, f) { return acc + f.size; }, 0);
+            showSelectionSummary('📁', 'Folder "' + folderName + '"', selectedFiles.length + ' file' + (selectedFiles.length === 1 ? '' : 's') + ' · ' + formatBytes(totalBytes) + ' · will create collection');
+        });
+    }
+
+    if (fileInput) {
+        fileInput.addEventListener('change', function() {
+            if (!fileInput.files || !fileInput.files.length) {
+                clearSelection();
+                return;
+            }
+            selectedFiles = Array.from(fileInput.files);
+            isFolderUpload = false;
+            folderName = '';
+            if (folderInput) folderInput.value = '';
+            var totalBytes = selectedFiles.reduce(function(acc, f) { return acc + f.size; }, 0);
+            if (selectedFiles.length > 1) {
+                showSelectionSummary('📚', selectedFiles.length + ' files selected', formatBytes(totalBytes) + ' · will create collection');
+            } else {
+                showSelectionSummary('📄', selectedFiles[0].name, formatBytes(totalBytes));
+            }
+        });
+    }
+
+    async function getFilesFromDataTransfer(dataTransfer) {
+        var items = dataTransfer.items;
+        if (!items || !items.length) {
+            return Array.from(dataTransfer.files || []);
+        }
+        var entries = [];
+        var hasDirectory = false;
+        for (var i = 0; i < items.length; i++) {
+            var entry = items[i].webkitGetAsEntry ? items[i].webkitGetAsEntry() : null;
+            if (entry) {
+                entries.push(entry);
+                if (entry.isDirectory) hasDirectory = true;
+            }
+        }
+        if (!hasDirectory) {
+            return Array.from(dataTransfer.files || []);
+        }
+
+        var files = [];
+        async function readEntry(entry, path) {
+            if (entry.isFile) {
+                await new Promise(function(resolve) {
+                    entry.file(function(file) {
+                        try {
+                            Object.defineProperty(file, '_relativePath', { value: path + file.name, writable: true });
+                        } catch(e) {
+                            file._relativePath = path + file.name;
+                        }
+                        files.push(file);
+                        resolve();
+                    }, function() { resolve(); });
+                });
+            } else if (entry.isDirectory) {
+                var dirReader = entry.createReader();
+                var readAll = async function() {
+                    return new Promise(function(resolve) {
+                        dirReader.readEntries(async function(results) {
+                            if (!results || !results.length) {
+                                resolve();
+                            } else {
+                                for (var j = 0; j < results.length; j++) {
+                                    await readEntry(results[j], path + entry.name + '/');
+                                }
+                                await readAll();
+                                resolve();
+                            }
+                        }, function() { resolve(); });
+                    });
+                };
+                await readAll();
+            }
+        }
+
+        for (var eIndex = 0; eIndex < entries.length; eIndex++) {
+            await readEntry(entries[eIndex], '');
+        }
+        return files;
+    }
+
+    /* Chunked upload with progress & collection handling */
+    document.getElementById('file-upload-form').addEventListener('submit', async function(e) {
+        if (!window.FormData || !window.XMLHttpRequest) return;
+        e.preventDefault();
+        var form = this;
+        var files = (selectedFiles && selectedFiles.length)
+            ? selectedFiles
+            : (activeUploadMode === 'folder' && folderInput && folderInput.files && folderInput.files.length)
+                ? Array.from(folderInput.files)
+                : Array.from((fileInput && fileInput.files) || (folderInput && folderInput.files) || []);
+        if (activeUploadMode === 'folder' && files.length) {
+            isFolderUpload = true;
+            if (!folderName && files[0]) {
+                var firstRel = files[0]._relativePath || files[0].webkitRelativePath || '';
+                folderName = firstRel ? firstRel.split('/')[0] : 'folder';
+            }
+        }
+        if (!files.length) {
+            alert('Please select a file or folder to upload.');
+            return;
+        }
+
+        var uploadBtn = document.getElementById('file-upload-btn');
+        uploadBtn.disabled = true;
+        var turnstileToken = '';
+        try {
+            turnstileToken = await verifyBeforeSubmit(form);
+        } catch (verificationError) {
+            uploadBtn.disabled = false;
+            alert(verificationError.message);
+            return;
+        }
+
+        var progressBar = document.getElementById('upload-progress');
+        var progressText = document.getElementById('progress-text');
+        var progressSpeed = document.getElementById('progress-speed');
+        var progressChunks = document.getElementById('progress-chunks');
+        var progressContainer = document.getElementById('progress-container');
+        var earlyLinkDetails = document.getElementById('early-link-details');
+        var earlyLinkUrl = document.getElementById('early-link-url');
+        var earlyLinkTitle = document.getElementById('early-link-title');
+        var earlyLinkDesc = document.getElementById('early-link-desc');
+        var earlyLinkCopyBtn = document.getElementById('early-link-copy-btn');
+        var earlyLinkViewAnchor = document.getElementById('early-link-view-anchor');
+        var earlyLinkRawAnchor = document.getElementById('early-link-raw-anchor');
+        var earlyLinkDlAnchor = document.getElementById('early-link-dl-anchor');
+        var earlyLinkStopBtn = document.getElementById('early-link-stop-btn');
+        var CHUNK = 95 * 1024 * 1024;
+
+        progressContainer.classList.add('is-open');
+        progressBar.value = 0;
+        progressText.textContent = '0%';
+        if (progressSpeed) progressSpeed.textContent = '';
+        if (progressChunks) progressChunks.textContent = '';
+        if (earlyLinkDetails) {
+            earlyLinkDetails.style.display = 'none';
+            earlyLinkDetails.open = false;
+        }
+        if (earlyLinkUrl) earlyLinkUrl.value = '';
+
+        var currentXhr = null;
+        var uploadAbortedByUser = false;
+        var latestRegisteredItem = null;
+
+        var existingColSelect = document.getElementById('collection_file');
+        var existingCollectionId = existingColSelect ? existingColSelect.value.trim() : '';
+        var isCollection = isFolderUpload || files.length > 1 || Boolean(existingCollectionId);
+        var activeCollectionId = existingCollectionId || null;
+        var activeCollectionUrl = existingCollectionId ? ('/c/' + existingCollectionId) : null;
+
+        var batchId = 'batch_' + Date.now() + '_' + Math.random().toString(36).slice(2, 10);
+
+        // If collection upload and not an existing collection, initialize collection right away
+        if (isCollection && !activeCollectionId) {
+            progressText.textContent = 'Preparing collection...';
+            var userCustomFilename = (form.querySelector('input[name="custom_filename"]')?.value || '').trim();
+            var colName = userCustomFilename || (isFolderUpload ? folderName : (files.length + ' uploaded files'));
+            var colPassword = form.querySelector('input[name="password"]')?.value || '';
+            var customIdVal = (form.querySelector('input[name="custom_id"]')?.value || '').trim();
+            var urlFormatVal = form.querySelector('input[name="url_format"]:checked')?.value || 'both';
+
+            var initColFd = new FormData();
+            initColFd.append('name', colName);
+            if (colPassword) initColFd.append('password', colPassword);
+            initColFd.append('batch_id', batchId);
+            if (customIdVal && urlFormatVal === 'custom') {
+                initColFd.append('custom_id', customIdVal);
+            }
+            if (urlFormatVal) {
+                initColFd.append('url_format', urlFormatVal);
+            }
+            if (turnstileToken) initColFd.append('cf-turnstile-response', turnstileToken);
+
+            try {
+                var colRes = await fetch('/collections/init_batch', {
+                    method: 'POST',
+                    body: initColFd
+                });
+                if (!colRes.ok) {
+                    var colErr = await colRes.text();
+                    throw new Error(colErr || 'Failed to initialize collection.');
+                }
+                var colData = await colRes.json();
+                activeCollectionId = colData.id;
+                activeCollectionUrl = colData.url;
+            } catch (colInitErr) {
+                uploadBtn.disabled = false;
+                progressContainer.classList.remove('is-open');
+                clearTurnstileGate(form);
+                alert('Could not start collection upload: ' + colInitErr.message);
+                return;
+            }
+        }
+
+        // Show collection share link straight away if uploading collection
+        if (isCollection && activeCollectionId) {
+            var fullColUrl = window.location.origin + activeCollectionUrl;
+            if (earlyLinkUrl) earlyLinkUrl.value = fullColUrl;
+            if (earlyLinkTitle) earlyLinkTitle.textContent = 'Get collection share link straight away';
+            if (earlyLinkDesc) earlyLinkDesc.textContent = 'Collection is registered and active now. Files will appear here as they are uploaded. If the upload stops or is cancelled, whatever partial content was transferred will be saved in this collection.';
+            if (earlyLinkViewAnchor) {
+                earlyLinkViewAnchor.textContent = 'open collection ↗';
+                earlyLinkViewAnchor.href = activeCollectionUrl;
+            }
+            if (earlyLinkRawAnchor) earlyLinkRawAnchor.style.display = 'none';
+            if (earlyLinkDlAnchor) {
+                earlyLinkDlAnchor.textContent = 'download zip ↗';
+                earlyLinkDlAnchor.href = '/c/' + activeCollectionId + '/download.zip';
+                earlyLinkDlAnchor.style.display = 'inline';
+            }
+            if (earlyLinkDetails) earlyLinkDetails.style.display = 'block';
+        }
+
+        if (earlyLinkCopyBtn && !earlyLinkCopyBtn.dataset.bound) {
+            earlyLinkCopyBtn.dataset.bound = '1';
+            earlyLinkCopyBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                if (!earlyLinkUrl || !earlyLinkUrl.value) return;
+                var val = earlyLinkUrl.value;
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText(val).then(function() {
+                        var orig = earlyLinkCopyBtn.textContent;
+                        earlyLinkCopyBtn.textContent = 'copied!';
+                        earlyLinkCopyBtn.classList.add('copied');
+                        setTimeout(function() {
+                            earlyLinkCopyBtn.textContent = orig;
+                            earlyLinkCopyBtn.classList.remove('copied');
+                        }, 1800);
+                    }).catch(function() {
+                        fallbackCopy();
+                    });
+                } else {
+                    fallbackCopy();
+                }
+                function fallbackCopy() {
+                    earlyLinkUrl.select();
+                    document.execCommand('copy');
+                    var orig = earlyLinkCopyBtn.textContent;
+                    earlyLinkCopyBtn.textContent = 'copied!';
+                    earlyLinkCopyBtn.classList.add('copied');
+                    setTimeout(function() {
+                        earlyLinkCopyBtn.textContent = orig;
+                        earlyLinkCopyBtn.classList.remove('copied');
+                    }, 1800);
+                }
+            });
+        }
+
+        if (earlyLinkStopBtn && !earlyLinkStopBtn.dataset.bound) {
+            earlyLinkStopBtn.dataset.bound = '1';
+            earlyLinkStopBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                if (currentXhr) {
+                    uploadAbortedByUser = true;
+                    currentXhr.abort();
+                    if (progressSpeed) progressSpeed.textContent = 'stopped';
+                    if (progressChunks) progressChunks.textContent = isCollection ? 'partial collection saved' : 'partial upload saved';
+                    progressText.textContent = isCollection ? 'upload stopped · partial collection saved' : 'upload stopped · partial file saved';
+                    if (earlyLinkDetails) earlyLinkDetails.open = true;
+                    uploadBtn.disabled = false;
+                }
+            });
+        }
+
+        function onError(msg) {
+            if (isCollection && activeCollectionId) {
+                if (progressSpeed) progressSpeed.textContent = 'interrupted';
+                if (progressChunks) progressChunks.textContent = 'partial collection saved at link';
+                progressText.textContent = 'stopped · partial collection saved';
+                if (earlyLinkDetails) {
+                    earlyLinkDetails.style.display = 'block';
+                    earlyLinkDetails.open = true;
+                }
+                uploadBtn.disabled = false;
+                clearTurnstileGate(form);
+                alert(msg + '\n\nAny data transferred so far is saved and accessible at the collection link!');
+            } else if (latestRegisteredItem) {
+                if (progressSpeed) progressSpeed.textContent = 'interrupted';
+                if (progressChunks) progressChunks.textContent = 'partial upload kept at link';
+                progressText.textContent = 'stopped · partial content saved';
+                if (earlyLinkDetails) {
+                    earlyLinkDetails.style.display = 'block';
+                    earlyLinkDetails.open = true;
+                }
+                uploadBtn.disabled = false;
+                clearTurnstileGate(form);
+                alert(msg + '\n\nAny data transferred so far is saved and accessible at the share link!');
+            } else {
+                alert(msg);
+                uploadBtn.disabled = false;
+                progressContainer.classList.remove('is-open');
+                clearTurnstileGate(form);
+            }
+        }
+
+        var totalBatchBytes = 0;
+        for (var fi = 0; fi < files.length; fi++) totalBatchBytes += files[fi].size;
+
+        var lastSpeedTime = performance.now();
+        var lastSpeedBytes = 0;
+        var smoothedSpeed = 0;
+        var completedFilesBytes = 0;
+
+        function uploadFile(file, fileIndex) {
+            return new Promise(async function(resolve, reject) {
+                var totalChunks = Math.max(1, Math.ceil(file.size / CHUNK));
+                var uploadId = batchId + '_' + fileIndex;
+
+                var initFd = new FormData();
+                var orig = new FormData(form);
+                for (var [k, v] of orig.entries()) {
+                    if (k !== 'file' && k !== 'cf-turnstile-response') initFd.append(k, v);
+                }
+                initFd.append('upload_id', uploadId);
+                initFd.append('total_chunks', totalChunks);
+                initFd.append('filename', file.name);
+                initFd.append('mimetype', file.type || 'application/octet-stream');
+                initFd.append('batch_id', batchId);
+                if (turnstileToken && fileIndex === 0 && (!isCollection || !activeCollectionId)) {
+                    initFd.append('cf-turnstile-response', turnstileToken);
+                }
+
+                if (isCollection && activeCollectionId) {
+                    if (files.length > 1 || isFolderUpload) {
+                        initFd.delete('custom_filename');
+                    }
+                    initFd.delete('custom_id');
+                    initFd.set('collection_id', activeCollectionId);
+                    var relPath = file._relativePath || file.webkitRelativePath || '';
+                    if (relPath && relPath.includes('/')) {
+                        var parts = relPath.split('/');
+                        var subfolder = parts.slice(1, -1).join('/');
+                        if (subfolder) initFd.set('collection_folder', subfolder);
+                    }
+                }
+
+                var earlyData = null;
+                try {
+                    var initRes = await fetch('/upload_init', {
+                        method: 'POST',
+                        body: initFd
+                    });
+                    if (initRes.ok) {
+                        earlyData = await initRes.json();
+                        latestRegisteredItem = earlyData;
+                        if (!isCollection) {
+                            var fullUrl = window.location.origin + earlyData.url;
+                            if (earlyLinkUrl) earlyLinkUrl.value = fullUrl;
+                            if (earlyLinkTitle) earlyLinkTitle.textContent = 'Get share link straight away';
+                            if (earlyLinkDesc) earlyLinkDesc.textContent = 'Link is registered and active now. You can copy it immediately. If the upload stops or is cancelled, whatever partial content was transferred will be served at this link.';
+                            if (earlyLinkViewAnchor) {
+                                earlyLinkViewAnchor.textContent = 'open overview ↗';
+                                earlyLinkViewAnchor.href = earlyData.url;
+                            }
+                            if (earlyLinkRawAnchor) {
+                                earlyLinkRawAnchor.style.display = 'inline';
+                                earlyLinkRawAnchor.href = earlyData.raw_url;
+                            }
+                            if (earlyLinkDlAnchor) {
+                                earlyLinkDlAnchor.textContent = 'download ↗';
+                                earlyLinkDlAnchor.href = earlyData.download_url;
+                                earlyLinkDlAnchor.style.display = 'inline';
+                            }
+                            if (earlyLinkDetails) earlyLinkDetails.style.display = 'block';
+                        }
+                    } else {
+                        var errTxt = await initRes.text();
+                        reject(new Error(errTxt || 'Failed to initialize upload.'));
+                        return;
+                    }
+                } catch(e) {
+                    reject(e);
+                    return;
+                }
+
+                // Step 2: Upload chunks
+                var chunk = 0;
+                function next() {
+                    if (uploadAbortedByUser) {
+                        resolve(earlyData);
+                        return;
+                    }
+                    var start = chunk * CHUNK;
+                    var blob = file.slice(start, Math.min(start + CHUNK, file.size));
+                    var fd = new FormData();
+                    fd.append('upload_id', uploadId);
+                    fd.append('chunk_index', chunk);
+                    fd.append('total_chunks', totalChunks);
+                    fd.append('filename', file.name);
+                    fd.append('mimetype', file.type || 'application/octet-stream');
+                    fd.append('batch_id', batchId);
+                    fd.append('file', blob, file.name);
+
+                    var xhr = new XMLHttpRequest();
+                    currentXhr = xhr;
+
+                    xhr.upload.addEventListener('progress', function(e) {
+                        if (e.lengthComputable) {
+                            var currentChunkBytes = Math.min(e.loaded, blob.size);
+                            var currentFileBytes = chunk * CHUNK + currentChunkBytes;
+                            var totalUploadedBytes = completedFilesBytes + currentFileBytes;
+                            var pct = totalBatchBytes > 0 ? Math.min(99, Math.round((totalUploadedBytes / totalBatchBytes) * 100)) : 0;
+                            progressBar.value = pct;
+
+                            var now = performance.now();
+                            var elapsedSec = (now - lastSpeedTime) / 1000;
+                            if (elapsedSec >= 0.3) {
+                                var deltaBytes = totalUploadedBytes - lastSpeedBytes;
+                                var instantSpeed = deltaBytes / elapsedSec;
+                                smoothedSpeed = smoothedSpeed > 0 ? (smoothedSpeed * 0.6 + instantSpeed * 0.4) : instantSpeed;
+                                lastSpeedTime = now;
+                                lastSpeedBytes = totalUploadedBytes;
+                            }
+
+                            var speedLabel = formatSpeed(smoothedSpeed);
+                            var bytesLabel = formatBytes(totalUploadedBytes) + ' / ' + formatBytes(totalBatchBytes);
+                            var filePrefix = files.length > 1 ? ('file ' + (fileIndex + 1) + '/' + files.length + ' · ') : '';
+
+                            progressText.textContent = pct + '% · ' + filePrefix + bytesLabel;
+                            if (progressSpeed) progressSpeed.textContent = speedLabel;
+
+                            if (progressChunks) {
+                                if (totalChunks > 1) {
+                                    var currentChunkNumber = chunk + 1;
+                                    var chunksLeft = totalChunks - currentChunkNumber;
+                                    var chunkSuffix = chunksLeft === 1 ? '1 chunk left' : (chunksLeft === 0 ? '0 chunks left (finalizing)' : chunksLeft + ' chunks left');
+                                    progressChunks.textContent = 'chunk ' + currentChunkNumber + ' of ' + totalChunks + ' · ' + chunkSuffix;
+                                } else {
+                                    progressChunks.textContent = 'single chunk upload';
+                                }
+                            }
+                        }
+                    });
+                    xhr.onreadystatechange = function() {
+                        if (xhr.readyState !== 4) return;
+                        currentXhr = null;
+                        if (xhr.status === 200) {
+                            try {
+                                var resp = JSON.parse(xhr.responseText);
+                                if (chunk < totalChunks - 1) {
+                                    chunk++;
+                                    next();
+                                } else {
+                                    completedFilesBytes += file.size;
+                                    resolve(resp || earlyData);
+                                }
+                            } catch(err) {
+                                reject(new Error('Invalid upload response.'));
+                            }
+                        } else {
+                            if (uploadAbortedByUser) {
+                                resolve(earlyData);
+                            } else {
+                                reject(new Error(xhr.responseText || xhr.statusText || 'Upload interrupted. Partial data is saved at the share link.'));
+                            }
+                        }
+                    };
+                    xhr.open('POST', '/upload_chunk', true);
+                    xhr.send(fd);
+                }
+                next();
+            });
+        }
+
+        try {
+            var uploaded = [];
+            for (var i = 0; i < files.length; i++) {
+                var res = await uploadFile(files[i], i);
+                if (uploadAbortedByUser) break;
+                uploaded.push(res);
+            }
+            if (uploadAbortedByUser) return;
+            progressBar.value = 100;
+            if (progressSpeed) progressSpeed.textContent = 'complete';
+            if (progressChunks) progressChunks.textContent = 'all chunks transferred';
+            if (earlyLinkDetails) {
+                earlyLinkDetails.style.display = 'none';
+                earlyLinkDetails.open = false;
+            }
+
+            if (!uploaded.length) {
+                uploadBtn.disabled = false;
+                progressContainer.classList.remove('is-open');
+                return;
+            }
+
+            if (isCollection && activeCollectionId) {
+                progressText.textContent = 'Collection ready! Redirecting...';
+                window.location.href = activeCollectionUrl;
+                return;
+            } else {
+                progressText.textContent = '100% · redirecting to overview...';
+                var targetUrl = (uploaded[0] && (uploaded[0].url || ('/v/' + uploaded[0].id))) || '/';
+                window.location.href = targetUrl;
+                return;
+            }
+        } catch (error) {
+            onError(error.message);
+        }
+    });
+
+    var activeCollection = null;
+    var toastTimer = null;
+    function copyCollectionInfoPage() {
+        if (!activeCollection) return;
+        navigator.clipboard.writeText(new URL(activeCollection.url, location.origin).href);
+    }
+    function showCollectionToast(collection) {
+        activeCollection = collection;
+        var toast = document.getElementById('collection-created-toast');
+        document.getElementById('collection-created-message').textContent = collection.name + ' created.';
+        document.getElementById('open-created-collection').href = collection.url;
+        toast.hidden = false;
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(function() { toast.hidden = true; activeCollection = null; }, 5000);
+    }
+    document.getElementById('copy-created-collection').addEventListener('click', copyCollectionInfoPage);
+    document.getElementById('name-created-collection').addEventListener('click', async function() {
+        if (!activeCollection) return;
+        var name = prompt('Collection name:', activeCollection.name);
+        if (!name) return;
+        var response = await fetch('/collections/' + encodeURIComponent(activeCollection.id) + '/name', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: name })
+        });
+        if (response.ok) {
+            activeCollection.name = name;
+            document.getElementById('collection-created-message').textContent = name + ' created.';
+        }
+    });
+    document.getElementById('collection-created-toast').addEventListener('contextmenu', function(event) {
+        event.preventDefault();
+        copyCollectionInfoPage();
+    });
+
+    document.getElementById('paste-upload-form').addEventListener('submit', async function(event) {
+        var form = event.currentTarget;
+        if (form.dataset.verified === 'true') return;
+        event.preventDefault();
+        var button = document.getElementById('paste-upload-btn');
+        button.disabled = true;
+        try {
+            await verifyBeforeSubmit(form);
+            form.dataset.verified = 'true';
+            form.submit();
+        } catch (error) {
+            button.disabled = false;
+            alert(error.message);
+        }
+    });
+
+    /* Drag & drop */
+    var dz = document.getElementById('file-upload-form');
+    dz.addEventListener('dragover', function(e) { e.preventDefault(); dz.classList.add('drag-over'); });
+    dz.addEventListener('dragleave', function(e) { e.preventDefault(); dz.classList.remove('drag-over'); });
+    dz.addEventListener('drop', async function(e) {
+        e.preventDefault();
+        dz.classList.remove('drag-over');
+        var dropped = await getFilesFromDataTransfer(e.dataTransfer);
+        if (!dropped || !dropped.length) return;
+
+        selectedFiles = dropped;
+        if (fileInput) {
+            fileInput.value = '';
+            fileInput.removeAttribute('required');
+        }
+        if (folderInput) folderInput.value = '';
+
+        var hasFolder = dropped.some(function(f) { return Boolean(f._relativePath && f._relativePath.includes('/')); });
+        var totalBytes = dropped.reduce(function(acc, f) { return acc + f.size; }, 0);
+
+        if (hasFolder) {
+            setUploadMode('folder');
+            isFolderUpload = true;
+            var firstWithFolder = dropped.find(function(f) { return Boolean(f._relativePath && f._relativePath.includes('/')); });
+            folderName = firstWithFolder ? firstWithFolder._relativePath.split('/')[0] : 'folder';
+            showSelectionSummary('📁', 'Folder "' + folderName + '"', dropped.length + ' file' + (dropped.length === 1 ? '' : 's') + ' · ' + formatBytes(totalBytes) + ' · will create collection');
+        } else if (dropped.length > 1) {
+            setUploadMode('files');
+            isFolderUpload = false;
+            folderName = '';
+            showSelectionSummary('📚', dropped.length + ' files dropped', formatBytes(totalBytes) + ' · will create collection');
+        } else {
+            setUploadMode('files');
+            isFolderUpload = false;
+            folderName = '';
+            showSelectionSummary('📄', dropped[0].name, formatBytes(totalBytes));
+        }
+    });
+</script>
+
+{% endblock %}

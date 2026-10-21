@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block content %}
+<div style="margin: 16px 0; padding: 16px; border: 2px solid #555; background: #161616; text-align: center; border-radius: 6px;">
+    <div style="font-size: 0.8rem; text-transform: uppercase; color: #888; letter-spacing: 0.12em; font-weight: bold; margin-bottom: 6px;">ITEM CODE</div>
+    <div style="font-size: 2.5rem; font-family: monospace; letter-spacing: 0.16em; font-weight: bold; color: #fff;">{{ item['id'] }}</div>
+    <div style="font-size: 0.8rem; color: #aaa; margin-top: 6px;">Use this 8-character code to retrieve this item.</div>
+</div>
+{% if item['is_partial'] %}
+<p style="color:red; font-weight:bold;">[WARNING: PARTIAL / INCOMPLETE FILE — upload stopped before completion, file may be broken]</p>
+{% endif %}
+<p>
+{% if item['is_partial'] %}
+Status: <strong>PARTIAL (INCOMPLETE / BROKEN)</strong><br>
+{% endif %}
+{% if item['type'] == 'file' %}
+Name: {{ item['filename'] }}<br>
+{% endif %}
+Type: {{ item['display_type'] }}<br>
+Size: {{ (item['size'] / 1024) | round(1) }} KB{% if item['is_partial'] %} (partial size){% endif %}<br>
+Views: {{ item['views'] }}
+</p>
+{% if item['type'] == 'file' %}
+<h2><a href="/v/{{ item['id'] }}/{{ item['filename'] }}/download">download {% if item['is_partial'] %}partial (broken) {% endif %}file</a></h2>
+<p><a href="/v/{{ item['id'] }}/{{ item['filename'] }}">open raw{% if item['is_partial'] %} (partial){% endif %}</a></p>
+{% else %}
+<h2><a href="/v/{{ item['id'] }}/paste.txt/download">download paste</a></h2>
+<p><a href="/v/{{ item['id'] }}/paste.txt">open paste</a></p>
+{% endif %}
+{% if item['burn_after_read'] > 0 %}<p>Warning: this item is deleted after {{ item['burn_after_read'] }} views.</p>{% endif %}
+{% endblock %}

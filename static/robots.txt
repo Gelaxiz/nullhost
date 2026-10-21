@@ -1,0 +1,16 @@
+User-agent: *
+Allow: /
+
+# Private account and administration surfaces
+Disallow: /a
+Disallow: /admin
+Disallow: /admin_dashboard
+Disallow: /gelaxiz_admin_gate
+Disallow: /rename/
+Disallow: /delete/
+
+# Uploaded content and public upload listings
+Disallow: /uploads/
+Disallow: /v/
+Disallow: /raw/
+Disallow: /c/

@@ -1,0 +1,10 @@
+MIDlet-1: Nullhost, , org.gelaxiz.nullhost.NullhostMIDlet
+MIDlet-Name: Nullhost
+MIDlet-Version: 1.0.0
+MIDlet-Vendor: Gelaxiz
+MIDlet-Description: Fast, anonymous, ephemeral file hosting for Java ME
+MicroEdition-Configuration: CLDC-1.1
+MicroEdition-Profile: MIDP-2.0
+MIDlet-Jar-URL: Nullhost.jar
+MIDlet-Jar-Size: 13678
+MIDlet-Permissions: javax.microedition.io.Connector.http, javax.microedition.io.Connector.file.read

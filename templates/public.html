@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block content %}
+
+<h2>public repository</h2>
+<p class="meta">files made public by their uploaders.</p>
+
+<hr>
+
+{% if items %}
+<div class="table-wrapper">
+    <table>
+        <thead>
+            <tr>
+                <th>id</th>
+                <th>type</th>
+                <th>name / size</th>
+                <th>views</th>
+                <th>expires</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in items %}
+            <tr>
+                <td><a href="/v/{{ item['id'] }}">{{ item['id'] }}</a></td>
+                <td>{{ item['display_type'] }}</td>
+                <td>{% if item['type'] == 'file' %}{{ item['filename'] }}{% else %}paste{% endif %} · {{ (item['size'] / 1048576) | round(2) }} mb{% if item['is_partial'] %} <span class="badge-partial">partial</span>{% endif %}</td>
+                <td>{{ item['views'] }}</td>
+                <td><script>document.write(new Date({{ item['expires_at'] }} * 1000).toLocaleDateString())</script></td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<p>no public files yet.</p>
+{% endif %}
+
+{% endblock %}

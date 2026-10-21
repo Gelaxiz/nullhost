@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block content %}
+    <h2 style="color: #d9534f; border-bottom: 2px solid #000; padding-bottom: 5px;">dmca & copyright takedown notice</h2>
+    <p style="font-size: 13px; line-height: 1.5;">
+        nullhost respects the intellectual property rights of others. as a free, decentralized file hosting and pastebin service ("dumb pipe"), we do not proactively monitor user uploads, but we respond promptly and decisively to valid legal takedown notices from copyright and intellectual property (ip) owners.
+    </p>
+
+    <h3 style="margin-top: 25px;">what ip owners can do</h3>
+    <ol style="font-size: 13px; line-height: 1.6; padding-left: 20px;">
+        <li><strong>locate the infringing shortcode:</strong> identify the exact nullhost url or alphanumeric id (e.g. <code>http://nullhost.domain/v/8x9a2b1c</code>).</li>
+        <li><strong>submit a formal request:</strong> send a legal takedown email to our designated copyright administrator: <strong><a href="mailto:dmca@gelaxiz.xyz" style="color: #d9534f;">dmca@gelaxiz.xyz</a></strong>.</li>
+        <li><strong>7-day tombstone quarantine:</strong> upon receiving a valid notice, our administrators immediately remove the infringing file and impose a strict 7-day <em>tombstone quarantine</em> on the link shortcode, preventing link recycling or re-registration during the dispute window.</li>
+    </ol>
+
+    <h3 style="margin-top: 25px;">dmca takedown notice email template</h3>
+    <p style="font-size: 12px; opacity: 0.8;">you can copy the text below or use the button to open your email app with the template pre-filled:</p>
+
+    <div style="text-align: center; margin: 20px 0;">
+        <a href="mailto:dmca@gelaxiz.xyz?subject=%5BDMCA%20Takedown%20Notice%5D%20Item%20ID%3A%20&body=Hello%20Nullhost%20Admin%2C%0A%0AI%20am%20the%20copyright%20owner%20(or%20authorized%20agent)%20of%20the%20following%20work%3A%0A%5BDescribe%20or%20link%20original%20work%5D%0A%0AThe%20following%20Nullhost%20item%20infringes%20my%20copyright%3A%0A%5BPaste%20full%20Nullhost%20URL%20or%20Item%20ID%5D%0A%0AI%20have%20a%20good%20faith%20belief%20that%20this%20use%20is%20not%20authorized%20by%20the%20copyright%20owner%2C%20its%20agent%2C%20or%20the%20law.%20I%20state%20under%20penalty%20of%20perjury%20that%20the%20information%20in%20this%20notice%20is%20accurate.%0A%0APlease%20remove%20this%20content%20and%20quarantine%20the%20link%20shortcode%20immediately.%0A%0ASincerely%2C%0A%5BYour%20Full%20Legal%20Name%20%2F%20Company%5D%0A%5BYour%20Contact%20Email%20%2F%20Phone%5D" style="display: inline-block; background-color: #d9534f; color: white; padding: 12px 24px; text-decoration: none; font-weight: bold; border: 2px solid #b52b27; font-size: 13px;">[✉ open email client with dmca template pre-filled]</a>
+    </div>
+
+    <div style="border: 2px solid #444; background-color: rgba(0,0,0,0.05); padding: 15px; font-family: monospace; font-size: 12px; white-space: pre-wrap; word-break: break-all; text-align: left; margin-bottom: 30px;"><strong>To:</strong> dmca@gelaxiz.xyz
+<strong>Subject:</strong> [DMCA Takedown Notice] Item ID / Shortcode: &lt;ENTER_ID_HERE&gt;
+
+Hello Nullhost Admin,
+
+I am the copyright owner (or authorized agent) of the following copyrighted work:
+[Describe or link to your original copyrighted work/property]
+
+I have a good faith belief that the following item hosted on Nullhost infringes upon my copyright and is not authorized by the copyright owner, its agent, or the law:
+Nullhost URL / Item ID: [Paste full Nullhost link e.g. http://.../v/abc12345]
+
+I state under penalty of perjury that the information in this notice is accurate and that I am the copyright owner or authorized to act on behalf of the owner.
+
+Please remove this content and quarantine the link shortcode immediately.
+
+Sincerely,
+[Your Full Legal Name / Company Name]
+[Your Contact Email / Phone Number]</div>
+{% endblock %}

@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block content %}
+
+<h2>admin login</h2>
+<p class="meta">restricted. totp 2fa required. attempts are rate limited.</p>
+
+{% if error %}
+<div class="alert alert-danger" style="margin-bottom:20px;">
+    {{ error }}
+    {% if cooldown and cooldown > 0 %}
+    <div id="cooldown-timer" style="margin-top:6px;">please wait <strong>{{ cooldown }}</strong> seconds...</div>
+    <script>
+        var s={{ cooldown }};
+        var t=setInterval(function(){s--;
+        if(s<=0){clearInterval(t);document.getElementById('cooldown-timer').innerHTML='<strong style="color:var(--green)">ready — you may try again.</strong>';var b=document.getElementById('login-btn');if(b)b.disabled=false;}
+        else{document.getElementById('cooldown-timer').innerHTML='please wait <strong>'+s+'</strong> seconds...';}
+        },1000);
+    </script>
+    {% endif %}
+</div>
+{% endif %}
+
+<form action="/admin" method="post" style="max-width:320px;">
+    <label>6-digit totp code</label>
+    <input type="text" name="totp_code" id="totp_code" required autofocus
+        maxlength="6" pattern="\d{6}" placeholder="000000"
+        autocomplete="one-time-code"
+        style="letter-spacing:0.2em; font-size:1.2rem; max-width:160px;">
+    <div class="btn-row">
+        <button type="submit" id="login-btn" class="primary" {% if cooldown and cooldown > 0 %}disabled{% endif %}>authenticate</button>
+    </div>
+</form>
+
+{% endblock %}

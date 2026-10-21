@@ -1,0 +1,164 @@
+{% extends "base.html" %}
+{% block content %}
+
+<h2>account</h2>
+<p class="meta">manage your uploads with a one-time number. keep it safe.</p>
+
+<div class="section">
+    <form action="/a" method="post" data-deferred-turnstile>
+        <input type="hidden" name="action" value="create">
+        <div class="turnstile-wrap upload-verification" data-account-turnstile-gate hidden>
+            <strong>confirm you are human to generate the account number</strong>
+            <div class="cf-turnstile" data-account-turnstile-target data-action="turnstile-spin-v2"></div>
+        </div>
+        <p class="field-help" role="status" aria-live="polite" data-account-turnstile-status></p>
+        <button type="submit" class="primary" data-idle-label="generate account number">generate account number</button>
+    </form>
+</div>
+
+<hr>
+
+<div class="section">
+    <h3>log in</h3>
+    <form action="/a" method="post" data-deferred-turnstile>
+        <input type="hidden" name="action" value="login">
+        <label>16-digit account number</label>
+        <input type="text" name="account_id" placeholder="0000000000000000" required pattern="\d{16}" title="16-digit number" inputmode="numeric">
+        <div class="turnstile-wrap upload-verification" data-account-turnstile-gate hidden>
+            <strong>confirm you are human to log in</strong>
+            <div class="cf-turnstile" data-account-turnstile-target data-action="turnstile-spin-v2"></div>
+        </div>
+        <p class="field-help" role="status" aria-live="polite" data-account-turnstile-status></p>
+        <div class="btn-row">
+            <button type="submit" data-idle-label="login">login</button>
+        </div>
+    </form>
+</div>
+
+{% if items %}
+<hr>
+<div class="section">
+    <h3>anonymous session uploads</h3>
+    <p class="meta">these were uploaded from this browser session. create an account to keep them permanently.</p>
+    <div class="table-wrapper">
+        <table>
+            <thead>
+                <tr>
+                    <th>type</th>
+                    <th>link</th>
+                    <th>uploaded</th>
+                    <th>views</th>
+                    <th>actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in items %}
+                <tr>
+                    <td>{{ item['display_type'] }}</td>
+                    <td><a href="/v/{{ item['id'] }}">{{ item['id'] }}</a></td>
+                    <td><script>document.write(new Date({{ item['created_at'] }} * 1000).toLocaleDateString())</script></td>
+                    <td>{{ item['views'] }}{% if item['burn_after_read'] > 0 %} / {{ item['burn_after_read'] }}{% endif %}</td>
+                    <td>
+                        <form action="/delete/{{ item['id'] }}" method="post" class="form-inline" onsubmit="return confirm('delete?');">
+                            <button type="submit" class="btn-small danger">delete</button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
+<script>
+(function() {
+    var siteKey = {{ turnstile_site_key|tojson }};
+    var action = {{ turnstile_action|tojson }};
+
+    function waitForTurnstile() {
+        return new Promise(function(resolve, reject) {
+            var attempts = 0;
+            function check() {
+                if (window.turnstile && window.turnstile.render) return resolve();
+                if (++attempts > 100) return reject(new Error('Verification could not load. Check your connection and try again.'));
+                window.setTimeout(check, 100);
+            }
+            check();
+        });
+    }
+
+    document.querySelectorAll('[data-deferred-turnstile]').forEach(function(form) {
+        var gate = form.querySelector('[data-account-turnstile-gate]');
+        var target = form.querySelector('[data-account-turnstile-target]');
+        var status = form.querySelector('[data-account-turnstile-status]');
+        var submitButton = form.querySelector('button[type="submit"]');
+
+        form.addEventListener('submit', async function(event) {
+            if (!{{ turnstile_enabled|tojson }}) return;
+            var token = form.querySelector('input[name="cf-turnstile-response"]');
+            if (form.dataset.turnstileVerified === 'true' && token && token.value) return;
+
+            event.preventDefault();
+            if (form.dataset.turnstilePending === 'true') return;
+            form.dataset.turnstilePending = 'true';
+            gate.hidden = false;
+            status.textContent = 'complete the verification to continue.';
+            submitButton.disabled = true;
+            submitButton.textContent = 'waiting for verification…';
+            gate.scrollIntoView({
+                behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
+                block: 'center'
+            });
+
+            try {
+                await waitForTurnstile();
+                if (target.dataset.widgetId) return;
+                target.dataset.widgetId = window.turnstile.render(target, {
+                    sitekey: siteKey,
+                    action: action,
+                    theme: 'auto',
+                    callback: function(verifiedToken) {
+                        var responseInput = form.querySelector('input[name="cf-turnstile-response"]');
+                        if (!responseInput) {
+                            responseInput = document.createElement('input');
+                            responseInput.type = 'hidden';
+                            responseInput.name = 'cf-turnstile-response';
+                            form.appendChild(responseInput);
+                        }
+                        responseInput.value = verifiedToken;
+                        form.dataset.turnstileVerified = 'true';
+                        delete form.dataset.turnstilePending;
+                        status.textContent = 'verified. continuing…';
+                        submitButton.disabled = false;
+                        submitButton.textContent = submitButton.dataset.idleLabel;
+                        form.requestSubmit(submitButton);
+                    },
+                    'error-callback': function() {
+                        delete form.dataset.turnstilePending;
+                        delete target.dataset.widgetId;
+                        status.textContent = 'verification failed to load. press the button to try again.';
+                        submitButton.disabled = false;
+                        submitButton.textContent = submitButton.dataset.idleLabel;
+                    },
+                    'expired-callback': function() {
+                        delete form.dataset.turnstileVerified;
+                        delete form.dataset.turnstilePending;
+                        status.textContent = 'verification expired. complete it again to continue.';
+                        submitButton.disabled = false;
+                        submitButton.textContent = submitButton.dataset.idleLabel;
+                        window.turnstile.reset(target.dataset.widgetId);
+                    }
+                });
+            } catch (error) {
+                delete form.dataset.turnstilePending;
+                status.textContent = error.message;
+                submitButton.disabled = false;
+                submitButton.textContent = submitButton.dataset.idleLabel;
+            }
+        });
+    });
+})();
+</script>
+
+{% endblock %}

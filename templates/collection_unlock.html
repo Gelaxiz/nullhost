@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block content %}
+
+<h2>{{ collection['name'] }}</h2>
+<p class="meta">this collection is password protected.</p>
+
+{% if error %}<div class="alert alert-danger">{{ error }}</div>{% endif %}
+
+<form method="post" style="max-width:360px;">
+    <label for="collection-password">password</label>
+    <input id="collection-password" type="password" name="password" required autofocus>
+    {% if turnstile_enabled %}
+    <div class="turnstile-wrap">
+        <div id="collection-turnstile" data-sitekey="{{ turnstile_site_key }}" data-action="{{ turnstile_action }}"></div>
+    </div>
+    {% endif %}
+    <div class="btn-row">
+        <button type="submit" class="primary">unlock collection</button>
+    </div>
+</form>
+
+{% if turnstile_enabled and not legacy_mode %}<script>
+(function renderCollectionCheck() {
+    if (!window.turnstile || !window.turnstile.render) { window.setTimeout(renderCollectionCheck, 200); return; }
+    window.turnstile.render('#collection-turnstile', {
+        sitekey: {{ turnstile_site_key|tojson }}, action: {{ turnstile_action|tojson }},
+        theme: 'auto', size: 'normal'
+    });
+}());
+</script>
+{% elif legacy_mode and turnstile_enabled %}<p>This protected collection requires a newer browser for verification.</p>{% endif %}
+
+{% endblock %}

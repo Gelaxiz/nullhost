@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>public files</h1>
+{% if items %}
+<ul>
+{% for item in items %}
+    <li><a href="/v/{{ item['id'] }}">{% if item['type'] == 'file' %}{{ item['filename'] }}{% else %}paste {{ item['id'] }}{% endif %}</a> ({{ (item['size'] / 1024) | round(1) }} KB)</li>
+{% endfor %}
+</ul>
+{% else %}
+<p>no public files.</p>
+{% endif %}
+{% endblock %}

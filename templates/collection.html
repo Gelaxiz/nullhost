@@ -1,0 +1,307 @@
+{% extends "base.html" %}
+{% block content %}
+
+{% macro render_node(node, depth=0) %}
+    {% for folder_name, folder in node['folders'].items() %}
+    <details class="tree-folder" open style="--tree-depth: {{ depth }};">
+        <summary><span class="folder-name">{{ folder_name }}</span><span class="folder-count">{{ folder['items']|length + folder['folders']|length }}</span></summary>
+        <div class="tree-branch">{{ render_node(folder, depth + 1) }}</div>
+    </details>
+    {% endfor %}
+    {% for item in node['items'] %}
+    {% set raw_link = '/v/' ~ item['id'] ~ '/' ~ item['filename'] if item['type'] == 'file' else '/v/' ~ item['id'] ~ '/paste.txt' %}
+    <div class="tree-file" style="--tree-depth: {{ depth }};">
+        <label class="tree-file-select">
+            <input type="checkbox" class="collection-item-checkbox" value="{{ item['id'] }}" data-download-url="{{ raw_link }}?dl=1">
+            <span class="tree-file-copy">
+                <strong>{{ item['label'] }}{% if item['is_partial'] %} <span class="badge-partial">partial</span>{% endif %}</strong>
+                <small>{{ item['display_type'] }} · {{ (item['size'] / 1048576) | round(2) }} mb{% if item['is_partial'] %} · <span style="color:var(--amber);">incomplete (broken)</span>{% endif %}{% if item['display_name'] %} · custom name{% endif %}</small>
+            </span>
+        </label>
+        <div class="tree-file-actions">
+            <button type="button" class="btn-small btn-copy-item" data-url="{{ url_for('overview', item_id=item['id'], _external=True) }}" title="Copy link to this item">
+                <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-1px; margin-right:3px;"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>
+                <span>link</span>
+            </button>
+            <a class="btn-small" href="{{ raw_link }}">raw{% if item['is_partial'] %} (partial){% endif %}</a>
+            <a class="btn-small primary" href="{{ raw_link }}?dl=1">download{% if item['is_partial'] %} (partial){% endif %}</a>
+            {% if is_owner %}
+            <form action="/collections/{{ collection['id'] }}/items/{{ item['id'] }}/rename" method="post" id="collection-rename-form-{{ item['id'] }}" class="form-inline">
+                <input type="hidden" name="display_name" id="collection-rename-input-{{ item['id'] }}">
+                <button type="button" class="btn-small" onclick='renameCollectionItem({{ item["id"]|tojson }}, {{ item["label"]|tojson }})'>rename</button>
+            </form>
+            {% endif %}
+        </div>
+    </div>
+    {% endfor %}
+{% endmacro %}
+
+{% if is_owner %}<a class="back-link" href="/a">← workspace</a>{% endif %}
+<header class="collection-header refined-collection-header">
+    <div>
+        <h1>{{ collection['name'] }}</h1>
+        <p class="meta">{{ items|length }} item{% if items|length != 1 %}s{% endif %}{% if collection['password_hash'] %} · password protected{% endif %}</p>
+    </div>
+    <div class="collection-header-actions">
+        <button type="button" id="copy-collection-link">copy link</button>
+        {% if is_owner %}<a class="button primary-link" href="/?collection={{ collection['id'] }}">upload here</a>{% endif %}
+    </div>
+</header>
+
+<details class="collection-share-panel">
+    <summary>share with another device</summary>
+    <div class="collection-share-content">
+        <img class="collection-qr" src="/c/{{ collection['id'] }}/qr.png" alt="QR code for this collection" loading="lazy">
+        <div>
+            <strong>scan to open this collection</strong>
+            <p>Anyone with the link{% if collection['password_hash'] %} and password{% endif %} can access these files.</p>
+        </div>
+    </div>
+</details>
+
+{% if is_owner %}
+<details class="collection-manage-panel" id="collection-manage-panel">
+    <summary>manage collection</summary>
+    <div class="collection-manage-grid">
+        <section>
+            <h3>add uploads</h3>
+            {% if available_items %}
+            <form action="/collections/{{ collection['id'] }}/items" method="post">
+                <div class="inline-folder-row">
+                    <input id="collection-add-folder" type="text" name="folder_path" placeholder="optional folder" aria-label="Folder for added uploads">
+                    <button type="submit" class="primary" id="available-add-button" disabled>add selected</button>
+                </div>
+                <div class="picker-heading">
+                    <span><strong id="available-selection-count">0 selected</strong> from your workspace</span>
+                    <button type="button" class="btn-small" id="available-select-all">select all</button>
+                </div>
+                <div class="item-picker compact-picker" id="available-items">
+                    {% for item in available_items %}
+                    <label class="item-picker-row">
+                        <input type="checkbox" name="item_ids" value="{{ item['id'] }}">
+                        <span class="item-picker-copy">
+                            <strong>{% if item['type'] == 'file' %}{{ item['filename'] }}{% else %}paste {{ item['id'] }}{% endif %}{% if item['is_partial'] %} <span class="badge-partial">partial</span>{% endif %}</strong>
+                            <small>{{ item['display_type'] or item['type'] }} · {{ (item['size'] / 1048576) | round(2) }} mb{% if item['is_partial'] %} · <span style="color:var(--amber);">incomplete</span>{% endif %}</small>
+                        </span>
+                    </label>
+                    {% endfor %}
+                </div>
+            </form>
+            {% else %}
+            <div class="empty-state compact-empty"><span>All current uploads are already here.</span></div>
+            {% endif %}
+        </section>
+        <section>
+            <h3>settings</h3>
+            <form action="/collections/{{ collection['id'] }}/settings" method="post" class="collection-settings-form">
+                <label for="collection-settings-name">name</label>
+                <input id="collection-settings-name" type="text" name="name" value="{{ collection['name'] }}" maxlength="80" required>
+                <label for="collection-settings-password">new password</label>
+                <input id="collection-settings-password" type="password" name="password" placeholder="leave blank to keep current">
+                {% if collection['password_hash'] %}
+                <label class="plain-checkbox"><input type="checkbox" name="remove_password" value="1"> remove collection password</label>
+                {% endif %}
+                <button type="submit">save settings</button>
+            </form>
+            <form action="/collections/{{ collection['id'] }}/delete" method="post" class="delete-collection-form" id="delete-collection-form" data-collection-id="{{ collection['id'] }}" data-item-count="{{ items|length }}">
+                <label class="delete-content-option" for="delete-collection-contents">
+                    <input id="delete-collection-contents" type="checkbox" name="delete_contents" value="1">
+                    <span class="delete-content-copy">
+                        <strong>also delete all {{ items|length }} underlying upload{% if items|length != 1 %}s{% endif %}</strong>
+                        <small>permanent — removes these uploads from every collection that uses them</small>
+                    </span>
+                </label>
+                <input type="hidden" name="contents_confirmation" id="delete-contents-confirmation">
+                <button type="submit" class="danger">delete collection</button>
+            </form>
+        </section>
+    </div>
+</details>
+{% endif %}
+
+{% if items %}
+{% if raw_download_mode %}
+<div class="multi-download-warning" id="multi-download-warning" role="alertdialog" aria-labelledby="multi-download-title" aria-describedby="multi-download-description">
+    <strong id="multi-download-title">download {{ items|length }} files individually?</strong>
+    <p id="multi-download-description">Your browser may show a prompt asking whether nullhost.gelaxiz.xyz can download multiple files. Choose <strong>Allow</strong> in that browser prompt. Otherwise, choose <strong>abort mission</strong> below.</p>
+    <div class="btn-row">
+        <button type="button" class="primary" id="allow-collection-downloads">start downloads</button>
+        <a class="button" href="{{ url_for('collection_view', collection_id=collection['id']) }}">abort mission</a>
+    </div>
+</div>
+{% endif %}
+<div class="collection-toolbar">
+    <div class="collection-selection-control">
+        <button type="button" class="btn-small toolbar-btn" id="collection-select-all">select all</button>
+        <span id="collection-selection-count" aria-live="polite">0 selected</span>
+    </div>
+    <div class="toolbar-spacer"></div>
+    {% if is_owner %}
+    <form action="/collections/{{ collection['id'] }}/items/move" method="post" class="form-inline selection-form collection-move-form">
+        <input type="text" name="folder_path" placeholder="move to folder" aria-label="Move selected files to folder">
+        <button type="submit" disabled data-requires-selection class="toolbar-btn">move</button>
+    </form>
+    <form action="/collections/{{ collection['id'] }}/items/remove-selected" method="post" class="form-inline selection-form" onsubmit="return confirm('remove selected files from this collection?');">
+        <button type="submit" class="danger toolbar-btn" disabled data-requires-selection>remove</button>
+    </form>
+    {% endif %}
+    <button type="button" id="download-individually" class="toolbar-btn" disabled data-requires-selection>download selected</button>
+    <form id="collection-zip-form" action="/c/{{ collection['id'] }}/download.zip" method="post" class="form-inline selection-form">
+        <button type="submit" class="primary toolbar-btn" id="collection-zip-button">download all as zip</button>
+    </form>
+</div>
+
+<div class="collection-tree" role="tree" aria-label="Files in {{ collection['name'] }}">
+    <div class="tree-root-label"><span>{{ collection['name'] }}</span><small>{{ items|length }} total</small></div>
+    {{ render_node(tree) }}
+</div>
+{% else %}
+<div class="empty-state collection-empty-state">
+    <strong>this collection is empty.</strong>
+    {% if is_owner %}<span>Upload a new file here or open “manage collection” to add one from your workspace.</span><a class="button" href="/?collection={{ collection['id'] }}">upload here</a>{% endif %}
+</div>
+{% endif %}
+
+<script>
+(function() {
+    var checkboxes = Array.from(document.querySelectorAll('.collection-item-checkbox'));
+    var count = document.getElementById('collection-selection-count');
+    var selectAll = document.getElementById('collection-select-all');
+    var zipButton = document.getElementById('collection-zip-button');
+    function selectedItems() { return checkboxes.filter(function(box) { return box.checked; }); }
+    function syncSelectionForms(selected) {
+        document.querySelectorAll('.selection-form').forEach(function(form) {
+            form.querySelectorAll('input[name="item_ids"]').forEach(function(input) { input.remove(); });
+            selected.forEach(function(box) {
+                var input = document.createElement('input');
+                input.type = 'hidden'; input.name = 'item_ids'; input.value = box.value;
+                form.appendChild(input);
+            });
+        });
+    }
+    function updateSelection() {
+        var selected = selectedItems();
+        if (count) count.textContent = selected.length + ' selected';
+        if (selectAll) selectAll.textContent = selected.length === checkboxes.length ? 'clear all' : 'select all';
+        document.querySelectorAll('[data-requires-selection]').forEach(function(button) { button.disabled = selected.length === 0; });
+        if (zipButton) zipButton.textContent = selected.length ? 'download selected as zip' : 'download all as zip';
+        syncSelectionForms(selected);
+    }
+    checkboxes.forEach(function(box) { box.addEventListener('change', updateSelection); });
+    selectAll?.addEventListener('click', function() {
+        var shouldSelect = selectedItems().length !== checkboxes.length;
+        checkboxes.forEach(function(box) { box.checked = shouldSelect; });
+        updateSelection();
+    });
+    document.getElementById('download-individually')?.addEventListener('click', function() {
+        var selected = selectedItems();
+        if (selected.length > 1 && !confirm('Your browser may ask you to allow multiple downloads. Continue with ' + selected.length + ' individual downloads?')) return;
+        selected.forEach(function(box, index) {
+            setTimeout(function() {
+                var link = document.createElement('a');
+                link.href = box.dataset.downloadUrl; link.download = '';
+                document.body.appendChild(link); link.click(); link.remove();
+            }, index * 250);
+        });
+    });
+    document.getElementById('allow-collection-downloads')?.addEventListener('click', function(event) {
+        var button = event.currentTarget;
+        button.disabled = true;
+        button.textContent = 'downloads started';
+        checkboxes.forEach(function(box, index) {
+            setTimeout(function() {
+                var link = document.createElement('a');
+                link.href = box.dataset.downloadUrl; link.download = '';
+                document.body.appendChild(link); link.click(); link.remove();
+            }, index * 250);
+        });
+    });
+    updateSelection();
+
+    var availableItems = document.getElementById('available-items');
+    var availableCount = document.getElementById('available-selection-count');
+    var availableAddButton = document.getElementById('available-add-button');
+    function updateAvailable() {
+        if (!availableItems) return;
+        var selected = availableItems.querySelectorAll('input:checked').length;
+        if (availableCount) availableCount.textContent = selected + ' selected';
+        if (availableAddButton) availableAddButton.disabled = selected === 0;
+    }
+    availableItems?.addEventListener('change', updateAvailable);
+    document.getElementById('available-select-all')?.addEventListener('click', function(event) {
+        var boxes = Array.from(availableItems.querySelectorAll('input[type="checkbox"]'));
+        var shouldSelect = boxes.some(function(box) { return !box.checked; });
+        boxes.forEach(function(box) { box.checked = shouldSelect; });
+        event.currentTarget.textContent = shouldSelect ? 'clear' : 'select all';
+        updateAvailable();
+    });
+
+    document.getElementById('copy-collection-link')?.addEventListener('click', async function(event) {
+        var button = event.currentTarget;
+        try {
+            await navigator.clipboard.writeText(window.location.href);
+            button.textContent = 'copied';
+            setTimeout(function() { button.textContent = 'copy link'; }, 1600);
+        } catch (_) {
+            prompt('copy this link:', window.location.href);
+        }
+    });
+
+    document.querySelectorAll('.btn-copy-item').forEach(function(btn) {
+        btn.addEventListener('click', async function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            var url = btn.dataset.url;
+            if (!url) return;
+            var span = btn.querySelector('span');
+            var origText = span ? span.textContent : btn.textContent;
+            try {
+                await navigator.clipboard.writeText(url);
+                if (span) span.textContent = 'copied!';
+                else btn.textContent = 'copied!';
+                btn.classList.add('copied');
+                setTimeout(function() {
+                    if (span) span.textContent = origText;
+                    else btn.textContent = origText;
+                    btn.classList.remove('copied');
+                }, 1600);
+            } catch (_) {
+                prompt('copy link:', url);
+            }
+        });
+    });
+
+    document.getElementById('delete-collection-form')?.addEventListener('submit', function(event) {
+        var form = event.currentTarget;
+        var deleteContents = document.getElementById('delete-collection-contents').checked;
+        if (!deleteContents) {
+            if (!confirm('Delete this collection? Its files will remain available.')) event.preventDefault();
+            return;
+        }
+
+        var count = form.dataset.itemCount;
+        var warning = 'Permanently delete this collection and all ' + count + ' underlying upload' + (count === '1' ? '' : 's') + '?\n\nFiles used in other collections will also be deleted. This cannot be undone.';
+        if (!confirm(warning)) {
+            event.preventDefault();
+            return;
+        }
+
+        var phrase = 'DELETE';
+        if (prompt('Type DELETE to continue:') !== phrase) {
+            alert('Nothing was deleted. The confirmation text did not match.');
+            event.preventDefault();
+            return;
+        }
+        document.getElementById('delete-contents-confirmation').value = phrase;
+    });
+})();
+
+function renameCollectionItem(itemId, currentName) {
+    var name = prompt('Name in this collection (leave empty to reset):', currentName);
+    if (name === null || name === currentName) return;
+    document.getElementById('collection-rename-input-' + itemId).value = name;
+    document.getElementById('collection-rename-form-' + itemId).submit();
+}
+</script>
+
+{% endblock %}

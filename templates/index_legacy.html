@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>nullhost lite</h1>
+<p>Basic mode for old Nokia, Symbian, Series 40/60 and Opera Mini browsers.</p>
+
+<h2>find a file</h2>
+<form action="/search" method="get">
+    <p><input type="text" name="id" size="18" maxlength="32"></p>
+    <p><input type="submit" value="find"></p>
+</form>
+
+<h2>links</h2>
+<ul>
+    <li><a href="/uploads/">public files</a></li>
+    <li><a href="/a">account</a></li>
+    <li><a href="/?lite=0">try full interface</a></li>
+</ul>
+
+<p><strong>Uploading:</strong> bot verification requires a newer browser. You can still open and download shared files here.</p>
+{% endblock %}

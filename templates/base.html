@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>nullhost</title>
+    <meta name="description" content="temporary file and paste hosting.">
+    <meta name="theme-color" content="#090a0d">
+    {% if legacy_mode %}
+    <style type="text/css">
+        body { margin: 6px; background: #fff; color: #000; font-family: sans-serif; font-size: 14px; line-height: 1.3; }
+        a { color: #0000cc; }
+        .nav-container, .content, .footer-links { width: auto; margin: 0; padding: 0; }
+        .nav { border-bottom: 1px solid #777; padding-bottom: 5px; margin-bottom: 8px; }
+        .nav-brand { font-weight: bold; }
+        .nav-links { display: inline; }
+        .nav-links a { margin-left: 5px; }
+        .footer-links { border-top: 1px solid #777; margin-top: 12px; padding-top: 5px; }
+        h1, h2, h3 { margin: 8px 0 4px; }
+        h1 { font-size: 20px; } h2 { font-size: 18px; } h3 { font-size: 16px; }
+        p, ul { margin: 5px 0; }
+        hr { border: 0; border-top: 1px solid #aaa; }
+        table { border-collapse: collapse; width: 100%; }
+        th, td { border: 1px solid #777; padding: 2px; text-align: left; vertical-align: top; }
+        input, select, textarea, button { font: inherit; max-width: 96%; }
+        .theme-toggle, .desktop-only { display: none; }
+    </style>
+    {% else %}
+    <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600&display=swap" rel="stylesheet">
+    <script>
+        (function () {
+            var saved = localStorage.getItem('nullhost-theme');
+            if (!['light', 'dark', 'oled'].includes(saved)) saved = null;
+            var systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+            document.documentElement.dataset.theme = saved || (systemDark ? 'dark' : 'light');
+            document.documentElement.dataset.themeSource = saved ? 'manual' : 'system';
+        })();
+    </script>
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+    <link rel="apple-touch-icon" href="{{ url_for('static', filename='icon-192.png') }}">
+    <link rel="icon" href="{{ url_for('favicon') }}" type="image/x-icon" sizes="any">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css', v='20260814-nuke') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='ecosystem.css', v='20260802-oled') }}">
+    {% if turnstile_enabled %}
+    <script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit" async defer></script>
+    {% endif %}
+    {% endif %}
+</head>
+<body>
+    <!--
+    THESIS: nullhost is a quiet, trustworthy utility that gets out of the upload task's way.
+    OWN-WORLD: Near-black canvas, graphite surfaces, cool-gray hierarchy, restrained blue links, soft borders.
+    STORY: Friends identify the utility, upload or retrieve material, and read status without friction.
+    FIRST VIEWPORT: A compact navigation bar anchors a focused single-column work surface.
+    FORM: Minimal dark utility, user-pinned replacement direction.
+    FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, and DESIGN.md
+    -->
+    <div class="nav-container">
+        <div class="nav">
+            <span class="nav-brand">nullhost</span>
+            <div class="nav-links">
+                <a href="/">[upload]</a>
+                <a href="/uploads/">[public]</a>
+                <a href="/app" class="desktop-only">[app]</a>
+                <a href="/a">[account]</a>
+                {% if not legacy_mode %}<button type="button" class="theme-toggle" id="theme-toggle" aria-live="polite">[theme]</button>{% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div class="content">
+        {% block content %}{% endblock %}
+    </div>
+
+    <div class="footer-links">
+        <a href="/tos">[tos]</a>
+        <a href="/privacy">[privacy]</a>
+        <a href="/dmca">[dmca]</a>
+        <a href="/about">[about]</a>
+    </div>
+    {% if not legacy_mode %}
+    <script>
+        (function () {
+            var root = document.documentElement;
+            var button = document.getElementById('theme-toggle');
+            var themeMeta = document.querySelector('meta[name="theme-color"]');
+            var systemTheme = window.matchMedia('(prefers-color-scheme: dark)');
+
+            function applyTheme(theme, source) {
+                var themes = ['light', 'dark', 'oled'];
+                if (!themes.includes(theme)) theme = systemTheme.matches ? 'dark' : 'light';
+                var next = themes[(themes.indexOf(theme) + 1) % themes.length];
+                root.dataset.theme = theme;
+                root.dataset.themeSource = source;
+                button.textContent = '[theme: ' + theme + ']';
+                button.setAttribute('aria-label', 'Current theme: ' + theme + '. Switch to ' + next + ' theme');
+                button.title = source === 'system' ? 'Following your system theme' : 'Theme selected on this device';
+                themeMeta.setAttribute('content', theme === 'light' ? '#f5f6f8' : (theme === 'oled' ? '#000000' : '#090a0d'));
+            }
+
+            applyTheme(root.dataset.theme, root.dataset.themeSource);
+            button.addEventListener('click', function () {
+                var themes = ['light', 'dark', 'oled'];
+                var next = themes[(themes.indexOf(root.dataset.theme) + 1) % themes.length];
+                localStorage.setItem('nullhost-theme', next);
+                applyTheme(next, 'manual');
+            });
+            systemTheme.addEventListener('change', function (event) {
+                if (!localStorage.getItem('nullhost-theme')) applyTheme(event.matches ? 'dark' : 'light', 'system');
+            });
+        })();
+
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', function() {
+                navigator.serviceWorker.register('/static/sw.js').then(function(registration) {
+                    console.log('ServiceWorker cleanup registered');
+                }).catch(function(err) {
+                    console.log('ServiceWorker registration failed: ', err);
+                });
+            });
+        }
+    </script>
+    <script src="{{ url_for('static', filename='motion.js', v='20260814-motion3') }}"></script>
+    {% endif %}
+</body>
+</html>

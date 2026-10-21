@@ -1,0 +1,290 @@
+{% extends "base.html" %}
+{% block content %}
+
+<header class="account-header">
+    <div>
+        <h1>your workspace</h1>
+        <p class="meta">{{ items|length }} upload{% if items|length != 1 %}s{% endif %} · {{ collections|length }} collection{% if collections|length != 1 %}s{% endif %}</p>
+    </div>
+    <div class="account-header-actions">
+        <a class="button primary-link" href="/">upload new</a>
+        <form action="/a" method="post" class="form-inline">
+            <input type="hidden" name="action" value="logout">
+            <button type="submit">logout</button>
+        </form>
+    </div>
+</header>
+
+<details class="account-key-panel">
+    <summary>account recovery key</summary>
+    <div class="account-key-content">
+        <code id="account-key">{{ account_id }}</code>
+        <button type="button" class="btn-small" id="copy-account-key">copy</button>
+        <span class="warning">save this somewhere safe — it cannot be recovered.</span>
+    </div>
+</details>
+
+<section class="workspace-section" aria-labelledby="collections-heading">
+    <div class="workspace-section-heading">
+        <div>
+            <h2 id="collections-heading">Collections</h2>
+            <p>Share related files under one clean link.</p>
+        </div>
+        <button type="button" id="new-collection-button" class="primary">new collection</button>
+    </div>
+
+    <details class="collection-create-panel" id="collection-create-panel">
+        <summary>create a collection</summary>
+        <form action="/collections" method="post" class="collection-create-form">
+            <div class="form-row compact-row">
+                <div>
+                    <label for="collection-name">name</label>
+                    <input id="collection-name" type="text" name="name" maxlength="80" placeholder="trip photos" required>
+                </div>
+                <div>
+                    <label for="collection-password">password</label>
+                    <input id="collection-password" type="password" name="password" placeholder="optional">
+                </div>
+            </div>
+            <div class="form-row compact-row" style="margin-top:6px;">
+                <div>
+                    <label for="collection-custom-id">custom link (optional)</label>
+                    <input id="collection-custom-id" type="text" name="custom_id" placeholder="e.g. trip-photos (alphanumeric &amp; dashes)">
+                </div>
+                <div>
+                    <label for="collection-folder">put selected files in</label>
+                    <input id="collection-folder" type="text" name="folder_path" placeholder="optional folder, e.g. photos/day-1">
+                </div>
+            </div>
+
+            {% if items %}
+            <div class="picker-heading">
+                <span>start with existing uploads <strong id="create-selection-count">0 selected</strong></span>
+                <button type="button" class="btn-small select-all-btn" data-target="new-collection-items">select all</button>
+            </div>
+            <div class="item-picker compact-picker" id="new-collection-items">
+                {% for item in items %}
+                <label class="item-picker-row">
+                    <input type="checkbox" name="item_ids" value="{{ item['id'] }}">
+                    <span class="item-picker-copy">
+                        <strong>{% if item['type'] == 'file' %}{{ item['filename'] }}{% else %}paste {{ item['id'] }}{% endif %}{% if item['is_partial'] %} <span class="badge-partial">partial</span>{% endif %}</strong>
+                        <small>{{ item['display_type'] }} · {{ (item['size'] / 1048576) | round(2) }} mb{% if item['is_partial'] %} · <span style="color:var(--amber);">incomplete</span>{% endif %}</small>
+                    </span>
+                </label>
+                {% endfor %}
+            </div>
+            {% endif %}
+            <div class="panel-actions">
+                <button type="submit" class="primary">create collection</button>
+                <button type="button" id="cancel-collection-button">cancel</button>
+            </div>
+        </form>
+    </details>
+
+    {% if collections %}
+    <div class="collection-cards">
+        {% for collection in collections %}
+        <a class="collection-card" href="/c/{{ collection['id'] }}">
+            <span class="collection-card-copy">
+                <strong>{{ collection['name'] }}</strong>
+                <small>{{ collection['item_count'] }} item{% if collection['item_count'] != 1 %}s{% endif %}{% if collection['password_hash'] %} · protected{% endif %}</small>
+            </span>
+            <span class="collection-open">manage</span>
+        </a>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty-state compact-empty">
+        <strong>no collections yet.</strong>
+        <span>Create one to group files behind a single share link.</span>
+    </div>
+    {% endif %}
+</section>
+
+<section class="workspace-section" aria-labelledby="items-heading">
+    <div class="workspace-section-heading item-library-heading">
+        <div>
+            <h2 id="items-heading">Uploads</h2>
+            <p>Select files once, then add them to any collection.</p>
+        </div>
+        {% if items %}<input type="search" id="item-search" class="item-search" placeholder="filter uploads" aria-label="Filter uploads">{% endif %}
+    </div>
+
+    {% if items %}
+    <form id="account-bulk-form" action="/collections/add-items" method="post" class="account-bulk-bar">
+        <div class="bulk-selection-summary">
+            <button type="button" class="btn-small" id="library-select-all">select all</button>
+            <span id="library-selection-count" aria-live="polite">0 selected</span>
+        </div>
+        {% if collections %}
+        <select name="collection_id" aria-label="Destination collection" required>
+            <option value="">add to collection…</option>
+            {% for collection in collections %}<option value="{{ collection['id'] }}">{{ collection['name'] }}</option>{% endfor %}
+        </select>
+        <input type="text" name="folder_path" placeholder="optional folder" aria-label="Folder in collection">
+        <button type="submit" class="primary" disabled id="library-add-button">add selected</button>
+        {% else %}
+        <button type="button" id="bulk-create-collection" class="primary">create a collection</button>
+        {% endif %}
+        <button type="button" class="danger" id="library-delete-button" disabled>delete selected</button>
+    </form>
+    <form id="account-delete-form" action="/items/delete-selected" method="post" hidden></form>
+
+    <div class="account-item-list" id="account-item-list">
+        {% for item in items %}
+        {% set raw_link = '/v/' ~ item['id'] ~ '/' ~ item['filename'] if item['type'] == 'file' else '/v/' ~ item['id'] ~ '/paste.txt' %}
+        <article class="account-item" data-search="{{ (item['filename'] or item['id'])|lower }} {{ item['display_type']|lower }}">
+            <label class="account-item-select" aria-label="Select {% if item['filename'] %}{{ item['filename'] }}{% else %}paste {{ item['id'] }}{% endif %}">
+                <input type="checkbox" name="item_ids" value="{{ item['id'] }}" form="account-bulk-form" class="library-checkbox">
+            </label>
+            <a class="account-item-main" href="/v/{{ item['id'] }}">
+                <strong>{% if item['type'] == 'file' %}{{ item['filename'] }}{% else %}paste {{ item['id'] }}{% endif %}{% if item['is_partial'] %} <span class="badge-partial">partial</span>{% endif %}</strong>
+                <small>{{ item['display_type'] }} · {{ (item['size'] / 1048576) | round(2) }} mb · {{ item['views'] }} view{% if item['views'] != 1 %}s{% endif %}{% if item['is_partial'] %} · <span style="color:var(--amber);">incomplete (broken)</span>{% endif %}</small>
+            </a>
+            <div class="account-item-actions">
+                <a class="btn-small" href="{{ raw_link }}">raw{% if item['is_partial'] %} (partial){% endif %}</a>
+                <a class="btn-small" href="{{ raw_link }}?dl=1">download{% if item['is_partial'] %} (partial){% endif %}</a>
+                {% if item['type'] == 'file' %}
+                <form action="/rename/{{ item['id'] }}" method="post" id="rename-form-{{ item['id'] }}" class="form-inline">
+                    <input type="hidden" name="new_name" id="rename-input-{{ item['id'] }}">
+                    <button type="button" class="btn-small" onclick='renamePrompt({{ item["id"]|tojson }}, {{ item["filename"]|tojson }})'>rename</button>
+                </form>
+                {% endif %}
+                <form action="/delete/{{ item['id'] }}" method="post" class="form-inline" onsubmit="return confirm('delete this upload?');">
+                    <button type="submit" class="btn-small danger">delete</button>
+                </form>
+            </div>
+        </article>
+        {% endfor %}
+    </div>
+    <p class="empty-filter hidden" id="empty-filter">no uploads match that filter.</p>
+    {% else %}
+    <div class="empty-state">
+        <strong>your workspace is empty.</strong>
+        <span>Upload a file or paste, then organize it here.</span>
+        <a class="button" href="/">upload something</a>
+    </div>
+    {% endif %}
+</section>
+
+<details class="account-nuke-panel">
+    <summary>danger zone</summary>
+    <div class="account-nuke-content">
+        <div>
+            <strong>delete this account without recovery</strong>
+            <p>This immediately removes every upload, collection, and account record. Nothing can be restored.</p>
+        </div>
+        <form action="/account/nuke" method="post" id="account-nuke-form" class="nuke-confirm-form">
+            <label for="nuke-confirmation">type NUKE to confirm</label>
+            <input type="text" name="confirmation" id="nuke-confirmation" required pattern="NUKE" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="NUKE" aria-describedby="nuke-warning">
+            <small id="nuke-warning">This immediately and permanently deletes everything in the account.</small>
+            <button type="submit" class="danger">nuke account</button>
+        </form>
+    </div>
+</details>
+
+<script>
+(function() {
+    var createPanel = document.getElementById('collection-create-panel');
+    function openCreatePanel() {
+        if (!createPanel) return;
+        createPanel.open = true;
+        createPanel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        setTimeout(function() { document.getElementById('collection-name').focus({ preventScroll: true }); }, 220);
+    }
+    document.getElementById('new-collection-button')?.addEventListener('click', openCreatePanel);
+    document.getElementById('bulk-create-collection')?.addEventListener('click', openCreatePanel);
+    document.getElementById('cancel-collection-button')?.addEventListener('click', function() { createPanel.open = false; });
+
+    var createPicker = document.getElementById('new-collection-items');
+    var createCount = document.getElementById('create-selection-count');
+    function updateCreateCount() {
+        if (createCount && createPicker) createCount.textContent = createPicker.querySelectorAll('input:checked').length + ' selected';
+    }
+    document.querySelectorAll('.select-all-btn').forEach(function(button) {
+        button.addEventListener('click', function() {
+            var container = document.getElementById(button.dataset.target);
+            var boxes = Array.from(container.querySelectorAll('input[type="checkbox"]'));
+            var shouldSelect = boxes.some(function(box) { return !box.checked; });
+            boxes.forEach(function(box) { box.checked = shouldSelect; });
+            button.textContent = shouldSelect ? 'clear' : 'select all';
+            updateCreateCount();
+        });
+    });
+    createPicker?.addEventListener('change', updateCreateCount);
+
+    var libraryBoxes = Array.from(document.querySelectorAll('.library-checkbox'));
+    var libraryCount = document.getElementById('library-selection-count');
+    var librarySelectAll = document.getElementById('library-select-all');
+    var addButton = document.getElementById('library-add-button');
+    var deleteButton = document.getElementById('library-delete-button');
+    function visibleBoxes() {
+        return libraryBoxes.filter(function(box) { return !box.closest('.account-item').classList.contains('hidden'); });
+    }
+    function updateLibrarySelection() {
+        var selected = libraryBoxes.filter(function(box) { return box.checked; }).length;
+        if (libraryCount) libraryCount.textContent = selected + ' selected';
+        if (librarySelectAll) librarySelectAll.textContent = visibleBoxes().length && visibleBoxes().every(function(box) { return box.checked; }) ? 'clear visible' : 'select visible';
+        if (addButton) addButton.disabled = selected === 0;
+        if (deleteButton) deleteButton.disabled = selected === 0;
+    }
+    libraryBoxes.forEach(function(box) { box.addEventListener('change', updateLibrarySelection); });
+    librarySelectAll?.addEventListener('click', function() {
+        var boxes = visibleBoxes();
+        var shouldSelect = boxes.some(function(box) { return !box.checked; });
+        boxes.forEach(function(box) { box.checked = shouldSelect; });
+        updateLibrarySelection();
+    });
+
+    var search = document.getElementById('item-search');
+    search?.addEventListener('input', function() {
+        var query = search.value.trim().toLowerCase();
+        var visible = 0;
+        document.querySelectorAll('.account-item').forEach(function(row) {
+            var matches = !query || row.dataset.search.includes(query);
+            row.classList.toggle('hidden', !matches);
+            if (matches) visible += 1;
+        });
+        document.getElementById('empty-filter').classList.toggle('hidden', visible !== 0);
+        updateLibrarySelection();
+    });
+
+    deleteButton?.addEventListener('click', function() {
+        var selected = libraryBoxes.filter(function(box) { return box.checked; });
+        if (!selected.length || !confirm('Permanently delete ' + selected.length + ' selected upload' + (selected.length === 1 ? '' : 's') + '? This cannot be undone.')) return;
+        var form = document.getElementById('account-delete-form');
+        form.replaceChildren();
+        selected.forEach(function(box) {
+            var input = document.createElement('input');
+            input.type = 'hidden'; input.name = 'item_ids'; input.value = box.value;
+            form.appendChild(input);
+        });
+        var confirmation = document.createElement('input');
+        confirmation.type = 'hidden'; confirmation.name = 'confirm_delete'; confirmation.value = '1';
+        form.appendChild(confirmation);
+        form.requestSubmit();
+    });
+
+    document.getElementById('copy-account-key')?.addEventListener('click', async function(event) {
+        var button = event.currentTarget;
+        try {
+            await navigator.clipboard.writeText(document.getElementById('account-key').textContent.trim());
+            button.textContent = 'copied';
+            setTimeout(function() { button.textContent = 'copy'; }, 1600);
+        } catch (_) {
+            window.getSelection().selectAllChildren(document.getElementById('account-key'));
+        }
+    });
+
+})();
+
+function renamePrompt(id, oldName) {
+    var name = prompt('new filename:', oldName);
+    if (name && name !== oldName) {
+        document.getElementById('rename-input-' + id).value = name;
+        document.getElementById('rename-form-' + id).submit();
+    }
+}
+</script>
+
+{% endblock %}

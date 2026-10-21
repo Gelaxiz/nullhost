@@ -1,0 +1,35 @@
+# Environment & Secrets
+.env
+.env.local
+.secret_key
+.admin_totp_secret
+cookies.txt
+
+# Databases & User Uploads
+nullhost.db
+*.db
+*.sqlite
+*.sqlite3
+uploads/
+uploads/*
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.venv/
+env/
+
+# Build artifacts
+client/j2me/build/
+*.class
+
+# Heavy development tools
+tools/jdk8/
+tools/ensymble-ng/
+tools/*.jar
+
+# System
+.DS_Store
+Thumbs.db

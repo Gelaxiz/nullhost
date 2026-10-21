@@ -1,0 +1,238 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:12px; margin-bottom:24px;">
+    <div>
+        <h2>admin dashboard</h2>
+        <p class="meta">sysadmin · authenticated via totp</p>
+    </div>
+    <form action="/admin" method="post" class="form-inline">
+        <input type="hidden" name="action" value="logout">
+        <button type="submit">logout</button>
+    </form>
+</div>
+
+<!-- Stats -->
+<div class="stat-grid">
+    <div class="stat-card">
+        <div class="stat-value">{{ stats.items_count }}</div>
+        <div class="stat-label">items</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value">{{ stats.files_count }}</div>
+        <div class="stat-label">files</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value">{{ stats.pastes_count }}</div>
+        <div class="stat-label">pastes</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value">{{ stats.accs_count }}</div>
+        <div class="stat-label">accounts</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value danger">{{ stats.tomb_count }}</div>
+        <div class="stat-label">tombstones</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value">{{ stats.total_size_mb }}</div>
+        <div class="stat-label">mb stored</div>
+    </div>
+</div>
+
+<!-- Takedown tool -->
+<div class="section">
+    <h3>takedown</h3>
+    <p class="meta">removes item immediately and quarantines the link for 7 days.</p>
+    <form action="" method="post" id="takedown-form" onsubmit="var id=document.getElementById('tk-id').value.trim();if(!id)return false;this.action='/admin/takedown_item/'+id;return confirm('takedown '+id+'?');">
+        <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:flex-end;">
+            <div style="flex:1; min-width:140px;">
+                <label>item id</label>
+                <input type="text" id="tk-id" placeholder="8x9a2b1c" required style="margin:0;">
+            </div>
+            <div style="flex:2; min-width:200px;">
+                <label>reason</label>
+                <input type="text" name="reason" placeholder="reason" value="Third-party takedown / Legal Notice" style="margin:0;">
+            </div>
+            <button type="submit" class="danger" style="margin-bottom:0;">execute</button>
+        </div>
+    </form>
+</div>
+
+<!-- System actions -->
+<div class="section">
+    <h3>system</h3>
+    <form action="/admin/run_cleanup" method="post" class="form-inline">
+        <button type="submit" onclick="return confirm('run cleanup worker now?');">run cleanup</button>
+    </form>
+</div>
+
+<hr>
+
+<!-- Tombstones -->
+<div class="section">
+    <h3>tombstones (active quarantine)</h3>
+    {% if tombstones %}
+    <div class="table-wrapper">
+        <table>
+            <thead>
+                <tr>
+                    <th>id</th>
+                    <th>reason</th>
+                    <th>deleted</th>
+                    <th>reusable in</th>
+                    <th>action</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for t in tombstones %}
+                <tr>
+                    <td><strong>{{ t.id }}</strong></td>
+                    <td>
+                        <div style="margin-bottom:4px;">{{ t.reason }}</div>
+                        <form action="/admin/update_tombstone_reason/{{ t.id }}" method="post" style="display:flex;gap:4px;margin:0;">
+                            <input type="text" name="reason" placeholder="new reason..." style="font-size:0.78rem;padding:4px 8px;margin:0;max-width:160px;">
+                            <button type="submit" class="btn-small">update</button>
+                        </form>
+                    </td>
+                    <td><script>document.write(new Date({{ t.deleted_at }} * 1000).toLocaleDateString())</script></td>
+                    <td>
+                        {% set diff = t.expires_at - now %}
+                        {% if diff > 0 %}{{ (diff / 86400) | round(1) }}d{% else %}<span style="color:var(--green);">ready</span>{% endif %}
+                    </td>
+                    <td>
+                        <form action="/admin/revoke_tombstone/{{ t.id }}" method="post" class="form-inline" onsubmit="return confirm('revoke {{ t.id }}?');">
+                            <button type="submit" class="btn-small">revoke</button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <p>no active tombstones.</p>
+    {% endif %}
+</div>
+
+<hr>
+
+<!-- Items list -->
+<div class="section">
+    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:14px;">
+        <h3 style="margin:0;border:none;padding:0;">hosted items {% if q %}<span style="font-weight:400;">(results for "{{ q }}")</span>{% else %}<span style="font-weight:400;">(recent 100)</span>{% endif %}</h3>
+        <form action="/admin_dashboard" method="get" style="display:flex;gap:6px;margin:0;">
+            <input type="text" name="q" value="{{ q or '' }}" placeholder="search id, filename, acc..." style="margin:0;font-size:0.82rem;padding:6px 10px;">
+            <button type="submit" class="btn-small">search</button>
+            {% if q %}<a href="/admin_dashboard" style="font-size:0.82rem;align-self:center;">[clear]</a>{% endif %}
+        </form>
+    </div>
+
+    {% if items %}
+    <div class="table-wrapper">
+        <table>
+            <thead>
+                <tr>
+                    <th>id</th>
+                    <th>type</th>
+                    <th>account</th>
+                    <th>name / size</th>
+                    <th>views</th>
+                    <th>expires</th>
+                    <th>actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for i in items %}
+                <tr>
+                    <td><a href="/v/{{ i.id }}" target="_blank">{{ i.id }}</a></td>
+                    <td>{{ i.type }}</td>
+                    <td>{% if i.account_id %}{{ i.account_id }}{% else %}<span style="color:var(--text-3)">anon</span>{% endif %}</td>
+                    <td>{% if i.type == 'file' %}{{ i.filename }}{% else %}paste{% endif %} · {{ (i.size / 1024) | round(1) }} kb</td>
+                    <td>{{ i.views }}</td>
+                    <td>
+                        {% if i.expires_at > 2000000000 %}
+                        <span style="color:var(--green);">never</span>
+                        {% else %}
+                        <script>document.write(new Date({{ i.expires_at }} * 1000).toLocaleDateString())</script>
+                        {% endif %}
+                    </td>
+                    <td style="white-space:nowrap;">
+                        <form action="/admin/delete_item/{{ i.id }}" method="post" class="form-inline" onsubmit="return confirm('delete {{ i.id }}?');">
+                            <button type="submit" class="btn-small">del</button>
+                        </form>
+                        <form action="/admin/takedown_item/{{ i.id }}" method="post" class="form-inline" onsubmit="return confirm('ban {{ i.id }}?');">
+                            <input type="hidden" name="reason" value="Admin Takedown / TOS Violation">
+                            <button type="submit" class="btn-small danger">ban</button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <p>no items hosted.</p>
+    {% endif %}
+</div>
+
+<hr>
+
+<!-- Accounts -->
+<div class="section">
+    <h3>registered accounts</h3>
+    {% if accounts %}
+    <div class="table-wrapper">
+        <table>
+            <thead>
+                <tr>
+                    <th>account id</th>
+                    <th>created</th>
+                    <th>items</th>
+                    <th>storage</th>
+                    <th>action</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for a in accounts %}
+                <tr>
+                    <td><code>{{ a.account_id }}</code></td>
+                    <td><script>document.write(new Date({{ a.created_at }} * 1000).toLocaleDateString())</script></td>
+                    <td>{{ a.item_count }}</td>
+                    <td>{% if a.total_size %}{{ (a.total_size / 1048576) | round(2) }} mb{% else %}0 mb{% endif %}</td>
+                    <td>
+                        <form action="/admin/delete_account/{{ a.account_id }}" method="post" class="form-inline" onsubmit="return confirm('delete account {{ a.account_id }} and all {{ a.item_count }} files?');">
+                            <button type="submit" class="btn-small danger">delete</button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <p>no registered accounts.</p>
+    {% endif %}
+</div>
+
+<hr>
+
+<!-- 2FA -->
+<div class="section">
+    <h3>2fa / totp</h3>
+    <div class="totp-card">
+        <div style="flex:1; min-width:220px;">
+            <p class="meta" style="margin-bottom:10px;">portal protected by totp. use google authenticator, authy, or any totp app.</p>
+            <p class="meta"><strong style="color:var(--text-2);">secret:</strong> <code>{{ totp_secret }}</code></p>
+            <form action="/admin/reset_totp_secret" method="post" class="form-inline" style="margin-top:10px;" onsubmit="return confirm('generating a new secret invalidates your current 2FA app. continue?');">
+                <button type="submit" class="btn-small">regenerate secret</button>
+            </form>
+        </div>
+        <div class="totp-qr">
+            <div class="totp-qr-label">qr code</div>
+            <img src="/admin/totp_qr.png" alt="2FA QR Code">
+        </div>
+    </div>
+</div>
+
+{% endblock %}
