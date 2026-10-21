@@ -16,14 +16,14 @@ import javax.microedition.io.file.FileSystemRegistry;
 
 /**
  * Nullhost Universal Java ME (MIDP 2.0 / CLDC 1.1 / JSR-75) Client.
- * Complete mobile client with direct photo picker, in-app public file browser,
- * upload history, detailed result cards, and live QR code generation.
+ * Fast, responsive mobile client with native touch buttons, background photo scanner,
+ * in-app public file explorer, upload history, and live QR code display.
  * Pure Java 1.4 (Major version 48) - 100% Dependency-Free.
  * Copyright (c) 2026 Gelaxiz. All rights reserved.
  */
 public class NullhostMIDlet extends MIDlet implements CommandListener, ItemCommandListener {
 
-    private static final String APP_VERSION = "1.3.0";
+    private static final String APP_VERSION = "1.4.0";
     private static final String CLIENT_ID = "j2me-universal";
     private static final String MOBILE_SECRET = "nullhost_secret_mobile_app_key_2026";
     private static final String DEFAULT_SERVER = "http://nullhost.gelaxiz.xyz";
@@ -40,10 +40,10 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
     private String customPassword = "";
     private String customSlug = "";
 
-    private static final String[] EXPIRY_LABELS = {"1 Hour", "24 Hours (Default)", "7 Days", "30 Days", "Never Expire"};
+    private static final String[] EXPIRY_LABELS = {"1 Hour", "24 Hours Default", "7 Days", "30 Days", "Never Expire"};
     private static final String[] EXPIRY_VALS = {"1h", "24h", "7d", "30d", "never"};
 
-    private static final String[] BURN_LABELS = {"Disabled (Normal)", "1 View (Burn)", "5 Views", "10 Views"};
+    private static final String[] BURN_LABELS = {"Disabled", "1 View", "5 Views", "10 Views"};
     private static final String[] BURN_VALS = {"0", "1", "5", "10"};
 
     // Current Selection
@@ -136,7 +136,7 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
         cmdPhoto = new Command("Choose Photo", Command.SCREEN, 2);
         cmdBrowse = new Command("Browse Storage", Command.SCREEN, 3);
         cmdPublicFiles = new Command("Public Files", Command.SCREEN, 4);
-        cmdMyUploads = new Command("My Uploads", Command.SCREEN, 5);
+        cmdMyUploads = new Command("Upload History", Command.SCREEN, 5);
         cmdOptions = new Command("Upload Settings", Command.SCREEN, 6);
         cmdServerSettings = new Command("Server Settings", Command.SCREEN, 7);
         cmdAbout = new Command("About", Command.SCREEN, 8);
@@ -153,51 +153,58 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
         mainForm = new Form("Nullhost Mobile");
 
         // 1. Upload Section
-        fileStatusItem = new StringItem("Selected File:", "(None - choose below)");
+        fileStatusItem = new StringItem("Selected File:", "No file selected");
+        fileStatusItem.setLayout(Item.LAYOUT_EXPAND | Item.LAYOUT_NEWLINE_AFTER);
         mainForm.append(fileStatusItem);
 
-        btnSelectPhoto = new StringItem(null, ">> Choose Photo (Gallery)", Item.HYPERLINK);
+        btnSelectPhoto = new StringItem(null, "Choose Photo", Item.BUTTON);
+        btnSelectPhoto.setLayout(Item.LAYOUT_EXPAND | Item.LAYOUT_NEWLINE_AFTER);
         btnSelectPhoto.setDefaultCommand(cmdItemAction);
         btnSelectPhoto.setItemCommandListener(this);
         mainForm.append(btnSelectPhoto);
 
-        btnBrowseFiles = new StringItem(null, ">> Browse All Storage", Item.HYPERLINK);
+        btnBrowseFiles = new StringItem(null, "Browse Files", Item.BUTTON);
+        btnBrowseFiles.setLayout(Item.LAYOUT_EXPAND | Item.LAYOUT_NEWLINE_AFTER);
         btnBrowseFiles.setDefaultCommand(cmdItemAction);
         btnBrowseFiles.setItemCommandListener(this);
         mainForm.append(btnBrowseFiles);
 
-        btnUploadNow = new StringItem(null, "[ UPLOAD FILE NOW ]", Item.BUTTON);
+        btnUploadNow = new StringItem(null, "Upload File Now", Item.BUTTON);
+        btnUploadNow.setLayout(Item.LAYOUT_EXPAND | Item.LAYOUT_NEWLINE_AFTER);
         btnUploadNow.setDefaultCommand(cmdItemAction);
         btnUploadNow.setItemCommandListener(this);
         mainForm.append(btnUploadNow);
 
-        // Separator
-        mainForm.append(new StringItem("", "--------------------------------"));
+        mainForm.append(new Spacer(10, 8));
 
         // 2. Browse & Upload History Section
-        btnPublicFiles = new StringItem(null, ">> Browse Public Files", Item.HYPERLINK);
+        btnPublicFiles = new StringItem(null, "Browse Public Files", Item.BUTTON);
+        btnPublicFiles.setLayout(Item.LAYOUT_EXPAND | Item.LAYOUT_NEWLINE_AFTER);
         btnPublicFiles.setDefaultCommand(cmdItemAction);
         btnPublicFiles.setItemCommandListener(this);
         mainForm.append(btnPublicFiles);
 
-        btnMyUploads = new StringItem(null, ">> My Upload History (0)", Item.HYPERLINK);
+        btnMyUploads = new StringItem(null, "Upload History", Item.BUTTON);
+        btnMyUploads.setLayout(Item.LAYOUT_EXPAND | Item.LAYOUT_NEWLINE_AFTER);
         btnMyUploads.setDefaultCommand(cmdItemAction);
         btnMyUploads.setItemCommandListener(this);
         mainForm.append(btnMyUploads);
 
-        // Separator
-        mainForm.append(new StringItem("", "--------------------------------"));
+        mainForm.append(new Spacer(10, 8));
 
         // 3. Settings & Stats
-        settingsSummaryItem = new StringItem("Settings:", "Expiry: 24h · Burn: Off");
+        settingsSummaryItem = new StringItem("Settings:", "Expiry 24h, Burn Off");
+        settingsSummaryItem.setLayout(Item.LAYOUT_EXPAND | Item.LAYOUT_NEWLINE_AFTER);
         mainForm.append(settingsSummaryItem);
 
-        btnUploadSettings = new StringItem(null, ">> Change Upload Settings", Item.HYPERLINK);
+        btnUploadSettings = new StringItem(null, "Upload Settings", Item.BUTTON);
+        btnUploadSettings.setLayout(Item.LAYOUT_EXPAND | Item.LAYOUT_NEWLINE_AFTER);
         btnUploadSettings.setDefaultCommand(cmdItemAction);
         btnUploadSettings.setItemCommandListener(this);
         mainForm.append(btnUploadSettings);
 
-        btnServerSettings = new StringItem(null, ">> Change Server URL", Item.HYPERLINK);
+        btnServerSettings = new StringItem(null, "Server Settings", Item.BUTTON);
+        btnServerSettings.setLayout(Item.LAYOUT_EXPAND | Item.LAYOUT_NEWLINE_AFTER);
         btnServerSettings.setDefaultCommand(cmdItemAction);
         btnServerSettings.setItemCommandListener(this);
         mainForm.append(btnServerSettings);
@@ -217,13 +224,17 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
 
     private void updateMainFormStatus() {
         if (selectedFilePath == null) {
-            fileStatusItem.setText("(None - choose below)");
+            fileStatusItem.setText("No file selected");
         } else {
             String fname = selectedFilePath.substring(selectedFilePath.lastIndexOf('/') + 1);
-            fileStatusItem.setText(fname + " (" + formatSize(selectedFileSize) + ")");
+            fileStatusItem.setText(fname + " - " + formatSize(selectedFileSize));
         }
-        btnMyUploads.setText(">> My Upload History (" + myUploads.size() + ")");
-        settingsSummaryItem.setText("Expiry: " + EXPIRY_LABELS[expiryIndex] + " · Burn: " + BURN_LABELS[burnIndex]);
+        if (myUploads.isEmpty()) {
+            btnMyUploads.setText("Upload History");
+        } else {
+            btnMyUploads.setText("Upload History: " + myUploads.size() + " items");
+        }
+        settingsSummaryItem.setText("Expiry " + EXPIRY_LABELS[expiryIndex] + ", Burn " + BURN_LABELS[burnIndex]);
     }
 
     public void commandAction(Command c, Item item) {
@@ -284,96 +295,112 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
     }
 
     // ------------------------------------------------------------------------
-    // PHOTO GALLERY (DIRECT CAMERA DIRECTORY SCANNER)
+    // PHOTO GALLERY (FAST ASYNCHRONOUS STORAGE SCANNER)
     // ------------------------------------------------------------------------
     private void openPhotoGallery() {
+        final Form loadingForm = new Form("Photos");
+        loadingForm.append(new StringItem("Status:", "Searching camera storage for photos..."));
+        loadingForm.append(new Gauge(null, false, Gauge.INDEFINITE, Gauge.CONTINUOUS_RUNNING));
+        display.setCurrent(loadingForm);
+
+        Thread t = new Thread(new Runnable() {
+            public void run() {
+                scanPhotosBackground();
+            }
+        });
+        t.start();
+    }
+
+    private void scanPhotosBackground() {
         galleryEntries.removeAllElements();
         galleryList = new List("Choose Photo", List.IMPLICIT);
         galleryList.addCommand(cmdSelect);
         galleryList.addCommand(cmdBack);
         galleryList.setCommandListener(this);
 
-        String[] standardPaths = {
-            "file:///E:/DCIM/100NOKIA/",
-            "file:///E:/DCIM/",
-            "file:///E:/Images/",
-            "file:///C:/Data/Images/",
-            "file:///F:/DCIM/100NOKIA/",
-            "file:///F:/DCIM/",
-            "file:///F:/Images/"
-        };
+        // First item is always manual folder navigation
+        galleryList.append("Browse Storage Folders", null);
+        galleryEntries.addElement("ACTION_BROWSE");
 
-        for (int i = 0; i < standardPaths.length; i++) {
-            scanDirectoryForPhotos(standardPaths[i], 1);
-            if (galleryEntries.size() >= 80) break;
-        }
+        try {
+            Enumeration roots = FileSystemRegistry.listRoots();
+            Vector rootList = new Vector();
+            while (roots.hasMoreElements()) {
+                rootList.addElement((String) roots.nextElement());
+            }
 
-        if (galleryEntries.isEmpty()) {
-            try {
-                Enumeration roots = FileSystemRegistry.listRoots();
-                while (roots.hasMoreElements()) {
-                    String root = (String) roots.nextElement();
-                    scanDirectoryForPhotos("file:///" + root, 0);
-                    if (galleryEntries.size() >= 80) break;
+            // Common camera and picture subdirectories on Symbian/J2ME
+            String[] subDirs = {
+                "DCIM/100NOKIA/",
+                "DCIM/",
+                "Images/Camera/",
+                "Images/",
+                "Data/Images/",
+                "Pictures/",
+                "My Pictures/",
+                "Photos/",
+                ""
+            };
+
+            for (int i = 0; i < rootList.size(); i++) {
+                String root = (String) rootList.elementAt(i);
+                String rootUrl = "file:///" + root;
+                if (!rootUrl.endsWith("/")) rootUrl += "/";
+
+                for (int j = 0; j < subDirs.length; j++) {
+                    String target = rootUrl + subDirs[j];
+                    scanSingleFolder(target);
+                    if (galleryEntries.size() >= 100) break;
                 }
-            } catch (Exception ex) {}
-        }
-
-        if (galleryEntries.isEmpty()) {
-            showAlert("No Photos Found", "No images (.jpg, .png, .gif) found in camera storage folders.", AlertType.INFO, mainForm);
-            return;
-        }
+                if (galleryEntries.size() >= 100) break;
+            }
+        } catch (Exception e) {}
 
         display.setCurrent(galleryList);
     }
 
-    private void scanDirectoryForPhotos(String dirUrl, int depth) {
-        if (depth > 2 || galleryEntries.size() >= 80) return;
+    private void scanSingleFolder(String folderUrl) {
         try {
-            FileConnection fc = (FileConnection) Connector.open(dirUrl, Connector.READ);
-            if (fc.isDirectory()) {
+            FileConnection fc = (FileConnection) Connector.open(folderUrl, Connector.READ);
+            if (fc.exists() && fc.isDirectory()) {
                 Enumeration list = fc.list();
-                Vector foundHere = new Vector();
+                Vector found = new Vector();
                 while (list.hasMoreElements()) {
                     String name = (String) list.nextElement();
-                    String full = dirUrl + name;
-                    if (name.endsWith("/")) {
-                        String lower = name.toLowerCase();
-                        if (lower.indexOf("dcim") != -1 || lower.indexOf("100nokia") != -1 || lower.indexOf("camera") != -1 || lower.indexOf("photo") != -1 || lower.indexOf("image") != -1) {
-                            scanDirectoryForPhotos(full, depth + 1);
-                        }
-                    } else {
+                    if (!name.endsWith("/")) {
                         String lower = name.toLowerCase();
                         if (lower.endsWith(".jpg") || lower.endsWith(".jpeg") || lower.endsWith(".png") || lower.endsWith(".gif")) {
-                            foundHere.addElement(full);
+                            found.addElement(name);
                         }
                     }
                 }
                 fc.close();
 
-                // Insert into gallery list (reverse order so recent photos show first)
-                for (int i = foundHere.size() - 1; i >= 0; i--) {
-                    String pUrl = (String) foundHere.elementAt(i);
-                    galleryEntries.addElement(pUrl);
-                    String fname = pUrl.substring(pUrl.lastIndexOf('/') + 1);
-                    long size = 0;
-                    try {
-                        FileConnection ifc = (FileConnection) Connector.open(pUrl, Connector.READ);
-                        size = ifc.fileSize();
-                        ifc.close();
-                    } catch (Exception e) {}
-                    galleryList.append(fname + " (" + formatSize(size) + ")", null);
-                    if (galleryEntries.size() >= 80) break;
+                // Add to gallery in reverse order so latest photos come first
+                for (int i = found.size() - 1; i >= 0; i--) {
+                    String fname = (String) found.elementAt(i);
+                    String fullUrl = folderUrl + fname;
+                    if (!galleryEntries.contains(fullUrl)) {
+                        galleryEntries.addElement(fullUrl);
+                        galleryList.append(fname, null);
+                    }
+                    if (galleryEntries.size() >= 100) break;
                 }
             } else {
                 fc.close();
             }
-        } catch (Exception e) {}
+        } catch (Exception ex) {}
     }
 
     private void handleGallerySelect() {
         int idx = galleryList.getSelectedIndex();
         if (idx < 0 || idx >= galleryEntries.size()) return;
+
+        if (idx == 0) {
+            // First item is Browse Storage Folders
+            openFileBrowser(null);
+            return;
+        }
 
         String selectedUrl = (String) galleryEntries.elementAt(idx);
         selectedFilePath = selectedUrl;
@@ -390,13 +417,13 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
     }
 
     // ------------------------------------------------------------------------
-    // FILE BROWSER (JSR-75 STORAGE NAVIGATION)
+    // FILE BROWSER (STORAGE NAVIGATION)
     // ------------------------------------------------------------------------
     private void openFileBrowser(String dirUrl) {
         currentEntries.removeAllElements();
         currentDirectoryUrl = dirUrl;
 
-        browserList = new List(dirUrl == null ? "Select Drive" : "Browse Files", List.IMPLICIT);
+        browserList = new List(dirUrl == null ? "Select Storage Root" : "Browse Files", List.IMPLICIT);
         browserList.addCommand(cmdSelect);
         browserList.addCommand(cmdBack);
         browserList.setCommandListener(this);
@@ -417,7 +444,7 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
                         String name = (String) list.nextElement();
                         currentEntries.addElement(dirUrl + name);
                         if (name.endsWith("/")) {
-                            browserList.append("[DIR] " + name, null);
+                            browserList.append("Folder: " + name.substring(0, name.length() - 1), null);
                         } else {
                             browserList.append(name, null);
                         }
@@ -434,12 +461,12 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
     }
 
     private String formatDriveLabel(String root) {
-        if (root.startsWith("C:") || root.startsWith("c:")) return "[C:] Phone Memory";
-        if (root.startsWith("E:") || root.startsWith("e:")) return "[E:] Mass Memory";
-        if (root.startsWith("F:") || root.startsWith("f:")) return "[F:] Memory Card";
-        if (root.startsWith("D:") || root.startsWith("d:")) return "[D:] RAM Disk";
-        if (root.startsWith("Z:") || root.startsWith("z:")) return "[Z:] ROM";
-        return "[Drive] " + root;
+        if (root.startsWith("C:") || root.startsWith("c:")) return "Phone Memory C:";
+        if (root.startsWith("E:") || root.startsWith("e:")) return "Mass Memory E:";
+        if (root.startsWith("F:") || root.startsWith("f:")) return "Memory Card F:";
+        if (root.startsWith("D:") || root.startsWith("d:")) return "RAM Disk D:";
+        if (root.startsWith("Z:") || root.startsWith("z:")) return "ROM Z:";
+        return "Drive: " + root;
     }
 
     private void handleBrowserSelect() {
@@ -500,7 +527,7 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
 
                     if (code != 200) {
                         conn.close();
-                        showAlert("Public Files", "Server error (HTTP " + code + ")", AlertType.ERROR, mainForm);
+                        showAlert("Public Files", "Server error HTTP " + code, AlertType.ERROR, mainForm);
                         return;
                     }
 
@@ -522,14 +549,14 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
                         return;
                     }
 
-                    publicList = new List("Public Files (" + publicItems.size() + ")", List.IMPLICIT);
+                    publicList = new List("Public Files: " + publicItems.size() + " items", List.IMPLICIT);
                     publicList.addCommand(cmdSelect);
                     publicList.addCommand(cmdBack);
                     publicList.setCommandListener(NullhostMIDlet.this);
 
                     for (int i = 0; i < publicItems.size(); i++) {
                         UploadRecord rec = (UploadRecord) publicItems.elementAt(i);
-                        publicList.append(rec.filename + " (" + formatSize(rec.size) + ")", null);
+                        publicList.append(rec.filename + " - " + formatSize(rec.size), null);
                     }
 
                     display.setCurrent(publicList);
@@ -557,7 +584,7 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
             return;
         }
 
-        final List histList = new List("My Uploads (" + myUploads.size() + ")", List.IMPLICIT);
+        final List histList = new List("Upload History: " + myUploads.size() + " items", List.IMPLICIT);
         final Command cmdHistSelect = new Command("View", Command.OK, 1);
         final Command cmdHistBack = new Command("Back", Command.BACK, 2);
         histList.addCommand(cmdHistSelect);
@@ -565,7 +592,7 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
 
         for (int i = 0; i < myUploads.size(); i++) {
             UploadRecord rec = (UploadRecord) myUploads.elementAt(i);
-            histList.append(rec.filename + " (" + formatSize(rec.size) + ")", null);
+            histList.append(rec.filename + " - " + formatSize(rec.size), null);
         }
 
         histList.setCommandListener(new CommandListener() {
@@ -592,7 +619,7 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
         final Form f = new Form("File Details");
 
         if (rec.qrImage != null) {
-            f.append(new ImageItem("QR Code:", rec.qrImage, Item.LAYOUT_CENTER, "Scan to Download"));
+            f.append(new ImageItem("Scan QR Code:", rec.qrImage, Item.LAYOUT_CENTER, "QR Code"));
         }
 
         f.append(new StringItem("File Name:", rec.filename));
@@ -851,7 +878,7 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
     // UPLOAD SUCCESS SCREEN (DETAILED INFO & PROMINENT QR CODE)
     // ------------------------------------------------------------------------
     private void showSuccessScreen(final UploadRecord record) {
-        final Form successForm = new Form("Upload Successful!");
+        final Form successForm = new Form("Upload Successful");
 
         if (record.qrImage != null) {
             successForm.append(new ImageItem("Scan QR Code:", record.qrImage, Item.LAYOUT_CENTER, "Scan to Download"));
