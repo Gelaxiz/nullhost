@@ -24,6 +24,8 @@ env/
 # Build artifacts
 client/j2me/build/
 *.class
+*.sis
+*.sisx
 
 # Heavy development tools
 tools/jdk8/

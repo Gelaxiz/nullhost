@@ -354,10 +354,10 @@ def download_app(filename=None):
         mtype = 'application/octet-stream'
         
     fpath = os.path.join(client_dir, fname)
-    if not os.path.exists(fpath):
-        return abort(404)
+    if os.path.exists(fpath):
+        return send_file(fpath, as_attachment=True, download_name=fname, mimetype=mtype)
         
-    return send_file(fpath, as_attachment=True, download_name=fname, mimetype=mtype)
+    return redirect(f"https://github.com/Gelaxiz/nullhost/releases/latest/download/{fname}")
 
 @app.route('/api/mobile/auth', methods=['POST'])
 def mobile_auth():

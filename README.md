@@ -146,14 +146,14 @@ sudo systemctl enable --now nullhost
 
 ## Standalone Client Applications
 
-The repository includes dedicated standalone client applications built specifically for their target operating systems.
+Pre-built application binaries are distributed via [GitHub Releases](https://github.com/Gelaxiz/nullhost/releases/latest). Full source code for all clients is included in the repository:
 
-| Client | Platform | Binary | Source |
+| Client | Platform | Release Binary | Source Code |
 | :--- | :--- | :--- | :--- |
-| **Symbian ^3 (Belle FP2)** | Symbian ^3, Anna, Belle FP2 (Nokia 808, 701, N8, etc.) | `client/Nullhost_Belle.sisx` | `client/symbian_belle/` |
-| **Series 60 Keypad** | S60 3rd / 5th Edition Keypad (Nokia N95, E71, E72, etc.) | `client/Nullhost_S60.sis` | `client/s60_keypad/` |
-| **Universal Java ME** | Any phone supporting MIDP 2.0 / CLDC 1.1 + JSR-75 | `client/Nullhost.jar` | `client/j2me/src/` |
-| **Windows Desktop** | Windows 7 / 8 / 10 / 11 (.NET 4.5+) | `client/Nullhost.exe` | `client/windows/` |
+| **Symbian ^3 (Belle FP2)** | Symbian ^3, Anna, Belle FP2 (Nokia 808, 701, N8, etc.) | [Nullhost_Belle.sisx](https://github.com/Gelaxiz/nullhost/releases/latest/download/Nullhost_Belle.sisx) | [`client/symbian_belle/`](client/symbian_belle/) |
+| **Series 60 Keypad** | S60 3rd / 5th Edition Keypad (Nokia N95, E71, E72, etc.) | [Nullhost_S60.sis](https://github.com/Gelaxiz/nullhost/releases/latest/download/Nullhost_S60.sis) | [`client/s60_keypad/`](client/s60_keypad/) |
+| **Universal Java ME** | Any phone supporting MIDP 2.0 / CLDC 1.1 + JSR-75 | [Nullhost.jar](https://github.com/Gelaxiz/nullhost/releases/latest/download/Nullhost.jar) ([.jad](https://github.com/Gelaxiz/nullhost/releases/latest/download/Nullhost.jad)) | [`client/j2me/`](client/j2me/) |
+| **Windows Desktop** | Windows 7 / 8 / 10 / 11 (.NET 4.5+) | [Nullhost.exe](https://github.com/Gelaxiz/nullhost/releases/latest/download/Nullhost.exe) | [`client/windows/`](client/windows/) |
 
 ### Symbian ^3 (Belle FP2) — Native C++
 - **100% Native Symbian C++**: Written entirely in Symbian C++ (`inc/`, `src/`, `group/`, `data/`) using standard Symbian OS ROM libraries. **Zero Qt, Zero Web Runtime (WRT)**, and zero external dependencies.
