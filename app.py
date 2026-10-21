@@ -341,8 +341,9 @@ def download_app(filename=None):
     
     file_map = {
         'windows': ('Nullhost.exe', 'application/x-msdos-program'),
-        'symbian': ('Nullhost.jar', 'application/java-archive'),
-        's60': ('Nullhost.jar', 'application/java-archive'),
+        'symbian': ('Nullhost_Belle.sisx', 'application/vnd.symbian.install'),
+        'belle': ('Nullhost_Belle.sisx', 'application/vnd.symbian.install'),
+        's60': ('Nullhost_S60.sis', 'application/vnd.symbian.install'),
         'j2me': ('Nullhost.jar', 'application/java-archive'),
         'jad': ('Nullhost.jad', 'text/vnd.sun.j2me.app-descriptor'),
         'belle-source': ('Nullhost_Symbian_Belle_Source.zip', 'application/zip'),
@@ -353,9 +354,8 @@ def download_app(filename=None):
         fname, mtype = file_map[target]
     else:
         fname = secure_filename(target)
-        if fname in ('Nullhost_Belle.sisx', 'Nullhost_S60.sis'):
-            fname = 'Nullhost.jar'
-            mtype = 'application/java-archive'
+        if fname.endswith(('.sisx', '.sis')):
+            mtype = 'application/vnd.symbian.install'
         elif fname.endswith('.jar'):
             mtype = 'application/java-archive'
         elif fname.endswith('.jad'):

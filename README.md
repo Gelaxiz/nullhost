@@ -150,10 +150,12 @@ The repository includes dedicated standalone client applications built specifica
 
 | Client | Platform | Binary | Source |
 | :--- | :--- | :--- | :--- |
-| **Universal Mobile (Symbian / S60 / S40 / Java)** | Symbian Belle FP2 (Nokia 808, 701, N8), S60, Series 40, Java ME | `client/Nullhost.jar` & `Nullhost.jad` | `client/j2me/src/` |
+| **Symbian ^3 (Belle FP2)** | Symbian Belle FP2 (Nokia 808, 701, N8, etc.) | `client/Nullhost_Belle.sisx` | `client/symbian_belle/` |
+| **Series 60 Keypad** | S60 3rd / 5th Edition Keypad (Nokia E52, E72, N95, etc.) | `client/Nullhost_S60.sis` | `client/s60_keypad/` |
+| **Universal Mobile (.JAR)** | Symbian, S60, Series 40, Java ME | `client/Nullhost.jar` & `Nullhost.jad` | `client/j2me/src/` |
 | **Windows Desktop** | Windows 7 / 8 / 10 / 11 (.NET 4.5+) | `client/Nullhost.exe` | `client/windows/` |
-| **Symbian ^3 (Belle FP2) C++** | Pure Symbian C++ Source Tree | `Nullhost_Symbian_Belle_Source.zip` | `client/symbian_belle/` |
-| **Series 60 Keypad C++** | Pure Symbian C++ Source Tree | `Nullhost_S60_Keypad_Source.zip` | `client/s60_keypad/` |
+| **Belle C++ Source** | Pure Native Symbian C++ Source | `Nullhost_Symbian_Belle_Source.zip` | `client/symbian_belle/` |
+| **S60 C++ Source** | Pure Native Symbian C++ Source | `Nullhost_S60_Keypad_Source.zip` | `client/s60_keypad/` |
 
 ### Universal Mobile Client (Nokia Symbian Belle FP2 / S60 / Java ME)
 - **Universal Zero-Dependency Standalone Application**: Fully compatible out-of-the-box with Nokia Symbian Belle FP2 (Nokia 808 PureView, 701, 700, 603), Symbian^3 / Anna (N8, E7, C7), S60 keypad devices, and Series 40 via the hardware-accelerated Nokia JVM in ROM.

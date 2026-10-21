@@ -25,22 +25,62 @@
             </div>
         </div>
 
-        <!-- Nokia Symbian Belle / S60 / Mobile Client -->
+        <!-- Symbian ^3 / Belle FP2 Touch Client (.SISX) -->
         <div style="background: var(--surface-1); border: 1px solid var(--border-soft); border-radius: 12px; padding: 20px; display: flex; flex-direction: column;">
             <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
                 <img src="/static/icon-512.png" alt="Nullhost Logo" style="width: 28px; height: 28px; border-radius: 6px;">
-                <h3 style="margin: 0; color: #00a6e2; font-size: 1.25rem;">Symbian & Mobile Devices</h3>
+                <h3 style="margin: 0; color: #00a6e2; font-size: 1.25rem;">Symbian ^3 (Belle FP2)</h3>
             </div>
-            <p style="font-size: 0.9rem; color: var(--text-2); flex-grow: 1;">Zero-dependency standalone client for Nokia Symbian Belle FP2 (Nokia 808 PureView, 701, 700, 603), Symbian^3 / Anna (N8, E7, C7), S60 keypad devices, and Series 40. Features official Nullhost logo, native filesystem browsing (C:, E:, F:), HMAC authentication, and photo gallery integration. Runs directly on Nokia's ROM JVM—zero Python runtime needed.</p>
+            <p style="font-size: 0.9rem; color: var(--text-2); flex-grow: 1;">Dedicated installation package (.SISX) for Nokia Belle FP2 (Nokia 808 PureView, 701, 700, 603) and Symbian^3 / Anna (N8, E7, C7). Includes authentic Nullhost logo and Belle FP2 device compatibility.</p>
             <ul style="font-size: 0.85rem; color: var(--text-2); margin: 12px 0 16px 18px; padding: 0;">
                 <li>Official embedded Nullhost logo</li>
-                <li>Touch & D-Pad keypad navigation</li>
-                <li>JSR-75 native filesystem explorer (C:, E:, F:)</li>
-                <li>Zero Python / zero external dependencies</li>
+                <li>Belle FP2 bottom toolbar & sliding touch sheets</li>
+                <li>In-app & system drive file picker (C:, E:, F:)</li>
+                <li>Photo gallery integration & HMAC uploads</li>
+            </ul>
+            <div style="margin-top: auto;">
+                <a href="/download-app?platform=belle" style="text-decoration: none;">
+                    <button type="button" class="primary" style="width: 100%; padding: 10px; background: #00a6e2; border-color: #00a6e2;">Download Nullhost_Belle.sisx</button>
+                </a>
+            </div>
+        </div>
+
+        <!-- Series 60 Keypad Client (.SIS) -->
+        <div style="background: var(--surface-1); border: 1px solid var(--border-soft); border-radius: 12px; padding: 20px; display: flex; flex-direction: column;">
+            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
+                <img src="/static/icon-512.png" alt="Nullhost Logo" style="width: 28px; height: 28px; border-radius: 6px;">
+                <h3 style="margin: 0; color: #38bdf8; font-size: 1.25rem;">Series 60 (Keypad)</h3>
+            </div>
+            <p style="font-size: 0.9rem; color: var(--text-2); flex-grow: 1;">Dedicated installation package (.SIS) for non-touch S60 3rd & 5th Edition keypad phones (Nokia E52, E72, E71, C5, N95, N82, E5) with hardware D-Pad and softkeys.</p>
+            <ul style="font-size: 0.85rem; color: var(--text-2); margin: 12px 0 16px 18px; padding: 0;">
+                <li>Official embedded Nullhost logo</li>
+                <li>Full 5-way D-Pad tab navigation</li>
+                <li>Hardware CBA softkeys (Options / Back)</li>
+                <li>Drive explorer & photo gallery</li>
+            </ul>
+            <div style="margin-top: auto;">
+                <a href="/download-app?platform=s60" style="text-decoration: none;">
+                    <button type="button" class="primary" style="width: 100%; padding: 10px; background: #0284c7; border-color: #0284c7;">Download Nullhost_S60.sis</button>
+                </a>
+            </div>
+        </div>
+
+        <!-- Universal Java ME (.JAR / .JAD) -->
+        <div style="background: var(--surface-1); border: 1px solid var(--border-soft); border-radius: 12px; padding: 20px; display: flex; flex-direction: column;">
+            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
+                <img src="/static/icon-512.png" alt="Nullhost Logo" style="width: 28px; height: 28px; border-radius: 6px;">
+                <h3 style="margin: 0; color: #f59e0b; font-size: 1.25rem;">Universal Mobile (.JAR)</h3>
+            </div>
+            <p style="font-size: 0.9rem; color: var(--text-2); flex-grow: 1;">Universal standalone MIDlet for any phone supporting Java (MIDP 2.0 / CLDC 1.1 + JSR-75). Runs directly on Nokia's ROM JVM with zero dependencies.</p>
+            <ul style="font-size: 0.85rem; color: var(--text-2); margin: 12px 0 16px 18px; padding: 0;">
+                <li>Official embedded Nullhost logo</li>
+                <li>Zero external dependencies</li>
+                <li>JSR-75 filesystem explorer (C:, E:, F:)</li>
+                <li>Adaptive touch & keypad UI</li>
             </ul>
             <div style="margin-top: auto; display: flex; gap: 8px;">
                 <a href="/download-app?platform=j2me" style="text-decoration: none; flex: 1;">
-                    <button type="button" class="primary" style="width: 100%; padding: 10px; background: #00a6e2; border-color: #00a6e2;">Download Nullhost.jar</button>
+                    <button type="button" class="primary" style="width: 100%; padding: 10px; background: #f59e0b; border-color: #f59e0b; color: #000;">Download .JAR</button>
                 </a>
                 <a href="/download-app?platform=jad" style="text-decoration: none;">
                     <button type="button" style="padding: 10px 14px;">.JAD</button>
@@ -52,9 +92,9 @@
         <div style="background: var(--surface-1); border: 1px solid var(--border-soft); border-radius: 12px; padding: 20px; display: flex; flex-direction: column;">
             <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
                 <img src="/static/icon-512.png" alt="Nullhost Logo" style="width: 28px; height: 28px; border-radius: 6px;">
-                <h3 style="margin: 0; color: #38bdf8; font-size: 1.25rem;">Symbian C++ Source</h3>
+                <h3 style="margin: 0; color: #a855f7; font-size: 1.25rem;">Symbian C++ Source</h3>
             </div>
-            <p style="font-size: 0.9rem; color: var(--text-2); flex-grow: 1;">Complete pure native C++ source code (Avkon, CActive HTTP, RFs, Crypto, MMP, BLD.INF, PKG) for developers compiling native SISX binaries using Nokia Carbide.c++ or the Symbian SDK.</p>
+            <p style="font-size: 0.9rem; color: var(--text-2); flex-grow: 1;">Complete pure native C++ source code (Avkon, CActive HTTP, RFs, Crypto, MMP, BLD.INF, PKG) for developers compiling native binaries in Carbide.c++ or Symbian SDK.</p>
             <ul style="font-size: 0.85rem; color: var(--text-2); margin: 12px 0 16px 18px; padding: 0;">
                 <li>100% Native Symbian C++ (Zero Qt, Zero WRT)</li>
                 <li>Belle FP2 bottom toolbar & touch sheets</li>
@@ -63,10 +103,10 @@
             </ul>
             <div style="margin-top: auto; display: flex; gap: 8px;">
                 <a href="/download-app?platform=belle-source" style="text-decoration: none; flex: 1;">
-                    <button type="button" style="width: 100%; padding: 10px; border-color: #38bdf8; color: #38bdf8;">Belle C++ (.ZIP)</button>
+                    <button type="button" style="width: 100%; padding: 10px; border-color: #a855f7; color: #a855f7;">Belle C++ (.ZIP)</button>
                 </a>
                 <a href="/download-app?platform=s60-source" style="text-decoration: none; flex: 1;">
-                    <button type="button" style="width: 100%; padding: 10px; border-color: #38bdf8; color: #38bdf8;">S60 C++ (.ZIP)</button>
+                    <button type="button" style="width: 100%; padding: 10px; border-color: #a855f7; color: #a855f7;">S60 C++ (.ZIP)</button>
                 </a>
             </div>
         </div>
