@@ -1,0 +1,32 @@
+#ifndef NULLHOSTBELLE_HRH
+#define NULLHOSTBELLE_HRH
+
+enum TNullhostBelleCommandIds
+    {
+    ENullhostCmdUpload = 0x6001,
+    ENullhostCmdBrowse,
+    ENullhostCmdGallery,
+    ENullhostCmdSystemPick,
+    ENullhostCmdAccount,
+    ENullhostCmdChangeExpiry,
+    ENullhostCmdChangeBurn,
+    ENullhostCmdSetPassword,
+    ENullhostCmdSetSlug,
+    ENullhostCmdTermsOfService,
+    ENullhostCmdPrivacyPolicy,
+    ENullhostCmdAbout,
+    ENullhostCmdCopyLink,
+    ENullhostCmdCopyRaw,
+    ENullhostCmdUploadAnother
+    };
+
+enum TNullhostViewType
+    {
+    ENullhostViewUpload = 0,
+    ENullhostViewGallery,
+    ENullhostViewBrowser,
+    ENullhostViewResult,
+    ENullhostViewText
+    };
+
+#endif // NULLHOSTBELLE_HRH

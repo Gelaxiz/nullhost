@@ -1,0 +1,47 @@
+TARGET            NullhostBelle.exe
+TARGETTYPE        exe
+UID               0x100039CE 0xE009F810
+
+SECUREID          0xE009F810
+CAPABILITY        LocalServices NetworkServices ReadUserData WriteUserData UserEnvironment
+
+SOURCEPATH        ..\src
+SOURCE            NullhostBelleMain.cpp
+SOURCE            NullhostBelleApplication.cpp
+SOURCE            NullhostBelleDocument.cpp
+SOURCE            NullhostBelleAppUi.cpp
+SOURCE            NullhostBelleContainer.cpp
+SOURCE            NullhostFileBrowser.cpp
+SOURCE            NullhostGalleryScanner.cpp
+SOURCE            NullhostHttpEngine.cpp
+SOURCE            NullhostCrypto.cpp
+
+SOURCEPATH        ..\data
+START RESOURCE    NullhostBelle.rss
+HEADER
+TARGETPATH        \resource\apps
+END
+
+START RESOURCE    NullhostBelle_reg.rss
+TARGETPATH        \private\10003a3f\import\apps
+END
+
+USERINCLUDE       ..\inc
+
+SYSTEMINCLUDE     \epoc32\include
+SYSTEMINCLUDE     \epoc32\include\mw
+
+LIBRARY           euser.lib
+LIBRARY           apparc.lib
+LIBRARY           cone.lib
+LIBRARY           eikcore.lib
+LIBRARY           avkon.lib
+LIBRARY           gdi.lib
+LIBRARY           fbscli.lib
+LIBRARY           bitgdi.lib
+LIBRARY           efsrv.lib
+LIBRARY           estor.lib
+LIBRARY           bafl.lib
+LIBRARY           http.lib
+LIBRARY           inetprotutil.lib
+LIBRARY           eikcoctl.lib

@@ -1,0 +1,30 @@
+#ifndef NULLHOSTS60_HRH
+#define NULLHOSTS60_HRH
+
+enum TNullhostS60CommandIds
+    {
+    ENullhostS60CmdUpload = 0x7001,
+    ENullhostS60CmdBrowse,
+    ENullhostS60CmdGallery,
+    ENullhostS60CmdSystemPick,
+    ENullhostS60CmdAccount,
+    ENullhostS60CmdChangeExpiry,
+    ENullhostS60CmdChangeBurn,
+    ENullhostS60CmdSetPassword,
+    ENullhostS60CmdSetSlug,
+    ENullhostS60CmdTermsOfService,
+    ENullhostS60CmdPrivacyPolicy,
+    ENullhostS60CmdAbout,
+    ENullhostS60CmdSettings
+    };
+
+enum TNullhostS60Tab
+    {
+    ETabUpload = 0,
+    ETabBrowse,
+    ETabGallery,
+    ETabAccount,
+    ETabViewer
+    };
+
+#endif // NULLHOSTS60_HRH

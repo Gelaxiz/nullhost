@@ -1,0 +1,19 @@
+; Package file for Series 60 Keypad Devices (S60 3rd / 5th Edition)
+; Pure Native C++ Application - Zero Qt, Zero Web Runtime
+
+#{"Nullhost"}, (0xE009F811), 1, 0, 0
+
+; Localised vendor name
+%{"Gelaxiz"}
+
+; Unique Vendor name
+:"Gelaxiz"
+
+; Supports S60 3rd Edition and S60 5th Edition platforms
+[0x101F7961], 0, 0, 0, {"Series60ProductID"}
+[0x1028315F], 0, 0, 0, {"Series60ProductID"}
+
+; Files to install
+"NullhostS60.exe"-"!:\sys\bin\NullhostS60.exe"
+"NullhostS60.rsc"-"!:\resource\apps\NullhostS60.rsc"
+"NullhostS60_reg.rsc"-"!:\private\10003a3f\import\apps\NullhostS60_reg.rsc"

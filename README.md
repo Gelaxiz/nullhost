@@ -155,17 +155,17 @@ The repository includes dedicated standalone client applications built specifica
 | **Universal Java ME** | Any phone supporting MIDP 2.0 / CLDC 1.1 + JSR-75 | `client/Nullhost.jar` | `client/j2me/src/` |
 | **Windows Desktop** | Windows 7 / 8 / 10 / 11 (.NET 4.5+) | `client/Nullhost.exe` | `client/windows/` |
 
-### Symbian ^3 (Belle FP2)
-- **100% Native**: Built directly on native Symbian OS canvas rendering. **Zero Qt, Zero Web Runtime (WRT)**.
-- **Belle FP2 Interface**: Frosted glass status bar, sliding action sheets, bottom pill toolbar.
-- **Photo Gallery**: Automatic scanner for camera and picture directories (`E:\Images\`, `C:\Data\Images\`, `F:\Images\`).
-- **Dual File Pickers**: In-app drive tree explorer (`C:`, `E:`, `F:`) and system file picker.
-- **In-App Menus**: English-only views for Terms of Service, Privacy Policy, and About.
+### Symbian ^3 (Belle FP2) — Native C++
+- **100% Native Symbian C++**: Written entirely in Symbian C++ (`inc/`, `src/`, `group/`, `data/`) using standard Symbian OS ROM libraries. **Zero Qt, Zero Web Runtime (WRT)**, and zero external dependencies.
+- **Belle FP2 Interface**: High-performance double-buffered canvas, frosted glass status bar, sliding action sheets, and capacitive bottom pill toolbar (`Options`, `Gallery`, `Browse`, `Upload`).
+- **Photo Gallery**: Native `RFs` directory scanner discovering JPEG, PNG, and GIF images across `E:\Images\`, `C:\Data\Images\`, `F:\Images\`, `E:\DCIM\`.
+- **Dual File Pickers**: Direct Symbian drive tree explorer (`C: Phone`, `E: Mass Storage`, `F: Memory Card`) and system query picker.
+- **In-App Menus (English)**: Full views for Terms of Service, Privacy Policy, and About Nullhost.
 
-### Series 60 (S60 Keypad)
-- **Keypad Ergonomics**: Hardware CBA softkeys (`Options` / `Back`) and 5-way D-Pad tab switcher (`[ Upload ] [ Browse ] [ Gallery ] [ Account ]`).
-- **100% Native**: Standalone Symbian executable without Qt or WRT.
-- **Dual File Pickers**: Hardware D-Pad drive browser and system picker query.
+### Series 60 (S60 Keypad) — Native C++
+- **100% Native Symbian C++**: Standalone Symbian C++ application compiled directly against S60 3rd/5th Edition ROM libraries. Zero external dependencies, zero Qt, zero WRT.
+- **Keypad Ergonomics**: Hardware CBA softkeys (`Options` / `Back`) and 5-way D-Pad tab switcher (`[ Upload ] [ Browse ] [ Gallery ] [ Account ]`) with cursor highlight bar and number shortcuts 1-4.
+- **Dual File Pickers**: D-Pad drive browser for `C:\`, `E:\`, `F:\` and system file query dialog.
 
 ### Universal Java ME MIDlet
 - **Universal J2ME**: Runs on standard numeric keypad phones and resistive/capacitive touchscreens.
