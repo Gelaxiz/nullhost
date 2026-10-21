@@ -16,14 +16,14 @@ import javax.microedition.io.file.FileSystemRegistry;
 
 /**
  * Nullhost Universal Java ME (MIDP 2.0 / CLDC 1.1 / JSR-75) Client.
- * Fast, responsive mobile client with native touch buttons, background photo scanner,
- * in-app public file explorer, upload history, and live QR code display.
+ * Complete mobile client with native touch buttons, background photo scanner,
+ * in-app code search, server file deletion, and live QR code display.
  * Pure Java 1.4 (Major version 48) - 100% Dependency-Free.
  * Copyright (c) 2026 Gelaxiz. All rights reserved.
  */
 public class NullhostMIDlet extends MIDlet implements CommandListener, ItemCommandListener {
 
-    private static final String APP_VERSION = "1.4.0";
+    private static final String APP_VERSION = "1.5.0";
     private static final String CLIENT_ID = "j2me-universal";
     private static final String MOBILE_SECRET = "nullhost_secret_mobile_app_key_2026";
     private static final String DEFAULT_SERVER = "http://nullhost.gelaxiz.xyz";
@@ -59,37 +59,39 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
     private StringItem btnSelectPhoto;
     private StringItem btnBrowseFiles;
     private StringItem btnUploadNow;
+    private StringItem btnFindByCode;
     private StringItem btnPublicFiles;
     private StringItem btnMyUploads;
     private StringItem settingsSummaryItem;
-    private StringItem btnUploadSettings;
-    private StringItem btnServerSettings;
+    private StringItem btnSettings;
 
-    // Sub-Forms
-    private Form optionsForm;
+    // Search by Code Form
+    private Form findForm;
+    private TextField findCodeField;
+    private Command cmdDoSearch;
+
+    // Consolidated Settings Form
+    private Form settingsForm;
+    private TextField optServerUrl;
     private ChoiceGroup optExpiry;
     private ChoiceGroup optBurn;
     private TextField optPassword;
     private TextField optSlug;
     private TextField optAccount;
 
-    private Form serverForm;
-    private TextField optServerUrl;
-
     // Commands
     private Command cmdUpload;
     private Command cmdPhoto;
     private Command cmdBrowse;
+    private Command cmdFindByCodeMenu;
     private Command cmdPublicFiles;
     private Command cmdMyUploads;
-    private Command cmdOptions;
-    private Command cmdServerSettings;
+    private Command cmdSettings;
     private Command cmdAbout;
     private Command cmdExit;
     private Command cmdBack;
     private Command cmdSelect;
-    private Command cmdSaveOptions;
-    private Command cmdSaveServer;
+    private Command cmdSaveSettings;
     private Command cmdItemAction;
 
     // File Browser State
@@ -135,17 +137,17 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
         cmdUpload = new Command("Upload File Now", Command.OK, 1);
         cmdPhoto = new Command("Choose Photo", Command.SCREEN, 2);
         cmdBrowse = new Command("Browse Storage", Command.SCREEN, 3);
-        cmdPublicFiles = new Command("Public Files", Command.SCREEN, 4);
-        cmdMyUploads = new Command("Upload History", Command.SCREEN, 5);
-        cmdOptions = new Command("Upload Settings", Command.SCREEN, 6);
-        cmdServerSettings = new Command("Server Settings", Command.SCREEN, 7);
+        cmdFindByCodeMenu = new Command("Find by Code", Command.SCREEN, 4);
+        cmdPublicFiles = new Command("Public Files", Command.SCREEN, 5);
+        cmdMyUploads = new Command("Upload History", Command.SCREEN, 6);
+        cmdSettings = new Command("Settings", Command.SCREEN, 7);
         cmdAbout = new Command("About", Command.SCREEN, 8);
         cmdExit = new Command("Exit", Command.EXIT, 9);
 
         cmdBack = new Command("Back", Command.BACK, 1);
         cmdSelect = new Command("Select", Command.OK, 1);
-        cmdSaveOptions = new Command("Save", Command.OK, 1);
-        cmdSaveServer = new Command("Save", Command.OK, 1);
+        cmdSaveSettings = new Command("Save", Command.OK, 1);
+        cmdDoSearch = new Command("Search", Command.OK, 1);
         cmdItemAction = new Command("Go", Command.ITEM, 1);
     }
 
@@ -177,7 +179,13 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
 
         mainForm.append(new Spacer(10, 8));
 
-        // 2. Browse & Upload History Section
+        // 2. Discover & Search Section
+        btnFindByCode = new StringItem(null, "Find by Code", Item.BUTTON);
+        btnFindByCode.setLayout(Item.LAYOUT_EXPAND | Item.LAYOUT_NEWLINE_AFTER);
+        btnFindByCode.setDefaultCommand(cmdItemAction);
+        btnFindByCode.setItemCommandListener(this);
+        mainForm.append(btnFindByCode);
+
         btnPublicFiles = new StringItem(null, "Browse Public Files", Item.BUTTON);
         btnPublicFiles.setLayout(Item.LAYOUT_EXPAND | Item.LAYOUT_NEWLINE_AFTER);
         btnPublicFiles.setDefaultCommand(cmdItemAction);
@@ -192,31 +200,25 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
 
         mainForm.append(new Spacer(10, 8));
 
-        // 3. Settings & Stats
+        // 3. Consolidated Settings Section
         settingsSummaryItem = new StringItem("Settings:", "Expiry 24h, Burn Off");
         settingsSummaryItem.setLayout(Item.LAYOUT_EXPAND | Item.LAYOUT_NEWLINE_AFTER);
         mainForm.append(settingsSummaryItem);
 
-        btnUploadSettings = new StringItem(null, "Upload Settings", Item.BUTTON);
-        btnUploadSettings.setLayout(Item.LAYOUT_EXPAND | Item.LAYOUT_NEWLINE_AFTER);
-        btnUploadSettings.setDefaultCommand(cmdItemAction);
-        btnUploadSettings.setItemCommandListener(this);
-        mainForm.append(btnUploadSettings);
-
-        btnServerSettings = new StringItem(null, "Server Settings", Item.BUTTON);
-        btnServerSettings.setLayout(Item.LAYOUT_EXPAND | Item.LAYOUT_NEWLINE_AFTER);
-        btnServerSettings.setDefaultCommand(cmdItemAction);
-        btnServerSettings.setItemCommandListener(this);
-        mainForm.append(btnServerSettings);
+        btnSettings = new StringItem(null, "Settings", Item.BUTTON);
+        btnSettings.setLayout(Item.LAYOUT_EXPAND | Item.LAYOUT_NEWLINE_AFTER);
+        btnSettings.setDefaultCommand(cmdItemAction);
+        btnSettings.setItemCommandListener(this);
+        mainForm.append(btnSettings);
 
         // Softkey Commands
         mainForm.addCommand(cmdUpload);
         mainForm.addCommand(cmdPhoto);
         mainForm.addCommand(cmdBrowse);
+        mainForm.addCommand(cmdFindByCodeMenu);
         mainForm.addCommand(cmdPublicFiles);
         mainForm.addCommand(cmdMyUploads);
-        mainForm.addCommand(cmdOptions);
-        mainForm.addCommand(cmdServerSettings);
+        mainForm.addCommand(cmdSettings);
         mainForm.addCommand(cmdAbout);
         mainForm.addCommand(cmdExit);
         mainForm.setCommandListener(this);
@@ -244,14 +246,14 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
             openFileBrowser(null);
         } else if (item == btnUploadNow) {
             startUploadThread();
+        } else if (item == btnFindByCode) {
+            openFindByCodeForm();
         } else if (item == btnPublicFiles) {
             startFetchPublicFiles();
         } else if (item == btnMyUploads) {
             openMyUploads();
-        } else if (item == btnUploadSettings) {
-            openOptionsForm();
-        } else if (item == btnServerSettings) {
-            openServerForm();
+        } else if (item == btnSettings) {
+            openSettingsForm();
         }
     }
 
@@ -265,14 +267,14 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
             openPhotoGallery();
         } else if (c == cmdBrowse) {
             openFileBrowser(null);
+        } else if (c == cmdFindByCodeMenu) {
+            openFindByCodeForm();
         } else if (c == cmdPublicFiles) {
             startFetchPublicFiles();
         } else if (c == cmdMyUploads) {
             openMyUploads();
-        } else if (c == cmdOptions) {
-            openOptionsForm();
-        } else if (c == cmdServerSettings) {
-            openServerForm();
+        } else if (c == cmdSettings) {
+            openSettingsForm();
         } else if (c == cmdAbout) {
             showAbout();
         } else if (c == cmdBack) {
@@ -287,11 +289,91 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
             handleGallerySelect();
         } else if ((c == cmdSelect || c == List.SELECT_COMMAND) && d == publicList) {
             handlePublicSelect();
-        } else if (c == cmdSaveOptions) {
-            saveOptions();
-        } else if (c == cmdSaveServer) {
-            saveServer();
+        } else if (c == cmdSaveSettings) {
+            saveSettings();
+        } else if (c == cmdDoSearch && d == findForm) {
+            executeSearchByCode();
         }
+    }
+
+    // ------------------------------------------------------------------------
+    // FIND FILE BY CODE
+    // ------------------------------------------------------------------------
+    private void openFindByCodeForm() {
+        findForm = new Form("Find File by Code");
+        findCodeField = new TextField("Enter Item Code or Slug:", "", 32, TextField.ANY);
+        findForm.append(findCodeField);
+        findForm.addCommand(cmdDoSearch);
+        findForm.addCommand(cmdBack);
+        findForm.setCommandListener(this);
+        display.setCurrent(findForm);
+    }
+
+    private void executeSearchByCode() {
+        final String code = findCodeField.getString().trim();
+        if (code.length() == 0) {
+            showAlert("Input Required", "Please enter an 8-character item code or custom link.", AlertType.WARNING, findForm);
+            return;
+        }
+
+        final Form searchingForm = new Form("Searching");
+        searchingForm.append(new StringItem("Status:", "Looking up " + code + " on server..."));
+        searchingForm.append(new Gauge(null, false, Gauge.INDEFINITE, Gauge.CONTINUOUS_RUNNING));
+        display.setCurrent(searchingForm);
+
+        Thread t = new Thread(new Runnable() {
+            public void run() {
+                try {
+                    String base = serverUrl.trim();
+                    if (base.endsWith("/")) base = base.substring(0, base.length() - 1);
+                    String lookupUrl = base + "/api/mobile/item/" + code;
+
+                    HttpConnection conn = (HttpConnection) Connector.open(lookupUrl, Connector.READ);
+                    conn.setRequestProperty("User-Agent", "Nullhost-J2ME/1.0");
+                    int respCode = conn.getResponseCode();
+
+                    if (respCode == 404 || respCode == 410) {
+                        conn.close();
+                        showAlert("Not Found", "No active file found matching code: " + code, AlertType.INFO, findForm);
+                        return;
+                    }
+
+                    if (respCode != 200) {
+                        conn.close();
+                        showAlert("Search Error", "Server returned HTTP " + respCode, AlertType.ERROR, findForm);
+                        return;
+                    }
+
+                    InputStream is = conn.openInputStream();
+                    ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                    byte[] buf = new byte[512];
+                    int len;
+                    while ((len = is.read(buf)) != -1) {
+                        baos.write(buf, 0, len);
+                    }
+                    is.close();
+                    conn.close();
+
+                    String json = new String(baos.toByteArray(), "UTF-8");
+                    UploadRecord rec = new UploadRecord();
+                    rec.id = extractJsonField(json, "id");
+                    rec.filename = extractJsonField(json, "filename");
+                    String sizeStr = extractJsonField(json, "size");
+                    if (sizeStr != null) {
+                        try { rec.size = Long.parseLong(sizeStr); } catch (Exception ex) {}
+                    }
+                    rec.url = extractJsonField(json, "url");
+                    rec.rawUrl = extractJsonField(json, "raw_url");
+                    rec.qrUrl = extractJsonField(json, "qr_url");
+                    if (rec.qrUrl == null && rec.url != null) rec.qrUrl = rec.url + "/qr.png";
+
+                    showItemDetails(rec, findForm, false);
+                } catch (Exception e) {
+                    showAlert("Search Error", "Could not connect to server: " + e.getMessage(), AlertType.ERROR, findForm);
+                }
+            }
+        });
+        t.start();
     }
 
     // ------------------------------------------------------------------------
@@ -572,7 +654,7 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
         int idx = publicList.getSelectedIndex();
         if (idx < 0 || idx >= publicItems.size()) return;
         UploadRecord rec = (UploadRecord) publicItems.elementAt(idx);
-        showItemDetails(rec, publicList);
+        showItemDetails(rec, publicList, false);
     }
 
     // ------------------------------------------------------------------------
@@ -601,7 +683,7 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
                     int idx = histList.getSelectedIndex();
                     if (idx >= 0 && idx < myUploads.size()) {
                         UploadRecord rec = (UploadRecord) myUploads.elementAt(idx);
-                        showItemDetails(rec, histList);
+                        showItemDetails(rec, histList, true);
                     }
                 } else if (c == cmdHistBack) {
                     display.setCurrent(mainForm);
@@ -613,9 +695,9 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
     }
 
     // ------------------------------------------------------------------------
-    // ITEM DETAILS SCREEN (WITH LIVE QR CODE)
+    // ITEM DETAILS SCREEN (WITH LIVE QR CODE & DELETE BUTTON)
     // ------------------------------------------------------------------------
-    private void showItemDetails(final UploadRecord rec, final Displayable backTarget) {
+    private void showItemDetails(final UploadRecord rec, final Displayable backTarget, final boolean isMyUpload) {
         final Form f = new Form("File Details");
 
         if (rec.qrImage != null) {
@@ -640,11 +722,27 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
             f.append(new StringItem("Raw URL:", rec.rawUrl));
         }
 
+        // Add Delete Button if viewing an item from My Uploads
+        if (isMyUpload) {
+            StringItem btnDel = new StringItem(null, "Delete File", Item.BUTTON);
+            btnDel.setLayout(Item.LAYOUT_EXPAND | Item.LAYOUT_NEWLINE_AFTER);
+            btnDel.setDefaultCommand(cmdItemAction);
+            btnDel.setItemCommandListener(new ItemCommandListener() {
+                public void commandAction(Command c, Item item) {
+                    deleteUploadedItem(rec);
+                }
+            });
+            f.append(btnDel);
+        }
+
         final Command cmdOpen = new Command("Open in Browser", Command.OK, 1);
         final Command cmdDetailsBack = new Command("Back", Command.BACK, 2);
+        final Command cmdDelMenu = isMyUpload ? new Command("Delete File", Command.SCREEN, 3) : null;
 
         f.addCommand(cmdOpen);
         f.addCommand(cmdDetailsBack);
+        if (cmdDelMenu != null) f.addCommand(cmdDelMenu);
+
         f.setCommandListener(new CommandListener() {
             public void commandAction(Command c, Displayable d) {
                 if (c == cmdOpen) {
@@ -657,11 +755,13 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
                     }
                 } else if (c == cmdDetailsBack) {
                     display.setCurrent(backTarget);
+                } else if (c == cmdDelMenu) {
+                    deleteUploadedItem(rec);
                 }
             }
         });
 
-        // If QR code is not yet loaded, load it in background and refresh
+        // Load QR code in background if missing
         if (rec.qrImage == null && rec.qrUrl != null && rec.qrUrl.length() > 0) {
             Thread qrThread = new Thread(new Runnable() {
                 public void run() {
@@ -673,7 +773,7 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
                             rec.qrImage = Image.createImage(is);
                             is.close();
                             conn.close();
-                            showItemDetails(rec, backTarget);
+                            showItemDetails(rec, backTarget, isMyUpload);
                         } else {
                             conn.close();
                         }
@@ -684,6 +784,58 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
         }
 
         display.setCurrent(f);
+    }
+
+    // ------------------------------------------------------------------------
+    // SERVER FILE DELETION
+    // ------------------------------------------------------------------------
+    private void deleteUploadedItem(final UploadRecord rec) {
+        final Form delForm = new Form("Deleting File");
+        delForm.append(new StringItem("Status:", "Deleting " + rec.filename + " from server..."));
+        delForm.append(new Gauge(null, false, Gauge.INDEFINITE, Gauge.CONTINUOUS_RUNNING));
+        display.setCurrent(delForm);
+
+        Thread t = new Thread(new Runnable() {
+            public void run() {
+                try {
+                    String base = serverUrl.trim();
+                    if (base.endsWith("/")) base = base.substring(0, base.length() - 1);
+                    String delTarget = base + "/api/mobile/delete";
+
+                    HttpConnection conn = (HttpConnection) Connector.open(delTarget, Connector.READ_WRITE);
+                    conn.setRequestMethod(HttpConnection.POST);
+                    conn.setRequestProperty("User-Agent", "Nullhost-J2ME/1.0");
+                    conn.setRequestProperty("Content-Type", "application/x-www-form-urlencoded");
+                    if (accountId.length() > 0) {
+                        conn.setRequestProperty("X-Nullhost-Account", accountId);
+                    }
+
+                    String postData = "id=" + rec.id;
+                    if (accountId.length() > 0) {
+                        postData += "&account_id=" + accountId;
+                    }
+
+                    OutputStream os = conn.openOutputStream();
+                    os.write(postData.getBytes("UTF-8"));
+                    os.flush();
+                    os.close();
+
+                    int code = conn.getResponseCode();
+                    conn.close();
+
+                    if (code == 200) {
+                        myUploads.removeElement(rec);
+                        updateMainFormStatus();
+                        showAlert("File Deleted", rec.filename + " was deleted from server.", AlertType.CONFIRMATION, mainForm);
+                    } else {
+                        showAlert("Delete Failed", "Server returned HTTP " + code, AlertType.ERROR, mainForm);
+                    }
+                } catch (Exception ex) {
+                    showAlert("Delete Error", "Could not delete: " + ex.getMessage(), AlertType.ERROR, mainForm);
+                }
+            }
+        });
+        t.start();
     }
 
     // ------------------------------------------------------------------------
@@ -926,59 +1078,39 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
     }
 
     // ------------------------------------------------------------------------
-    // SETTINGS FORMS
+    // CONSOLIDATED SETTINGS FORM (SERVER + UPLOAD PARAMETERS)
     // ------------------------------------------------------------------------
-    private void openOptionsForm() {
-        optionsForm = new Form("Upload Settings");
+    private void openSettingsForm() {
+        settingsForm = new Form("Settings");
+
+        optServerUrl = new TextField("Server URL:", serverUrl, 128, TextField.URL);
+        settingsForm.append(optServerUrl);
 
         optExpiry = new ChoiceGroup("Retention Time:", Choice.EXCLUSIVE, EXPIRY_LABELS, null);
         optExpiry.setSelectedIndex(expiryIndex, true);
-        optionsForm.append(optExpiry);
+        settingsForm.append(optExpiry);
 
         optBurn = new ChoiceGroup("Burn After Reading:", Choice.EXCLUSIVE, BURN_LABELS, null);
         optBurn.setSelectedIndex(burnIndex, true);
-        optionsForm.append(optBurn);
+        settingsForm.append(optBurn);
 
-        optPassword = new TextField("Password (Optional):", customPassword, 32, TextField.ANY);
-        optionsForm.append(optPassword);
+        optPassword = new TextField("Password Optional:", customPassword, 32, TextField.ANY);
+        settingsForm.append(optPassword);
 
-        optSlug = new TextField("Custom Link / Slug:", customSlug, 32, TextField.ANY);
-        optionsForm.append(optSlug);
+        optSlug = new TextField("Custom Link or Slug:", customSlug, 32, TextField.ANY);
+        settingsForm.append(optSlug);
 
-        optAccount = new TextField("Account ID (24 digits):", accountId, 24, TextField.NUMERIC);
-        optionsForm.append(optAccount);
+        optAccount = new TextField("Account ID 24 digits:", accountId, 24, TextField.NUMERIC);
+        settingsForm.append(optAccount);
 
-        optionsForm.addCommand(cmdSaveOptions);
-        optionsForm.addCommand(cmdBack);
-        optionsForm.setCommandListener(this);
+        settingsForm.addCommand(cmdSaveSettings);
+        settingsForm.addCommand(cmdBack);
+        settingsForm.setCommandListener(this);
 
-        display.setCurrent(optionsForm);
+        display.setCurrent(settingsForm);
     }
 
-    private void saveOptions() {
-        expiryIndex = optExpiry.getSelectedIndex();
-        burnIndex = optBurn.getSelectedIndex();
-        customPassword = optPassword.getString().trim();
-        customSlug = optSlug.getString().trim();
-        accountId = optAccount.getString().trim();
-
-        updateMainFormStatus();
-        display.setCurrent(mainForm);
-    }
-
-    private void openServerForm() {
-        serverForm = new Form("Server Settings");
-        optServerUrl = new TextField("Server URL:", serverUrl, 128, TextField.URL);
-        serverForm.append(optServerUrl);
-
-        serverForm.addCommand(cmdSaveServer);
-        serverForm.addCommand(cmdBack);
-        serverForm.setCommandListener(this);
-
-        display.setCurrent(serverForm);
-    }
-
-    private void saveServer() {
+    private void saveSettings() {
         String entered = optServerUrl.getString().trim();
         if (entered.endsWith("/")) {
             entered = entered.substring(0, entered.length() - 1);
@@ -986,6 +1118,13 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
         if (entered.length() > 0) {
             serverUrl = entered;
         }
+
+        expiryIndex = optExpiry.getSelectedIndex();
+        burnIndex = optBurn.getSelectedIndex();
+        customPassword = optPassword.getString().trim();
+        customSlug = optSlug.getString().trim();
+        accountId = optAccount.getString().trim();
+
         updateMainFormStatus();
         display.setCurrent(mainForm);
     }
@@ -999,6 +1138,8 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
             "Fast, anonymous file and photo hosting for Symbian and vintage phones.\n\n" +
             "Features:\n" +
             "- Instant camera photo picker\n" +
+            "- Find files by code or slug\n" +
+            "- Delete files from upload history\n" +
             "- JSR-75 filesystem navigation\n" +
             "- Live QR code generation\n" +
             "- Browse public files & upload history\n" +

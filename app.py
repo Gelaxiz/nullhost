@@ -497,6 +497,36 @@ def mobile_delete():
         conn.commit()
     return jsonify({'status': 'ok', 'message': 'Item deleted'})
 
+@app.route('/api/mobile/item/<item_id>')
+def mobile_item_lookup(item_id):
+    item_id = (item_id or '').strip()
+    if not item_id:
+        return jsonify({'status': 'error', 'message': 'Missing item ID'}), 400
+    now = int(time.time())
+    with get_db() as conn:
+        cur = conn.execute("SELECT * FROM items WHERE id = ?", (item_id,))
+        item = cur.fetchone()
+        if not item:
+            return jsonify({'status': 'error', 'message': 'Item not found'}), 404
+        if item['expires_at'] <= now:
+            return jsonify({'status': 'error', 'message': 'Item has expired'}), 410
+        
+        fname = item['filename'] or ('paste.txt' if item['type'] == 'paste' else 'file')
+        return jsonify({
+            'status': 'ok',
+            'id': item['id'],
+            'filename': fname,
+            'size': item['size'] or 0,
+            'type': item['type'],
+            'views': item['views'] or 0,
+            'expires_at': item['expires_at'],
+            'has_password': bool(item['password_hash']),
+            'burn_after_read': item['burn_after_read'] or 0,
+            'url': url_for('overview', item_id=item['id'], _external=True),
+            'raw_url': url_for('raw', item_id=item['id'], filename=fname, _external=True),
+            'qr_url': url_for('item_qr', item_id=item['id'], _external=True)
+        })
+
 @app.route('/api/client/update')
 def client_update_manifest():
     client_path = os.path.join(os.path.dirname(__file__), 'client', 'Nullhost.exe')
