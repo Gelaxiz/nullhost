@@ -351,7 +351,16 @@ def download_app(filename=None):
         fname, mtype = file_map[target]
     else:
         fname = secure_filename(target)
-        mtype = 'application/octet-stream'
+        if fname.endswith(('.sisx', '.sis')):
+            mtype = 'application/vnd.symbian.install'
+        elif fname.endswith('.jar'):
+            mtype = 'application/java-archive'
+        elif fname.endswith('.jad'):
+            mtype = 'text/vnd.sun.j2me.app-descriptor'
+        elif fname.endswith('.exe'):
+            mtype = 'application/x-msdos-program'
+        else:
+            mtype = 'application/octet-stream'
         
     fpath = os.path.join(client_dir, fname)
     if os.path.exists(fpath):
