@@ -16,38 +16,54 @@ import javax.microedition.io.file.FileSystemRegistry;
 
 /**
  * Nullhost Universal Java ME (MIDP 2.0 / CLDC 1.1 / JSR-75) Client.
- * Simplified, direct, lightning-fast uploader for Symbian Belle, S60, and J2ME phones.
- * Pure Java 1.4 (Major version 48) - Zero Python, Zero bloated dependencies.
+ * Complete mobile client with direct photo picker, in-app public file browser,
+ * upload history, detailed result cards, and live QR code generation.
+ * Pure Java 1.4 (Major version 48) - 100% Dependency-Free.
  * Copyright (c) 2026 Gelaxiz. All rights reserved.
  */
 public class NullhostMIDlet extends MIDlet implements CommandListener, ItemCommandListener {
 
-    private static final String APP_VERSION = "1.2.0";
+    private static final String APP_VERSION = "1.3.0";
     private static final String CLIENT_ID = "j2me-universal";
     private static final String MOBILE_SECRET = "nullhost_secret_mobile_app_key_2026";
     private static final String DEFAULT_SERVER = "http://nullhost.gelaxiz.xyz";
 
     private Display display;
 
-    // Configurable state
+    // Server and Account Configuration
     private String serverUrl = DEFAULT_SERVER;
     private String accountId = "";
+
+    // Upload Parameters
     private int expiryIndex = 1; // 24 Hours default
     private int burnIndex = 0;   // Disabled default
     private String customPassword = "";
     private String customSlug = "";
 
-    // Selected file state
+    private static final String[] EXPIRY_LABELS = {"1 Hour", "24 Hours (Default)", "7 Days", "30 Days", "Never Expire"};
+    private static final String[] EXPIRY_VALS = {"1h", "24h", "7d", "30d", "never"};
+
+    private static final String[] BURN_LABELS = {"Disabled (Normal)", "1 View (Burn)", "5 Views", "10 Views"};
+    private static final String[] BURN_VALS = {"0", "1", "5", "10"};
+
+    // Current Selection
     private String selectedFilePath = null;
     private long selectedFileSize = 0;
 
-    // Main Form
+    // User Upload History (Session Records)
+    private Vector myUploads = new Vector();
+
+    // UI - Main Form
     private Form mainForm;
     private StringItem fileStatusItem;
     private StringItem btnSelectPhoto;
     private StringItem btnBrowseFiles;
     private StringItem btnUploadNow;
-    private StringItem tipItem;
+    private StringItem btnPublicFiles;
+    private StringItem btnMyUploads;
+    private StringItem settingsSummaryItem;
+    private StringItem btnUploadSettings;
+    private StringItem btnServerSettings;
 
     // Sub-Forms
     private Form optionsForm;
@@ -64,7 +80,8 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
     private Command cmdUpload;
     private Command cmdPhoto;
     private Command cmdBrowse;
-    private Command cmdNativeGallery;
+    private Command cmdPublicFiles;
+    private Command cmdMyUploads;
     private Command cmdOptions;
     private Command cmdServerSettings;
     private Command cmdAbout;
@@ -73,8 +90,6 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
     private Command cmdSelect;
     private Command cmdSaveOptions;
     private Command cmdSaveServer;
-
-    // Item Action Command
     private Command cmdItemAction;
 
     // File Browser State
@@ -85,6 +100,23 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
     // Photo Gallery State
     private List galleryList;
     private Vector galleryEntries = new Vector();
+
+    // Public Files State
+    private List publicList;
+    private Vector publicItems = new Vector();
+
+    public static class UploadRecord {
+        public String id = "";
+        public String filename = "";
+        public long size = 0;
+        public String url = "";
+        public String rawUrl = "";
+        public String qrUrl = "";
+        public String deleteUrl = "";
+        public String expiry = "24 Hours";
+        public String burn = "Disabled";
+        public Image qrImage = null;
+    }
 
     public void startApp() {
         if (display == null) {
@@ -100,27 +132,28 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
     public void destroyApp(boolean unconditional) {}
 
     private void initCommands() {
-        cmdUpload = new Command("Upload Now", Command.OK, 1);
+        cmdUpload = new Command("Upload File Now", Command.OK, 1);
         cmdPhoto = new Command("Choose Photo", Command.SCREEN, 2);
-        cmdBrowse = new Command("Browse Files", Command.SCREEN, 3);
-        cmdNativeGallery = new Command("Native Gallery (Web)", Command.SCREEN, 4);
-        cmdOptions = new Command("Upload Options", Command.SCREEN, 5);
-        cmdServerSettings = new Command("Server Settings", Command.SCREEN, 6);
-        cmdAbout = new Command("About", Command.SCREEN, 7);
-        cmdExit = new Command("Exit", Command.EXIT, 8);
+        cmdBrowse = new Command("Browse Storage", Command.SCREEN, 3);
+        cmdPublicFiles = new Command("Public Files", Command.SCREEN, 4);
+        cmdMyUploads = new Command("My Uploads", Command.SCREEN, 5);
+        cmdOptions = new Command("Upload Settings", Command.SCREEN, 6);
+        cmdServerSettings = new Command("Server Settings", Command.SCREEN, 7);
+        cmdAbout = new Command("About", Command.SCREEN, 8);
+        cmdExit = new Command("Exit", Command.EXIT, 9);
 
         cmdBack = new Command("Back", Command.BACK, 1);
         cmdSelect = new Command("Select", Command.OK, 1);
         cmdSaveOptions = new Command("Save", Command.OK, 1);
         cmdSaveServer = new Command("Save", Command.OK, 1);
-
         cmdItemAction = new Command("Go", Command.ITEM, 1);
     }
 
     private void initMainForm() {
-        mainForm = new Form("Nullhost");
+        mainForm = new Form("Nullhost Mobile");
 
-        fileStatusItem = new StringItem("Selected File:", "(None - choose photo or file below)");
+        // 1. Upload Section
+        fileStatusItem = new StringItem("Selected File:", "(None - choose below)");
         mainForm.append(fileStatusItem);
 
         btnSelectPhoto = new StringItem(null, ">> Choose Photo (Gallery)", Item.HYPERLINK);
@@ -128,7 +161,7 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
         btnSelectPhoto.setItemCommandListener(this);
         mainForm.append(btnSelectPhoto);
 
-        btnBrowseFiles = new StringItem(null, ">> Browse All Files", Item.HYPERLINK);
+        btnBrowseFiles = new StringItem(null, ">> Browse All Storage", Item.HYPERLINK);
         btnBrowseFiles.setDefaultCommand(cmdItemAction);
         btnBrowseFiles.setItemCommandListener(this);
         mainForm.append(btnBrowseFiles);
@@ -138,13 +171,43 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
         btnUploadNow.setItemCommandListener(this);
         mainForm.append(btnUploadNow);
 
-        tipItem = new StringItem("Tip:", "For Symbian Belle system gallery picker, choose 'Native Gallery (Web)' from Options menu.");
-        mainForm.append(tipItem);
+        // Separator
+        mainForm.append(new StringItem("", "--------------------------------"));
 
+        // 2. Browse & Upload History Section
+        btnPublicFiles = new StringItem(null, ">> Browse Public Files", Item.HYPERLINK);
+        btnPublicFiles.setDefaultCommand(cmdItemAction);
+        btnPublicFiles.setItemCommandListener(this);
+        mainForm.append(btnPublicFiles);
+
+        btnMyUploads = new StringItem(null, ">> My Upload History (0)", Item.HYPERLINK);
+        btnMyUploads.setDefaultCommand(cmdItemAction);
+        btnMyUploads.setItemCommandListener(this);
+        mainForm.append(btnMyUploads);
+
+        // Separator
+        mainForm.append(new StringItem("", "--------------------------------"));
+
+        // 3. Settings & Stats
+        settingsSummaryItem = new StringItem("Settings:", "Expiry: 24h · Burn: Off");
+        mainForm.append(settingsSummaryItem);
+
+        btnUploadSettings = new StringItem(null, ">> Change Upload Settings", Item.HYPERLINK);
+        btnUploadSettings.setDefaultCommand(cmdItemAction);
+        btnUploadSettings.setItemCommandListener(this);
+        mainForm.append(btnUploadSettings);
+
+        btnServerSettings = new StringItem(null, ">> Change Server URL", Item.HYPERLINK);
+        btnServerSettings.setDefaultCommand(cmdItemAction);
+        btnServerSettings.setItemCommandListener(this);
+        mainForm.append(btnServerSettings);
+
+        // Softkey Commands
         mainForm.addCommand(cmdUpload);
         mainForm.addCommand(cmdPhoto);
         mainForm.addCommand(cmdBrowse);
-        mainForm.addCommand(cmdNativeGallery);
+        mainForm.addCommand(cmdPublicFiles);
+        mainForm.addCommand(cmdMyUploads);
         mainForm.addCommand(cmdOptions);
         mainForm.addCommand(cmdServerSettings);
         mainForm.addCommand(cmdAbout);
@@ -152,13 +215,15 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
         mainForm.setCommandListener(this);
     }
 
-    private void updateFileStatus() {
+    private void updateMainFormStatus() {
         if (selectedFilePath == null) {
-            fileStatusItem.setText("(None - choose photo or file below)");
+            fileStatusItem.setText("(None - choose below)");
         } else {
             String fname = selectedFilePath.substring(selectedFilePath.lastIndexOf('/') + 1);
             fileStatusItem.setText(fname + " (" + formatSize(selectedFileSize) + ")");
         }
+        btnMyUploads.setText(">> My Upload History (" + myUploads.size() + ")");
+        settingsSummaryItem.setText("Expiry: " + EXPIRY_LABELS[expiryIndex] + " · Burn: " + BURN_LABELS[burnIndex]);
     }
 
     public void commandAction(Command c, Item item) {
@@ -168,6 +233,14 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
             openFileBrowser(null);
         } else if (item == btnUploadNow) {
             startUploadThread();
+        } else if (item == btnPublicFiles) {
+            startFetchPublicFiles();
+        } else if (item == btnMyUploads) {
+            openMyUploads();
+        } else if (item == btnUploadSettings) {
+            openOptionsForm();
+        } else if (item == btnServerSettings) {
+            openServerForm();
         }
     }
 
@@ -181,8 +254,10 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
             openPhotoGallery();
         } else if (c == cmdBrowse) {
             openFileBrowser(null);
-        } else if (c == cmdNativeGallery) {
-            openNativeGalleryWeb();
+        } else if (c == cmdPublicFiles) {
+            startFetchPublicFiles();
+        } else if (c == cmdMyUploads) {
+            openMyUploads();
         } else if (c == cmdOptions) {
             openOptionsForm();
         } else if (c == cmdServerSettings) {
@@ -195,14 +270,12 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
             } else {
                 display.setCurrent(mainForm);
             }
-        } else if (c == cmdSelect && d == browserList) {
+        } else if ((c == cmdSelect || c == List.SELECT_COMMAND) && d == browserList) {
             handleBrowserSelect();
-        } else if (c == List.SELECT_COMMAND && d == browserList) {
-            handleBrowserSelect();
-        } else if (c == cmdSelect && d == galleryList) {
+        } else if ((c == cmdSelect || c == List.SELECT_COMMAND) && d == galleryList) {
             handleGallerySelect();
-        } else if (c == List.SELECT_COMMAND && d == galleryList) {
-            handleGallerySelect();
+        } else if ((c == cmdSelect || c == List.SELECT_COMMAND) && d == publicList) {
+            handlePublicSelect();
         } else if (c == cmdSaveOptions) {
             saveOptions();
         } else if (c == cmdSaveServer) {
@@ -211,27 +284,7 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
     }
 
     // ------------------------------------------------------------------------
-    // NATIVE BELLE WEB LAUNCHER (SYSTEM GALLERY PICKER)
-    // ------------------------------------------------------------------------
-    private void openNativeGalleryWeb() {
-        try {
-            String liteUrl = serverUrl;
-            if (liteUrl.endsWith("/")) {
-                liteUrl = liteUrl.substring(0, liteUrl.length() - 1);
-            }
-            liteUrl += "/lite";
-            boolean needExit = platformRequest(liteUrl);
-            if (needExit) {
-                destroyApp(true);
-                notifyDestroyed();
-            }
-        } catch (Exception e) {
-            showAlert("Browser Error", "Could not launch native browser: " + e.getMessage(), AlertType.ERROR, mainForm);
-        }
-    }
-
-    // ------------------------------------------------------------------------
-    // PHOTO GALLERY (FAST DIRECT DIRECTORY SCAN)
+    // PHOTO GALLERY (DIRECT CAMERA DIRECTORY SCANNER)
     // ------------------------------------------------------------------------
     private void openPhotoGallery() {
         galleryEntries.removeAllElements();
@@ -240,7 +293,6 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
         galleryList.addCommand(cmdBack);
         galleryList.setCommandListener(this);
 
-        // Scan primary camera directories on Symbian and phone storage
         String[] standardPaths = {
             "file:///E:/DCIM/100NOKIA/",
             "file:///E:/DCIM/",
@@ -253,23 +305,22 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
 
         for (int i = 0; i < standardPaths.length; i++) {
             scanDirectoryForPhotos(standardPaths[i], 1);
-            if (galleryEntries.size() >= 40) break;
+            if (galleryEntries.size() >= 80) break;
         }
 
-        // If no images found in standard folders, scan drive roots
         if (galleryEntries.isEmpty()) {
             try {
                 Enumeration roots = FileSystemRegistry.listRoots();
                 while (roots.hasMoreElements()) {
                     String root = (String) roots.nextElement();
                     scanDirectoryForPhotos("file:///" + root, 0);
-                    if (galleryEntries.size() >= 40) break;
+                    if (galleryEntries.size() >= 80) break;
                 }
             } catch (Exception ex) {}
         }
 
         if (galleryEntries.isEmpty()) {
-            showAlert("No Photos Found", "No images (.jpg, .png, .gif) found in camera folders.", AlertType.INFO, mainForm);
+            showAlert("No Photos Found", "No images (.jpg, .png, .gif) found in camera storage folders.", AlertType.INFO, mainForm);
             return;
         }
 
@@ -277,11 +328,12 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
     }
 
     private void scanDirectoryForPhotos(String dirUrl, int depth) {
-        if (depth > 2 || galleryEntries.size() >= 50) return;
+        if (depth > 2 || galleryEntries.size() >= 80) return;
         try {
             FileConnection fc = (FileConnection) Connector.open(dirUrl, Connector.READ);
             if (fc.isDirectory()) {
                 Enumeration list = fc.list();
+                Vector foundHere = new Vector();
                 while (list.hasMoreElements()) {
                     String name = (String) list.nextElement();
                     String full = dirUrl + name;
@@ -293,20 +345,29 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
                     } else {
                         String lower = name.toLowerCase();
                         if (lower.endsWith(".jpg") || lower.endsWith(".jpeg") || lower.endsWith(".png") || lower.endsWith(".gif")) {
-                            galleryEntries.addElement(full);
-                            long size = 0;
-                            try {
-                                FileConnection ifc = (FileConnection) Connector.open(full, Connector.READ);
-                                size = ifc.fileSize();
-                                ifc.close();
-                            } catch (Exception e) {}
-                            galleryList.append(name + " (" + formatSize(size) + ")", null);
-                            if (galleryEntries.size() >= 50) break;
+                            foundHere.addElement(full);
                         }
                     }
                 }
+                fc.close();
+
+                // Insert into gallery list (reverse order so recent photos show first)
+                for (int i = foundHere.size() - 1; i >= 0; i--) {
+                    String pUrl = (String) foundHere.elementAt(i);
+                    galleryEntries.addElement(pUrl);
+                    String fname = pUrl.substring(pUrl.lastIndexOf('/') + 1);
+                    long size = 0;
+                    try {
+                        FileConnection ifc = (FileConnection) Connector.open(pUrl, Connector.READ);
+                        size = ifc.fileSize();
+                        ifc.close();
+                    } catch (Exception e) {}
+                    galleryList.append(fname + " (" + formatSize(size) + ")", null);
+                    if (galleryEntries.size() >= 80) break;
+                }
+            } else {
+                fc.close();
             }
-            fc.close();
         } catch (Exception e) {}
     }
 
@@ -324,12 +385,12 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
             selectedFileSize = 0;
         }
 
-        updateFileStatus();
+        updateMainFormStatus();
         display.setCurrent(mainForm);
     }
 
     // ------------------------------------------------------------------------
-    // FILE BROWSER (JSR-75 FileConnection)
+    // FILE BROWSER (JSR-75 STORAGE NAVIGATION)
     // ------------------------------------------------------------------------
     private void openFileBrowser(String dirUrl) {
         currentEntries.removeAllElements();
@@ -346,8 +407,7 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
                 while (roots.hasMoreElements()) {
                     String root = (String) roots.nextElement();
                     currentEntries.addElement("file:///" + root);
-                    String driveDesc = formatDriveLabel(root);
-                    browserList.append(driveDesc, null);
+                    browserList.append(formatDriveLabel(root), null);
                 }
             } else {
                 FileConnection fc = (FileConnection) Connector.open(dirUrl, Connector.READ);
@@ -398,7 +458,7 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
             } catch (Exception e) {
                 selectedFileSize = 0;
             }
-            updateFileStatus();
+            updateMainFormStatus();
             display.setCurrent(mainForm);
         }
     }
@@ -419,18 +479,442 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
     }
 
     // ------------------------------------------------------------------------
-    // UPLOAD OPTIONS & SERVER SETTINGS
+    // BROWSE PUBLIC FILES (EXISTING FILES ON SERVER)
+    // ------------------------------------------------------------------------
+    private void startFetchPublicFiles() {
+        final Form loadingForm = new Form("Public Files");
+        loadingForm.append(new StringItem("Status:", "Connecting to server..."));
+        loadingForm.append(new Gauge(null, false, Gauge.INDEFINITE, Gauge.CONTINUOUS_RUNNING));
+        display.setCurrent(loadingForm);
+
+        Thread t = new Thread(new Runnable() {
+            public void run() {
+                try {
+                    String base = serverUrl.trim();
+                    if (base.endsWith("/")) base = base.substring(0, base.length() - 1);
+                    String url = base + "/api/mobile/public";
+
+                    HttpConnection conn = (HttpConnection) Connector.open(url, Connector.READ);
+                    conn.setRequestProperty("User-Agent", "Nullhost-J2ME/1.0");
+                    int code = conn.getResponseCode();
+
+                    if (code != 200) {
+                        conn.close();
+                        showAlert("Public Files", "Server error (HTTP " + code + ")", AlertType.ERROR, mainForm);
+                        return;
+                    }
+
+                    InputStream is = conn.openInputStream();
+                    ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                    byte[] buf = new byte[512];
+                    int len;
+                    while ((len = is.read(buf)) != -1) {
+                        baos.write(buf, 0, len);
+                    }
+                    is.close();
+                    conn.close();
+
+                    String json = new String(baos.toByteArray(), "UTF-8");
+                    publicItems = parseItemsArray(json);
+
+                    if (publicItems.isEmpty()) {
+                        showAlert("Public Files", "No active public files currently hosted.", AlertType.INFO, mainForm);
+                        return;
+                    }
+
+                    publicList = new List("Public Files (" + publicItems.size() + ")", List.IMPLICIT);
+                    publicList.addCommand(cmdSelect);
+                    publicList.addCommand(cmdBack);
+                    publicList.setCommandListener(NullhostMIDlet.this);
+
+                    for (int i = 0; i < publicItems.size(); i++) {
+                        UploadRecord rec = (UploadRecord) publicItems.elementAt(i);
+                        publicList.append(rec.filename + " (" + formatSize(rec.size) + ")", null);
+                    }
+
+                    display.setCurrent(publicList);
+                } catch (Exception e) {
+                    showAlert("Public Files", "Could not fetch files: " + e.getMessage(), AlertType.ERROR, mainForm);
+                }
+            }
+        });
+        t.start();
+    }
+
+    private void handlePublicSelect() {
+        int idx = publicList.getSelectedIndex();
+        if (idx < 0 || idx >= publicItems.size()) return;
+        UploadRecord rec = (UploadRecord) publicItems.elementAt(idx);
+        showItemDetails(rec, publicList);
+    }
+
+    // ------------------------------------------------------------------------
+    // MY UPLOAD HISTORY
+    // ------------------------------------------------------------------------
+    private void openMyUploads() {
+        if (myUploads.isEmpty()) {
+            showAlert("Upload History", "No uploads performed during this session yet.", AlertType.INFO, mainForm);
+            return;
+        }
+
+        final List histList = new List("My Uploads (" + myUploads.size() + ")", List.IMPLICIT);
+        final Command cmdHistSelect = new Command("View", Command.OK, 1);
+        final Command cmdHistBack = new Command("Back", Command.BACK, 2);
+        histList.addCommand(cmdHistSelect);
+        histList.addCommand(cmdHistBack);
+
+        for (int i = 0; i < myUploads.size(); i++) {
+            UploadRecord rec = (UploadRecord) myUploads.elementAt(i);
+            histList.append(rec.filename + " (" + formatSize(rec.size) + ")", null);
+        }
+
+        histList.setCommandListener(new CommandListener() {
+            public void commandAction(Command c, Displayable d) {
+                if (c == cmdHistSelect || c == List.SELECT_COMMAND) {
+                    int idx = histList.getSelectedIndex();
+                    if (idx >= 0 && idx < myUploads.size()) {
+                        UploadRecord rec = (UploadRecord) myUploads.elementAt(idx);
+                        showItemDetails(rec, histList);
+                    }
+                } else if (c == cmdHistBack) {
+                    display.setCurrent(mainForm);
+                }
+            }
+        });
+
+        display.setCurrent(histList);
+    }
+
+    // ------------------------------------------------------------------------
+    // ITEM DETAILS SCREEN (WITH LIVE QR CODE)
+    // ------------------------------------------------------------------------
+    private void showItemDetails(final UploadRecord rec, final Displayable backTarget) {
+        final Form f = new Form("File Details");
+
+        if (rec.qrImage != null) {
+            f.append(new ImageItem("QR Code:", rec.qrImage, Item.LAYOUT_CENTER, "Scan to Download"));
+        }
+
+        f.append(new StringItem("File Name:", rec.filename));
+        if (rec.id != null && rec.id.length() > 0) {
+            f.append(new StringItem("Item Code:", rec.id));
+        }
+        f.append(new StringItem("File Size:", formatSize(rec.size)));
+        if (rec.expiry != null && rec.expiry.length() > 0) {
+            f.append(new StringItem("Retention:", rec.expiry));
+        }
+        if (rec.burn != null && rec.burn.length() > 0) {
+            f.append(new StringItem("Burn Limit:", rec.burn));
+        }
+        if (rec.url != null && rec.url.length() > 0) {
+            f.append(new StringItem("Short URL:", rec.url));
+        }
+        if (rec.rawUrl != null && rec.rawUrl.length() > 0) {
+            f.append(new StringItem("Raw URL:", rec.rawUrl));
+        }
+        if (rec.deleteUrl != null && rec.deleteUrl.length() > 0) {
+            f.append(new StringItem("Delete URL:", rec.deleteUrl));
+        }
+
+        final Command cmdOpen = new Command("Open in Browser", Command.OK, 1);
+        final Command cmdDetailsBack = new Command("Back", Command.BACK, 2);
+
+        f.addCommand(cmdOpen);
+        f.addCommand(cmdDetailsBack);
+        f.setCommandListener(new CommandListener() {
+            public void commandAction(Command c, Displayable d) {
+                if (c == cmdOpen) {
+                    if (rec.url != null && rec.url.length() > 0) {
+                        try {
+                            platformRequest(rec.url);
+                        } catch (Exception ex) {
+                            showAlert("Browser Error", "Could not open browser: " + ex.getMessage(), AlertType.ERROR, f);
+                        }
+                    }
+                } else if (c == cmdDetailsBack) {
+                    display.setCurrent(backTarget);
+                }
+            }
+        });
+
+        // If QR code is not yet loaded, load it in background and refresh
+        if (rec.qrImage == null && rec.qrUrl != null && rec.qrUrl.length() > 0) {
+            Thread qrThread = new Thread(new Runnable() {
+                public void run() {
+                    try {
+                        HttpConnection conn = (HttpConnection) Connector.open(rec.qrUrl, Connector.READ);
+                        conn.setRequestProperty("User-Agent", "Nullhost-J2ME/1.0");
+                        if (conn.getResponseCode() == 200) {
+                            InputStream is = conn.openInputStream();
+                            rec.qrImage = Image.createImage(is);
+                            is.close();
+                            conn.close();
+                            showItemDetails(rec, backTarget);
+                        } else {
+                            conn.close();
+                        }
+                    } catch (Exception ex) {}
+                }
+            });
+            qrThread.start();
+        }
+
+        display.setCurrent(f);
+    }
+
+    // ------------------------------------------------------------------------
+    // MULTIPART UPLOAD & LIVE QR GENERATION
+    // ------------------------------------------------------------------------
+    private void startUploadThread() {
+        if (selectedFilePath == null) {
+            showAlert("No File Selected", "Please choose a photo or file first.", AlertType.WARNING, mainForm);
+            return;
+        }
+
+        final Form progressForm = new Form("Uploading File");
+        final StringItem statusText = new StringItem("Status:", "Connecting to server...");
+        final Gauge gauge = new Gauge(null, false, Gauge.INDEFINITE, Gauge.CONTINUOUS_RUNNING);
+        progressForm.append(statusText);
+        progressForm.append(gauge);
+        display.setCurrent(progressForm);
+
+        Thread t = new Thread(new Runnable() {
+            public void run() {
+                try {
+                    UploadRecord record = executeUpload(statusText);
+                    if (record != null) {
+                        showSuccessScreen(record);
+                    } else {
+                        showAlert("Upload Failed", "Server did not return a valid download link.", AlertType.ERROR, mainForm);
+                    }
+                } catch (Exception e) {
+                    showAlert("Upload Error", (e.getMessage() != null) ? e.getMessage() : e.toString(), AlertType.ERROR, mainForm);
+                }
+            }
+        });
+        t.start();
+    }
+
+    private UploadRecord executeUpload(StringItem statusText) throws Exception {
+        String base = serverUrl.trim();
+        if (base.endsWith("/")) {
+            base = base.substring(0, base.length() - 1);
+        }
+        String uploadTarget = base + "/api/mobile/upload";
+
+        UploadRecord record = null;
+        try {
+            record = performUploadRequest(uploadTarget, statusText);
+        } catch (Exception ex) {
+            if (uploadTarget.startsWith("https://")) {
+                statusText.setText("Retrying over HTTP fallback...");
+                String fallbackTarget = "http://" + uploadTarget.substring(8);
+                record = performUploadRequest(fallbackTarget, statusText);
+            } else {
+                throw ex;
+            }
+        }
+
+        // Fetch Live QR Code image
+        if (record != null && record.qrUrl != null && record.qrUrl.length() > 0) {
+            statusText.setText("Generating QR code image...");
+            try {
+                HttpConnection qrConn = (HttpConnection) Connector.open(record.qrUrl, Connector.READ);
+                qrConn.setRequestProperty("User-Agent", "Nullhost-J2ME/1.0");
+                if (qrConn.getResponseCode() == 200) {
+                    InputStream qris = qrConn.openInputStream();
+                    record.qrImage = Image.createImage(qris);
+                    qris.close();
+                }
+                qrConn.close();
+            } catch (Exception ex) {}
+        }
+
+        return record;
+    }
+
+    private UploadRecord performUploadRequest(String targetUrl, StringItem statusText) throws Exception {
+        String expiry = EXPIRY_VALS[expiryIndex];
+        String burn = BURN_VALS[burnIndex];
+
+        String boundary = "----NullhostBoundary" + System.currentTimeMillis();
+        String fname = selectedFilePath.substring(selectedFilePath.lastIndexOf('/') + 1);
+
+        long nowSec = System.currentTimeMillis() / 1000L;
+        String nonce = Long.toString(System.currentTimeMillis(), 16);
+        String tokenPayload = CLIENT_ID + ":" + nowSec + ":" + nonce;
+        String tokenSig = CryptoHelper.hmacSha256Hex(MOBILE_SECRET, tokenPayload);
+        String appToken = tokenPayload + ":" + tokenSig;
+
+        HttpConnection conn = (HttpConnection) Connector.open(targetUrl, Connector.READ_WRITE);
+        conn.setRequestMethod(HttpConnection.POST);
+        conn.setRequestProperty("User-Agent", "Nullhost-J2ME/1.0");
+        conn.setRequestProperty("Content-Type", "multipart/form-data; boundary=" + boundary);
+        conn.setRequestProperty("X-Nullhost-App-Token", appToken);
+        if (accountId.length() > 0) {
+            conn.setRequestProperty("X-Nullhost-Account", accountId);
+        }
+
+        statusText.setText("Sending file data...");
+        OutputStream os = conn.openOutputStream();
+
+        writeField(os, boundary, "format", "json");
+        writeField(os, boundary, "expiry", expiry);
+        if (!burn.equals("0")) {
+            writeField(os, boundary, "burn_views", burn);
+        }
+        if (customPassword.length() > 0) {
+            writeField(os, boundary, "password", customPassword);
+        }
+        if (customSlug.length() > 0) {
+            writeField(os, boundary, "custom_id", customSlug);
+        }
+        if (accountId.length() > 0) {
+            writeField(os, boundary, "account_id", accountId);
+        }
+
+        os.write(("--" + boundary + "\r\n").getBytes("UTF-8"));
+        os.write(("Content-Disposition: form-data; name=\"file\"; filename=\"" + fname + "\"\r\n").getBytes("UTF-8"));
+        os.write("Content-Type: application/octet-stream\r\n\r\n".getBytes("UTF-8"));
+
+        FileConnection fc = (FileConnection) Connector.open(selectedFilePath, Connector.READ);
+        InputStream fis = fc.openInputStream();
+        byte[] fbuf = new byte[2048];
+        int flen;
+        long sent = 0;
+        while ((flen = fis.read(fbuf)) != -1) {
+            os.write(fbuf, 0, flen);
+            sent += flen;
+            if (sent % 16384 == 0) {
+                statusText.setText("Sending: " + formatSize(sent));
+            }
+        }
+        fis.close();
+        fc.close();
+
+        os.write(("\r\n--" + boundary + "--\r\n").getBytes("UTF-8"));
+        os.flush();
+        os.close();
+
+        statusText.setText("Waiting for server response...");
+        int respCode = conn.getResponseCode();
+
+        InputStream is = conn.openInputStream();
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        byte[] rBuf = new byte[256];
+        int rLen;
+        while ((rLen = is.read(rBuf)) != -1) {
+            baos.write(rBuf, 0, rLen);
+        }
+        is.close();
+        conn.close();
+
+        if (respCode == 200 || respCode == 201) {
+            String respStr = new String(baos.toByteArray(), "UTF-8");
+            UploadRecord record = new UploadRecord();
+            record.id = extractJsonField(respStr, "id");
+            record.filename = extractJsonField(respStr, "filename");
+            if (record.filename == null) record.filename = fname;
+
+            String sizeStr = extractJsonField(respStr, "size");
+            if (sizeStr != null) {
+                try { record.size = Long.parseLong(sizeStr); } catch (Exception e) {}
+            } else {
+                record.size = selectedFileSize;
+            }
+
+            record.url = extractJsonField(respStr, "url");
+            record.rawUrl = extractJsonField(respStr, "raw_url");
+            record.qrUrl = extractJsonField(respStr, "qr_url");
+            record.deleteUrl = extractJsonField(respStr, "delete_url");
+            record.expiry = EXPIRY_LABELS[expiryIndex];
+            record.burn = BURN_LABELS[burnIndex];
+
+            if (record.url == null) record.url = targetUrl;
+            if (record.rawUrl == null) record.rawUrl = record.url;
+            if (record.qrUrl == null && record.url != null) record.qrUrl = record.url + "/qr.png";
+
+            myUploads.insertElementAt(record, 0);
+            return record;
+        }
+
+        return null;
+    }
+
+    private void writeField(OutputStream os, String boundary, String name, String val) throws Exception {
+        os.write(("--" + boundary + "\r\n").getBytes("UTF-8"));
+        os.write(("Content-Disposition: form-data; name=\"" + name + "\"\r\n\r\n").getBytes("UTF-8"));
+        os.write((val + "\r\n").getBytes("UTF-8"));
+    }
+
+    // ------------------------------------------------------------------------
+    // UPLOAD SUCCESS SCREEN (DETAILED INFO & PROMINENT QR CODE)
+    // ------------------------------------------------------------------------
+    private void showSuccessScreen(final UploadRecord record) {
+        final Form successForm = new Form("Upload Successful!");
+
+        if (record.qrImage != null) {
+            successForm.append(new ImageItem("Scan QR Code:", record.qrImage, Item.LAYOUT_CENTER, "Scan to Download"));
+        }
+
+        successForm.append(new StringItem("Item Code:", record.id));
+        successForm.append(new StringItem("File Name:", record.filename));
+        successForm.append(new StringItem("File Size:", formatSize(record.size)));
+        successForm.append(new StringItem("Retention:", record.expiry));
+        successForm.append(new StringItem("Burn Limit:", record.burn));
+        successForm.append(new StringItem("Short URL:", record.url));
+        successForm.append(new StringItem("Direct Raw Link:", record.rawUrl));
+        if (record.deleteUrl != null && record.deleteUrl.length() > 0) {
+            successForm.append(new StringItem("Delete Link:", record.deleteUrl));
+        }
+
+        final Command cmdOpen = new Command("Open in Browser", Command.OK, 1);
+        final Command cmdNew = new Command("Upload Another", Command.SCREEN, 2);
+        final Command cmdHome = new Command("Back to Home", Command.SCREEN, 3);
+        final Command cmdExitApp = new Command("Exit", Command.EXIT, 4);
+
+        successForm.addCommand(cmdOpen);
+        successForm.addCommand(cmdNew);
+        successForm.addCommand(cmdHome);
+        successForm.addCommand(cmdExitApp);
+
+        successForm.setCommandListener(new CommandListener() {
+            public void commandAction(Command c, Displayable d) {
+                if (c == cmdOpen) {
+                    try {
+                        platformRequest(record.url);
+                    } catch (Exception ex) {
+                        showAlert("Browser Error", "Could not open browser: " + ex.getMessage(), AlertType.ERROR, successForm);
+                    }
+                } else if (c == cmdNew) {
+                    selectedFilePath = null;
+                    selectedFileSize = 0;
+                    updateMainFormStatus();
+                    display.setCurrent(mainForm);
+                } else if (c == cmdHome) {
+                    updateMainFormStatus();
+                    display.setCurrent(mainForm);
+                } else if (c == cmdExitApp) {
+                    destroyApp(true);
+                    notifyDestroyed();
+                }
+            }
+        });
+
+        display.setCurrent(successForm);
+    }
+
+    // ------------------------------------------------------------------------
+    // SETTINGS FORMS
     // ------------------------------------------------------------------------
     private void openOptionsForm() {
-        optionsForm = new Form("Upload Options");
+        optionsForm = new Form("Upload Settings");
 
-        String[] expiryLabels = {"1 Hour", "24 Hours (Default)", "7 Days", "30 Days", "Never Expire"};
-        optExpiry = new ChoiceGroup("Retention Time:", Choice.EXCLUSIVE, expiryLabels, null);
+        optExpiry = new ChoiceGroup("Retention Time:", Choice.EXCLUSIVE, EXPIRY_LABELS, null);
         optExpiry.setSelectedIndex(expiryIndex, true);
         optionsForm.append(optExpiry);
 
-        String[] burnLabels = {"Disabled (Normal)", "1 View (Burn)", "5 Views", "10 Views"};
-        optBurn = new ChoiceGroup("Burn After Reading:", Choice.EXCLUSIVE, burnLabels, null);
+        optBurn = new ChoiceGroup("Burn After Reading:", Choice.EXCLUSIVE, BURN_LABELS, null);
         optBurn.setSelectedIndex(burnIndex, true);
         optionsForm.append(optBurn);
 
@@ -457,6 +941,7 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
         customSlug = optSlug.getString().trim();
         accountId = optAccount.getString().trim();
 
+        updateMainFormStatus();
         display.setCurrent(mainForm);
     }
 
@@ -480,6 +965,7 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
         if (entered.length() > 0) {
             serverUrl = entered;
         }
+        updateMainFormStatus();
         display.setCurrent(mainForm);
     }
 
@@ -489,10 +975,13 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
 
         Form f = new Form("About Nullhost");
         f.append(new StringItem("Nullhost Universal J2ME", "Version " + APP_VERSION + "\n\n" +
-            "Streamlined direct uploader for Symbian Belle, Series 60, and J2ME phones.\n\n" +
-            "Zero Python dependencies.\n" +
-            "Direct HMAC mobile authentication.\n" +
-            "Native Symbian Web Lite support.\n\n" +
+            "Fast, anonymous file and photo hosting for Symbian and vintage phones.\n\n" +
+            "Features:\n" +
+            "- Instant camera photo picker\n" +
+            "- JSR-75 filesystem navigation\n" +
+            "- Live QR code generation\n" +
+            "- Browse public files & upload history\n" +
+            "- Direct HMAC mobile uploads\n\n" +
             "Server: " + serverUrl + "\n" +
             "Free Memory: " + freeMem + " KB / " + totalMem + " KB\n" +
             "Platform: " + System.getProperty("microedition.platform") + "\n\n" +
@@ -503,217 +992,70 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
     }
 
     // ------------------------------------------------------------------------
-    // MULTIPART UPLOAD IMPLEMENTATION
+    // UTILITY METHODS & JSON PARSER
     // ------------------------------------------------------------------------
-    private void startUploadThread() {
-        if (selectedFilePath == null) {
-            showAlert("No File Selected", "Please choose a photo or file first.", AlertType.WARNING, mainForm);
-            return;
-        }
+    private Vector parseItemsArray(String json) {
+        Vector list = new Vector();
+        if (json == null) return list;
+        int itemsStart = json.indexOf("\"items\":");
+        if (itemsStart == -1) itemsStart = json.indexOf("\"items\" :");
+        if (itemsStart == -1) return list;
 
-        final Form progressForm = new Form("Uploading File");
-        final StringItem statusText = new StringItem("Status:", "Preparing upload...");
-        final Gauge gauge = new Gauge(null, false, Gauge.INDEFINITE, Gauge.CONTINUOUS_RUNNING);
-        progressForm.append(statusText);
-        progressForm.append(gauge);
-        display.setCurrent(progressForm);
+        int bracketStart = json.indexOf('[', itemsStart);
+        if (bracketStart == -1) return list;
 
-        Thread t = new Thread(new Runnable() {
-            public void run() {
+        int bracketEnd = json.lastIndexOf(']');
+        if (bracketEnd == -1 || bracketEnd <= bracketStart) return list;
+
+        int cur = bracketStart;
+        while (cur < bracketEnd) {
+            int objStart = json.indexOf('{', cur);
+            if (objStart == -1 || objStart >= bracketEnd) break;
+            int objEnd = json.indexOf('}', objStart);
+            if (objEnd == -1) break;
+
+            String objStr = json.substring(objStart + 1, objEnd);
+            UploadRecord rec = new UploadRecord();
+            rec.id = extractJsonField(objStr, "id");
+            rec.filename = extractJsonField(objStr, "filename");
+            String sizeStr = extractJsonField(objStr, "size");
+            if (sizeStr != null) {
                 try {
-                    statusText.setText("Connecting to server...");
-                    String resultUrl = executeUpload(statusText);
-                    if (resultUrl != null) {
-                        showSuccessScreen(resultUrl);
-                    } else {
-                        showAlert("Upload Failed", "Server did not return a valid download link.", AlertType.ERROR, mainForm);
-                    }
-                } catch (Exception e) {
-                    showAlert("Upload Error", (e.getMessage() != null) ? e.getMessage() : e.toString(), AlertType.ERROR, mainForm);
-                }
+                    rec.size = Long.parseLong(sizeStr);
+                } catch (Exception ex) {}
             }
-        });
-        t.start();
-    }
-
-    private String executeUpload(StringItem statusText) throws Exception {
-        String base = serverUrl.trim();
-        if (base.endsWith("/")) {
-            base = base.substring(0, base.length() - 1);
-        }
-        String uploadTarget = base + "/api/mobile/upload";
-
-        try {
-            return performUploadRequest(uploadTarget, statusText);
-        } catch (Exception ex) {
-            // If https failed on SSL handshake or certificate error, auto-retry with http://
-            if (uploadTarget.startsWith("https://")) {
-                statusText.setText("Retrying over HTTP fallback...");
-                String fallbackTarget = "http://" + uploadTarget.substring(8);
-                return performUploadRequest(fallbackTarget, statusText);
-            } else {
-                throw ex;
+            rec.url = extractJsonField(objStr, "url");
+            rec.rawUrl = extractJsonField(objStr, "raw_url");
+            if (rec.url != null && rec.url.length() > 0) {
+                rec.qrUrl = rec.url + "/qr.png";
             }
-        }
-    }
-
-    private String performUploadRequest(String targetUrl, StringItem statusText) throws Exception {
-        String[] expiryVals = {"1h", "24h", "7d", "30d", "never"};
-        String expiry = expiryVals[expiryIndex];
-
-        String[] burnVals = {"0", "1", "5", "10"};
-        String burn = burnVals[burnIndex];
-
-        String boundary = "----NullhostBoundary" + System.currentTimeMillis();
-        String fname = selectedFilePath.substring(selectedFilePath.lastIndexOf('/') + 1);
-
-        long nowSec = System.currentTimeMillis() / 1000L;
-        String nonce = Long.toString(System.currentTimeMillis(), 16);
-        String tokenPayload = CLIENT_ID + ":" + nowSec + ":" + nonce;
-        String tokenSig = CryptoHelper.hmacSha256Hex(MOBILE_SECRET, tokenPayload);
-        String appToken = tokenPayload + ":" + tokenSig;
-
-        HttpConnection conn = (HttpConnection) Connector.open(targetUrl, Connector.READ_WRITE);
-        conn.setRequestMethod(HttpConnection.POST);
-        conn.setRequestProperty("User-Agent", "Nullhost-J2ME/1.0");
-        conn.setRequestProperty("Content-Type", "multipart/form-data; boundary=" + boundary);
-        conn.setRequestProperty("X-Nullhost-App-Token", appToken);
-        if (accountId.length() > 0) {
-            conn.setRequestProperty("X-Nullhost-Account", accountId);
-        }
-
-        statusText.setText("Sending file data...");
-        OutputStream os = conn.openOutputStream();
-
-        // Form Fields
-        writeField(os, boundary, "format", "json");
-        writeField(os, boundary, "expiry", expiry);
-        if (!burn.equals("0")) {
-            writeField(os, boundary, "burn_views", burn);
-        }
-        if (customPassword.length() > 0) {
-            writeField(os, boundary, "password", customPassword);
-        }
-        if (customSlug.length() > 0) {
-            writeField(os, boundary, "custom_id", customSlug);
-        }
-        if (accountId.length() > 0) {
-            writeField(os, boundary, "account_id", accountId);
-        }
-
-        // File Header
-        os.write(("--" + boundary + "\r\n").getBytes("UTF-8"));
-        os.write(("Content-Disposition: form-data; name=\"file\"; filename=\"" + fname + "\"\r\n").getBytes("UTF-8"));
-        os.write("Content-Type: application/octet-stream\r\n\r\n".getBytes("UTF-8"));
-
-        // File Payload
-        FileConnection fc = (FileConnection) Connector.open(selectedFilePath, Connector.READ);
-        InputStream fis = fc.openInputStream();
-        byte[] fbuf = new byte[2048];
-        int flen;
-        long sent = 0;
-        while ((flen = fis.read(fbuf)) != -1) {
-            os.write(fbuf, 0, flen);
-            sent += flen;
-            if (sent % 16384 == 0) {
-                statusText.setText("Sending: " + formatSize(sent));
+            if (rec.filename != null && rec.filename.length() > 0) {
+                list.addElement(rec);
             }
+            cur = objEnd + 1;
         }
-        fis.close();
-        fc.close();
-
-        // End Boundary
-        os.write(("\r\n--" + boundary + "--\r\n").getBytes("UTF-8"));
-        os.flush();
-        os.close();
-
-        statusText.setText("Waiting for server response...");
-        int respCode = conn.getResponseCode();
-
-        // Read Response Body
-        InputStream is = conn.openInputStream();
-        ByteArrayOutputStream baos = new ByteArrayOutputStream();
-        byte[] rBuf = new byte[256];
-        int rLen;
-        while ((rLen = is.read(rBuf)) != -1) {
-            baos.write(rBuf, 0, rLen);
-        }
-        is.close();
-        conn.close();
-
-        if (respCode == 200 || respCode == 201) {
-            String respStr = new String(baos.toByteArray(), "UTF-8");
-            String url = extractJsonField(respStr, "url");
-            return url != null ? url : serverUrl;
-        }
-
-        return null;
-    }
-
-    private void writeField(OutputStream os, String boundary, String name, String val) throws Exception {
-        os.write(("--" + boundary + "\r\n").getBytes("UTF-8"));
-        os.write(("Content-Disposition: form-data; name=\"" + name + "\"\r\n\r\n").getBytes("UTF-8"));
-        os.write((val + "\r\n").getBytes("UTF-8"));
-    }
-
-    private void showSuccessScreen(final String resultUrl) {
-        final Form successForm = new Form("Upload Successful!");
-
-        successForm.append(new StringItem("Short Link:", resultUrl));
-        String rawUrl = resultUrl;
-        int vIdx = resultUrl.indexOf("/v/");
-        if (vIdx != -1) {
-            rawUrl = resultUrl.substring(0, vIdx) + "/raw/" + resultUrl.substring(vIdx + 3);
-        }
-        successForm.append(new StringItem("Direct Link:", rawUrl));
-
-        final Command cmdOpenBrowser = new Command("Open in Browser", Command.OK, 1);
-        final Command cmdNewUpload = new Command("Upload Another", Command.SCREEN, 2);
-        final Command cmdExitApp = new Command("Exit", Command.EXIT, 3);
-
-        successForm.addCommand(cmdOpenBrowser);
-        successForm.addCommand(cmdNewUpload);
-        successForm.addCommand(cmdExitApp);
-
-        successForm.setCommandListener(new CommandListener() {
-            public void commandAction(Command c, Displayable d) {
-                if (c == cmdOpenBrowser) {
-                    try {
-                        platformRequest(resultUrl);
-                    } catch (Exception ex) {
-                        showAlert("Browser Error", "Could not open browser: " + ex.getMessage(), AlertType.ERROR, successForm);
-                    }
-                } else if (c == cmdNewUpload) {
-                    selectedFilePath = null;
-                    selectedFileSize = 0;
-                    updateFileStatus();
-                    display.setCurrent(mainForm);
-                } else if (c == cmdExitApp) {
-                    destroyApp(true);
-                    notifyDestroyed();
-                }
-            }
-        });
-
-        display.setCurrent(successForm);
+        return list;
     }
 
     private String extractJsonField(String json, String field) {
+        if (json == null || field == null) return null;
         String key = "\"" + field + "\"";
         int idx = 0;
         while ((idx = json.indexOf(key, idx)) != -1) {
-            if (idx == 0 || json.charAt(idx - 1) == '{' || json.charAt(idx - 1) == ',' || json.charAt(idx - 1) == ' ') {
+            if (idx == 0 || json.charAt(idx - 1) == '{' || json.charAt(idx - 1) == ',' || json.charAt(idx - 1) == ' ' || json.charAt(idx - 1) == '\n') {
                 int colon = json.indexOf(':', idx + key.length());
                 if (colon != -1) {
                     int start = colon + 1;
-                    while (start < json.length() && (json.charAt(start) == ' ' || json.charAt(start) == '\"')) {
+                    while (start < json.length() && (json.charAt(start) == ' ' || json.charAt(start) == '\"' || json.charAt(start) == '\r' || json.charAt(start) == '\n')) {
                         start++;
                     }
                     int end = start;
-                    while (end < json.length() && json.charAt(end) != '\"' && json.charAt(end) != ',' && json.charAt(end) != '}') {
+                    while (end < json.length() && json.charAt(end) != '\"' && json.charAt(end) != ',' && json.charAt(end) != '}' && json.charAt(end) != '\r' && json.charAt(end) != '\n') {
                         end++;
                     }
-                    return json.substring(start, end).trim();
+                    if (start <= end) {
+                        return json.substring(start, end).trim();
+                    }
                 }
             }
             idx += key.length();
