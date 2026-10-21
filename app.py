@@ -341,24 +341,29 @@ def download_app(filename=None):
     
     file_map = {
         'windows': ('Nullhost.exe', 'application/x-msdos-program'),
-        'symbian': ('Nullhost_Belle.sisx', 'application/vnd.symbian.install'),
-        's60': ('Nullhost_S60.sis', 'application/vnd.symbian.install'),
+        'symbian': ('Nullhost.jar', 'application/java-archive'),
+        's60': ('Nullhost.jar', 'application/java-archive'),
         'j2me': ('Nullhost.jar', 'application/java-archive'),
         'jad': ('Nullhost.jad', 'text/vnd.sun.j2me.app-descriptor'),
+        'belle-source': ('Nullhost_Symbian_Belle_Source.zip', 'application/zip'),
+        's60-source': ('Nullhost_S60_Keypad_Source.zip', 'application/zip'),
     }
     
     if target in file_map:
         fname, mtype = file_map[target]
     else:
         fname = secure_filename(target)
-        if fname.endswith(('.sisx', '.sis')):
-            mtype = 'application/vnd.symbian.install'
+        if fname in ('Nullhost_Belle.sisx', 'Nullhost_S60.sis'):
+            fname = 'Nullhost.jar'
+            mtype = 'application/java-archive'
         elif fname.endswith('.jar'):
             mtype = 'application/java-archive'
         elif fname.endswith('.jad'):
             mtype = 'text/vnd.sun.j2me.app-descriptor'
         elif fname.endswith('.exe'):
             mtype = 'application/x-msdos-program'
+        elif fname.endswith('.zip'):
+            mtype = 'application/zip'
         else:
             mtype = 'application/octet-stream'
         

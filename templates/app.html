@@ -7,13 +7,16 @@
     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; margin-top: 24px;">
         <!-- Windows Desktop Client -->
         <div style="background: var(--surface-1); border: 1px solid var(--border-soft); border-radius: 12px; padding: 20px; display: flex; flex-direction: column;">
-            <h3 style="margin-top: 0; color: var(--accent); font-size: 1.25rem;">Windows Desktop</h3>
-            <p style="font-size: 0.9rem; color: var(--text-2); flex-grow: 1;">Built with .NET for maximum compatibility. Runs on Windows XP, 7, 10, and 11. Context menu integration and background tray upload.</p>
+            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
+                <img src="/static/icon-512.png" alt="Nullhost Logo" style="width: 28px; height: 28px; border-radius: 6px;">
+                <h3 style="margin: 0; color: var(--accent); font-size: 1.25rem;">Windows Desktop</h3>
+            </div>
+            <p style="font-size: 0.9rem; color: var(--text-2); flex-grow: 1;">Built with .NET for maximum compatibility. Runs on Windows XP, 7, 10, and 11. Context menu integration, clipboard copy, and background tray upload.</p>
             <ul style="font-size: 0.85rem; color: var(--text-2); margin: 12px 0 16px 18px; padding: 0;">
+                <li>Official embedded Nullhost logo</li>
                 <li>Right-click Explorer upload</li>
                 <li>System tray notifications</li>
                 <li>Instant clipboard copy</li>
-                <li>Automatic chunking for >95 MB</li>
             </ul>
             <div style="margin-top: auto;">
                 <a href="/download-app?platform=windows" style="text-decoration: none;">
@@ -22,56 +25,48 @@
             </div>
         </div>
 
-        <!-- Symbian ^3 / Belle FP2 Touch Client -->
+        <!-- Nokia Symbian Belle / S60 / Mobile Client -->
         <div style="background: var(--surface-1); border: 1px solid var(--border-soft); border-radius: 12px; padding: 20px; display: flex; flex-direction: column;">
-            <h3 style="margin-top: 0; color: #00a6e2; font-size: 1.25rem;">Symbian ^3 (Belle FP2)</h3>
-            <p style="font-size: 0.9rem; color: var(--text-2); flex-grow: 1;">Standalone native touch application tailored for Nokia 808 PureView, N8, C7, E7, 701, 603, and 700 with modern Belle FP2 UI.</p>
-            <ul style="font-size: 0.85rem; color: var(--text-2); margin: 12px 0 16px 18px; padding: 0;">
-                <li>Modern Belle FP2 bottom toolbar</li>
-                <li>Sliding bottom action sheets</li>
-                <li>Visual 3-column photo gallery</li>
-                <li>System & in-app file browser (C:, E:, F:)</li>
-            </ul>
-            <div style="margin-top: auto;">
-                <a href="/download-app?platform=symbian" style="text-decoration: none;">
-                    <button type="button" class="primary" style="width: 100%; padding: 10px; background: #00a6e2; border-color: #00a6e2;">Download Nullhost_Belle.sisx</button>
-                </a>
+            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
+                <img src="/static/icon-512.png" alt="Nullhost Logo" style="width: 28px; height: 28px; border-radius: 6px;">
+                <h3 style="margin: 0; color: #00a6e2; font-size: 1.25rem;">Symbian & Mobile Devices</h3>
             </div>
-        </div>
-
-        <!-- Series 60 Keypad Client -->
-        <div style="background: var(--surface-1); border: 1px solid var(--border-soft); border-radius: 12px; padding: 20px; display: flex; flex-direction: column;">
-            <h3 style="margin-top: 0; color: #38bdf8; font-size: 1.25rem;">Series 60 (Keypad Devices)</h3>
-            <p style="font-size: 0.9rem; color: var(--text-2); flex-grow: 1;">Tailored for non-touch S60 3rd and 5th Edition keypad phones (Nokia E52, E72, E71, C5, N95, N82, E5) with hardware D-Pad & softkeys.</p>
+            <p style="font-size: 0.9rem; color: var(--text-2); flex-grow: 1;">Zero-dependency standalone client for Nokia Symbian Belle FP2 (Nokia 808 PureView, 701, 700, 603), Symbian^3 / Anna (N8, E7, C7), S60 keypad devices, and Series 40. Features official Nullhost logo, native filesystem browsing (C:, E:, F:), HMAC authentication, and photo gallery integration. Runs directly on Nokia's ROM JVM—zero Python runtime needed.</p>
             <ul style="font-size: 0.85rem; color: var(--text-2); margin: 12px 0 16px 18px; padding: 0;">
-                <li>Full 5-way D-Pad navigation</li>
-                <li>Hardware CBA softkeys (Options / Back)</li>
-                <li>Drive & folder tree explorer</li>
-                <li>Keypad photo gallery with preview</li>
-            </ul>
-            <div style="margin-top: auto;">
-                <a href="/download-app?platform=s60" style="text-decoration: none;">
-                    <button type="button" class="primary" style="width: 100%; padding: 10px;">Download Nullhost_S60.sis</button>
-                </a>
-            </div>
-        </div>
-
-        <!-- Universal Java ME (.JAR) Client -->
-        <div style="background: var(--surface-1); border: 1px solid var(--border-soft); border-radius: 12px; padding: 20px; display: flex; flex-direction: column;">
-            <h3 style="margin-top: 0; color: #f59e0b; font-size: 1.25rem;">Universal Java ME (.JAR)</h3>
-            <p style="font-size: 0.9rem; color: var(--text-2); flex-grow: 1;">Universal standalone MIDlet for any mobile phone with Java support (Series 40, S60, Symbian, Sony Ericsson, Samsung, J2ME Loader).</p>
-            <ul style="font-size: 0.85rem; color: var(--text-2); margin: 12px 0 16px 18px; padding: 0;">
-                <li>MIDP 2.0 / CLDC 1.1 + JSR-75</li>
-                <li>In-app filesystem browser</li>
-                <li>Canvas-rendered photo gallery</li>
-                <li>Adaptive resolution & touch/keypad</li>
+                <li>Official embedded Nullhost logo</li>
+                <li>Touch & D-Pad keypad navigation</li>
+                <li>JSR-75 native filesystem explorer (C:, E:, F:)</li>
+                <li>Zero Python / zero external dependencies</li>
             </ul>
             <div style="margin-top: auto; display: flex; gap: 8px;">
                 <a href="/download-app?platform=j2me" style="text-decoration: none; flex: 1;">
-                    <button type="button" class="primary" style="width: 100%; padding: 10px;">Download .JAR</button>
+                    <button type="button" class="primary" style="width: 100%; padding: 10px; background: #00a6e2; border-color: #00a6e2;">Download Nullhost.jar</button>
                 </a>
                 <a href="/download-app?platform=jad" style="text-decoration: none;">
                     <button type="button" style="padding: 10px 14px;">.JAD</button>
+                </a>
+            </div>
+        </div>
+
+        <!-- Symbian Native C++ Source Trees -->
+        <div style="background: var(--surface-1); border: 1px solid var(--border-soft); border-radius: 12px; padding: 20px; display: flex; flex-direction: column;">
+            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
+                <img src="/static/icon-512.png" alt="Nullhost Logo" style="width: 28px; height: 28px; border-radius: 6px;">
+                <h3 style="margin: 0; color: #38bdf8; font-size: 1.25rem;">Symbian C++ Source</h3>
+            </div>
+            <p style="font-size: 0.9rem; color: var(--text-2); flex-grow: 1;">Complete pure native C++ source code (Avkon, CActive HTTP, RFs, Crypto, MMP, BLD.INF, PKG) for developers compiling native SISX binaries using Nokia Carbide.c++ or the Symbian SDK.</p>
+            <ul style="font-size: 0.85rem; color: var(--text-2); margin: 12px 0 16px 18px; padding: 0;">
+                <li>100% Native Symbian C++ (Zero Qt, Zero WRT)</li>
+                <li>Belle FP2 bottom toolbar & touch sheets</li>
+                <li>S60 3rd/5th Edition CBA softkeys & keypad</li>
+                <li>Includes official icon assets & build scripts</li>
+            </ul>
+            <div style="margin-top: auto; display: flex; gap: 8px;">
+                <a href="/download-app?platform=belle-source" style="text-decoration: none; flex: 1;">
+                    <button type="button" style="width: 100%; padding: 10px; border-color: #38bdf8; color: #38bdf8;">Belle C++ (.ZIP)</button>
+                </a>
+                <a href="/download-app?platform=s60-source" style="text-decoration: none; flex: 1;">
+                    <button type="button" style="width: 100%; padding: 10px; border-color: #38bdf8; color: #38bdf8;">S60 C++ (.ZIP)</button>
                 </a>
             </div>
         </div>

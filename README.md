@@ -146,34 +146,31 @@ sudo systemctl enable --now nullhost
 
 ## Standalone Client Applications
 
-Pre-built application binaries are distributed via [GitHub Releases](https://github.com/Gelaxiz/nullhost/releases/latest). Full source code for all clients is included in the repository:
+The repository includes dedicated standalone client applications built specifically for their target operating systems.
 
-| Client | Platform | Release Binary | Source Code |
+| Client | Platform | Binary | Source |
 | :--- | :--- | :--- | :--- |
-| **Symbian ^3 (Belle FP2)** | Symbian ^3, Anna, Belle FP2 (Nokia 808, 701, N8, etc.) | [Nullhost_Belle.sisx](https://github.com/Gelaxiz/nullhost/releases/latest/download/Nullhost_Belle.sisx) | [`client/symbian_belle/`](client/symbian_belle/) |
-| **Series 60 Keypad** | S60 3rd / 5th Edition Keypad (Nokia N95, E71, E72, etc.) | [Nullhost_S60.sis](https://github.com/Gelaxiz/nullhost/releases/latest/download/Nullhost_S60.sis) | [`client/s60_keypad/`](client/s60_keypad/) |
-| **Universal Java ME** | Any phone supporting MIDP 2.0 / CLDC 1.1 + JSR-75 | [Nullhost.jar](https://github.com/Gelaxiz/nullhost/releases/latest/download/Nullhost.jar) ([.jad](https://github.com/Gelaxiz/nullhost/releases/latest/download/Nullhost.jad)) | [`client/j2me/`](client/j2me/) |
-| **Windows Desktop** | Windows 7 / 8 / 10 / 11 (.NET 4.5+) | [Nullhost.exe](https://github.com/Gelaxiz/nullhost/releases/latest/download/Nullhost.exe) | [`client/windows/`](client/windows/) |
+| **Universal Mobile (Symbian / S60 / S40 / Java)** | Symbian Belle FP2 (Nokia 808, 701, N8), S60, Series 40, Java ME | `client/Nullhost.jar` & `Nullhost.jad` | `client/j2me/src/` |
+| **Windows Desktop** | Windows 7 / 8 / 10 / 11 (.NET 4.5+) | `client/Nullhost.exe` | `client/windows/` |
+| **Symbian ^3 (Belle FP2) C++** | Pure Symbian C++ Source Tree | `Nullhost_Symbian_Belle_Source.zip` | `client/symbian_belle/` |
+| **Series 60 Keypad C++** | Pure Symbian C++ Source Tree | `Nullhost_S60_Keypad_Source.zip` | `client/s60_keypad/` |
 
-### Symbian ^3 (Belle FP2) — Native C++
-- **100% Native Symbian C++**: Written entirely in Symbian C++ (`inc/`, `src/`, `group/`, `data/`) using standard Symbian OS ROM libraries. **Zero Qt, Zero Web Runtime (WRT)**, and zero external dependencies.
+### Universal Mobile Client (Nokia Symbian Belle FP2 / S60 / Java ME)
+- **Universal Zero-Dependency Standalone Application**: Fully compatible out-of-the-box with Nokia Symbian Belle FP2 (Nokia 808 PureView, 701, 700, 603), Symbian^3 / Anna (N8, E7, C7), S60 keypad devices, and Series 40 via the hardware-accelerated Nokia JVM in ROM.
+- **Strictly Zero Python**: Zero Python runtime, zero PyS60 scripts, zero external dependencies. Never encounters launcher crashes.
+- **Authentic Branding**: Official Nullhost logo embedded directly (`icon.png` / `MIDlet-Icon`) in high-resolution RGBA.
+- **JSR-75 Native Filesystem Explorer**: Complete file browsing across phone memory (`C:`), mass storage (`E:`), and memory card (`F:`).
+- **HMAC Handshake & Multipart Upload**: Secure HMAC-SHA256 authentication and direct upload engine.
+
+### Symbian Native C++ Source Trees
+- **100% Native Symbian C++**: Pure C++ implementations (`inc/`, `src/`, `group/`, `data/`) using standard Symbian OS ROM libraries. **Zero Qt, Zero Web Runtime (WRT)**.
 - **Belle FP2 Interface**: High-performance double-buffered canvas, frosted glass status bar, sliding action sheets, and capacitive bottom pill toolbar (`Options`, `Gallery`, `Browse`, `Upload`).
-- **Photo Gallery**: Native `RFs` directory scanner discovering JPEG, PNG, and GIF images across `E:\Images\`, `C:\Data\Images\`, `F:\Images\`, `E:\DCIM\`.
-- **Dual File Pickers**: Direct Symbian drive tree explorer (`C: Phone`, `E: Mass Storage`, `F: Memory Card`) and system query picker.
-- **In-App Menus (English)**: Full views for Terms of Service, Privacy Policy, and About Nullhost.
-
-### Series 60 (S60 Keypad) — Native C++
-- **100% Native Symbian C++**: Standalone Symbian C++ application compiled directly against S60 3rd/5th Edition ROM libraries. Zero external dependencies, zero Qt, zero WRT.
-- **Keypad Ergonomics**: Hardware CBA softkeys (`Options` / `Back`) and 5-way D-Pad tab switcher (`[ Upload ] [ Browse ] [ Gallery ] [ Account ]`) with cursor highlight bar and number shortcuts 1-4.
-- **Dual File Pickers**: D-Pad drive browser for `C:\`, `E:\`, `F:\` and system file query dialog.
-
-### Universal Java ME MIDlet
-- **Universal J2ME**: Runs on standard numeric keypad phones and resistive/capacitive touchscreens.
-- **JSR-75 FileConnection**: File system browser across phone memory and removable storage.
-- **Self-Contained Crypto**: Pure Java CLDC 1.1 HMAC-SHA256 implementation without external libraries.
+- **S60 Keypad Ergonomics**: Hardware CBA softkeys (`Options` / `Back`) and 5-way D-Pad tab navigation.
+- **Ready for Carbide.c++ & Nokia SDK**: Packaged as clean source zips with `bld.inf`, `.mmp`, `.pkg`, and resource definition files.
 
 ### Windows Desktop Client
 - **System Tray & Explorer Integration**: Right-click any file in Windows Explorer and choose "Upload to Nullhost".
+- **Authentic Logo**: Official multi-resolution `logo.ico` embedded directly into the PE executable.
 - **Chunked Upload Engine**: Streams files larger than 95 MB in chunks to bypass proxy upload limits.
 
 ---
