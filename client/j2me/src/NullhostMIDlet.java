@@ -444,7 +444,7 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
                         String name = (String) list.nextElement();
                         currentEntries.addElement(dirUrl + name);
                         if (name.endsWith("/")) {
-                            browserList.append("Folder: " + name.substring(0, name.length() - 1), null);
+                            browserList.append("/" + name.substring(0, name.length() - 1), null);
                         } else {
                             browserList.append(name, null);
                         }
