@@ -639,9 +639,6 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
         if (rec.rawUrl != null && rec.rawUrl.length() > 0) {
             f.append(new StringItem("Raw URL:", rec.rawUrl));
         }
-        if (rec.deleteUrl != null && rec.deleteUrl.length() > 0) {
-            f.append(new StringItem("Delete URL:", rec.deleteUrl));
-        }
 
         final Command cmdOpen = new Command("Open in Browser", Command.OK, 1);
         final Command cmdDetailsBack = new Command("Back", Command.BACK, 2);
@@ -891,9 +888,6 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
         successForm.append(new StringItem("Burn Limit:", record.burn));
         successForm.append(new StringItem("Short URL:", record.url));
         successForm.append(new StringItem("Direct Raw Link:", record.rawUrl));
-        if (record.deleteUrl != null && record.deleteUrl.length() > 0) {
-            successForm.append(new StringItem("Delete Link:", record.deleteUrl));
-        }
 
         final Command cmdOpen = new Command("Open in Browser", Command.OK, 1);
         final Command cmdNew = new Command("Upload Another", Command.SCREEN, 2);
