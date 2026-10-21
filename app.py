@@ -341,10 +341,12 @@ def download_app(filename=None):
     
     file_map = {
         'windows': ('Nullhost.exe', 'application/x-msdos-program'),
-        'symbian': ('Nullhost_Belle.sisx', 'application/vnd.symbian.install'),
-        'belle': ('Nullhost_Belle.sisx', 'application/vnd.symbian.install'),
-        's60': ('Nullhost_S60.sis', 'application/vnd.symbian.install'),
+        'symbian': ('Nullhost.jar', 'application/java-archive'),
+        'belle': ('Nullhost.jar', 'application/java-archive'),
+        's60': ('Nullhost.jar', 'application/java-archive'),
+        'mobile': ('Nullhost.jar', 'application/java-archive'),
         'j2me': ('Nullhost.jar', 'application/java-archive'),
+        'jar': ('Nullhost.jar', 'application/java-archive'),
         'jad': ('Nullhost.jad', 'text/vnd.sun.j2me.app-descriptor'),
         'belle-source': ('Nullhost_Symbian_Belle_Source.zip', 'application/zip'),
         's60-source': ('Nullhost_S60_Keypad_Source.zip', 'application/zip'),
@@ -369,7 +371,11 @@ def download_app(filename=None):
         
     fpath = os.path.join(client_dir, fname)
     if os.path.exists(fpath):
-        return send_file(fpath, as_attachment=True, download_name=fname, mimetype=mtype)
+        resp = make_response(send_file(fpath, as_attachment=True, download_name=fname, mimetype=mtype))
+        resp.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate, max-age=0'
+        resp.headers['Pragma'] = 'no-cache'
+        resp.headers['Expires'] = '0'
+        return resp
         
     return redirect(f"https://github.com/Gelaxiz/nullhost/releases/latest/download/{fname}")
 
