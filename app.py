@@ -436,7 +436,7 @@ def mobile_items():
         return jsonify({'status': 'ok', 'items': []})
     with get_db() as conn:
         rows = conn.execute(
-            'SELECT id, type, filename, size, created_at, expires_at, views FROM items WHERE account_id = ? ORDER BY created_at DESC LIMIT 50',
+            'SELECT id, type, filename, size, created_at, expires_at, views, password_hash FROM items WHERE account_id = ? ORDER BY created_at DESC LIMIT 50',
             (account_id,)
         ).fetchall()
     items = []
@@ -450,8 +450,11 @@ def mobile_items():
             'views': r['views'] or 0,
             'created_at': r['created_at'],
             'expires_at': r['expires_at'],
+            'has_password': bool(r['password_hash']),
             'url': url_for('overview', item_id=r['id'], _external=True),
             'raw_url': url_for('raw', item_id=r['id'], filename=fname, _external=True),
+            'download_url': url_for('download', item_id=r['id'], filename=fname, _external=True),
+            'qr_url': url_for('item_qr', item_id=r['id'], _external=True) + '?size=5',
             'thumb_url': url_for('raw', item_id=r['id'], filename=fname, _external=True) if fname.lower().endswith(('.jpg', '.jpeg', '.png', '.gif')) else ''
         })
     return jsonify({'status': 'ok', 'items': items})
@@ -532,8 +535,26 @@ def mobile_item_lookup(item_id):
         if item['expires_at'] <= now:
             return jsonify({'status': 'error', 'message': 'Item has expired'}), 410
         
+        pwd = (request.args.get('password') or request.headers.get('X-Nullhost-Password') or '').strip()
+        has_pwd = bool(item['password_hash'])
+        pwd_ok = False
+        if has_pwd:
+            if pwd and check_password_hash(item['password_hash'], pwd):
+                pwd_ok = True
+                session[f'auth_{item["id"]}'] = True
+        else:
+            pwd_ok = True
+
         fname = item['filename'] or ('paste.txt' if item['type'] == 'paste' else 'file')
-        content_val = item['content'] if (item['type'] == 'paste' and not item['password_hash']) else None
+        content_val = item['content'] if (item['type'] == 'paste' and pwd_ok) else None
+
+        raw_url = url_for('raw', item_id=item['id'], filename=fname, _external=True)
+        dl_url = url_for('download', item_id=item['id'], filename=fname, _external=True)
+        if has_pwd and pwd_ok and pwd:
+            import urllib.parse
+            raw_url += '?password=' + urllib.parse.quote_plus(pwd)
+            dl_url += '?password=' + urllib.parse.quote_plus(pwd)
+
         return jsonify({
             'status': 'ok',
             'id': item['id'],
@@ -542,12 +563,13 @@ def mobile_item_lookup(item_id):
             'type': item['type'],
             'views': item['views'] or 0,
             'expires_at': item['expires_at'],
-            'has_password': bool(item['password_hash']),
+            'has_password': has_pwd,
+            'password_ok': pwd_ok,
             'burn_after_read': item['burn_after_read'] or 0,
             'content': content_val,
             'url': url_for('overview', item_id=item['id'], _external=True),
-            'raw_url': url_for('raw', item_id=item['id'], filename=fname, _external=True),
-            'download_url': url_for('download', item_id=item['id'], filename=fname, _external=True),
+            'raw_url': raw_url,
+            'download_url': dl_url,
             'qr_url': url_for('item_qr', item_id=item['id'], _external=True) + '?size=5'
         })
 
@@ -2043,7 +2065,10 @@ def raw(item_id, filename=None, force_download=False):
         return "error: not found or expired", 404
 
     if item['password_hash']:
-        if request.method == 'POST':
+        param_pwd = (request.args.get('password') or request.headers.get('X-Nullhost-Password') or '').strip()
+        if param_pwd and check_password_hash(item['password_hash'], param_pwd):
+            session[f'auth_{item_id}'] = True
+        elif request.method == 'POST':
             if not verify_turnstile():
                 return render_template('password.html', item_id=item_id, target='raw', action_url=request.path, error='verification failed. try again.'), 403
             pwd = request.form.get('password')

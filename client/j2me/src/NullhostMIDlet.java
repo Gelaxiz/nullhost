@@ -28,7 +28,7 @@ import javax.microedition.rms.RecordStore;
  */
 public class NullhostMIDlet extends MIDlet implements CommandListener, ItemCommandListener {
 
-    private static final String APP_VERSION = "1.6.2";
+    private static final String APP_VERSION = "1.7.0";
     private static final String CLIENT_ID = "j2me-universal";
     private static final String MOBILE_SECRET = "nullhost_secret_mobile_app_key_2026";
     private static final String DEFAULT_SERVER = "http://nullhost.gelaxiz.xyz";
@@ -93,6 +93,8 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
     private Command cmdPublicFiles;
     private Command cmdMyUploads;
     private Command cmdSettings;
+    private Command cmdTerms;
+    private Command cmdPrivacy;
     private Command cmdAbout;
     private Command cmdExit;
     private Command cmdBack;
@@ -108,6 +110,17 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
     // Photo Gallery State
     private List galleryList;
     private Vector galleryEntries = new Vector();
+
+    static class PhotoItem {
+        String url;
+        String name;
+        long time;
+        PhotoItem(String u, String n, long t) {
+            this.url = u;
+            this.name = n;
+            this.time = t;
+        }
+    }
 
     // Public Files State
     private List publicList;
@@ -128,6 +141,8 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
         public String burn = "Disabled";
         public String content = null;
         public Image qrImage = null;
+        public boolean hasPassword = false;
+        public String password = "";
     }
 
     public void startApp() {
@@ -154,8 +169,10 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
         cmdPublicFiles = new Command("Public Files", Command.SCREEN, 5);
         cmdMyUploads = new Command("Upload History", Command.SCREEN, 6);
         cmdSettings = new Command("Settings", Command.SCREEN, 7);
-        cmdAbout = new Command("About", Command.SCREEN, 8);
-        cmdExit = new Command("Exit", Command.EXIT, 9);
+        cmdTerms = new Command("Terms of Service", Command.SCREEN, 8);
+        cmdPrivacy = new Command("Privacy Policy", Command.SCREEN, 9);
+        cmdAbout = new Command("About", Command.SCREEN, 10);
+        cmdExit = new Command("Exit", Command.EXIT, 11);
 
         cmdBack = new Command("Back", Command.BACK, 1);
         cmdSelect = new Command("Select", Command.OK, 1);
@@ -224,14 +241,9 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
         btnSettings.setItemCommandListener(this);
         mainForm.append(btnSettings);
 
-        // Softkey Commands
-        mainForm.addCommand(cmdUpload);
-        mainForm.addCommand(cmdPhoto);
-        mainForm.addCommand(cmdBrowse);
-        mainForm.addCommand(cmdFindByCodeMenu);
-        mainForm.addCommand(cmdPublicFiles);
-        mainForm.addCommand(cmdMyUploads);
-        mainForm.addCommand(cmdSettings);
+        // Softkey Commands (Only non-redundant items in options menu; main actions are on-screen buttons)
+        mainForm.addCommand(cmdTerms);
+        mainForm.addCommand(cmdPrivacy);
         mainForm.addCommand(cmdAbout);
         mainForm.addCommand(cmdExit);
         mainForm.setCommandListener(this);
@@ -290,6 +302,10 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
             openSettingsForm();
         } else if (c == cmdAbout) {
             showAbout();
+        } else if (c == cmdTerms) {
+            showTermsOfService();
+        } else if (c == cmdPrivacy) {
+            showPrivacyPolicy();
         } else if (c == cmdBack) {
             if (d == browserList) {
                 handleBrowserBack();
@@ -500,8 +516,14 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
                     if (rec.qrUrl == null && rec.url != null) rec.qrUrl = rec.url + "/qr.png?size=5";
                     rec.content = extractJsonField(json, "content");
                     rec.expiry = formatRetentionDisplay(null, rec.expiresAt);
+                    rec.hasPassword = "true".equals(extractJsonField(json, "has_password"));
+                    boolean pwdOk = "true".equals(extractJsonField(json, "password_ok"));
 
-                    showItemDetails(rec, findForm, false);
+                    if (rec.hasPassword && !pwdOk) {
+                        promptFilePassword(rec, cleanCode, findForm, false);
+                    } else {
+                        showItemDetails(rec, findForm, false);
+                    }
                 } catch (Exception e) {
                     showAlert("Search Error", "Could not connect to server: " + e.getMessage(), AlertType.ERROR, findForm);
                 }
@@ -538,6 +560,8 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
         galleryList.append("Browse Storage Folders", null);
         galleryEntries.addElement("ACTION_BROWSE");
 
+        Vector allPhotos = new Vector();
+
         try {
             Enumeration roots = FileSystemRegistry.listRoots();
             Vector rootList = new Vector();
@@ -565,42 +589,72 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
 
                 for (int j = 0; j < subDirs.length; j++) {
                     String target = rootUrl + subDirs[j];
-                    scanSingleFolder(target);
-                    if (galleryEntries.size() >= 100) break;
+                    scanSingleFolder(target, allPhotos);
+                    if (allPhotos.size() >= 120) break;
                 }
-                if (galleryEntries.size() >= 100) break;
+                if (allPhotos.size() >= 120) break;
+            }
+
+            // Sort allPhotos descending by timestamp, then filename descending (newest first)
+            int total = allPhotos.size();
+            for (int i = 0; i < total - 1; i++) {
+                int maxIdx = i;
+                for (int j = i + 1; j < total; j++) {
+                    PhotoItem a = (PhotoItem) allPhotos.elementAt(maxIdx);
+                    PhotoItem b = (PhotoItem) allPhotos.elementAt(j);
+                    if (b.time > a.time) {
+                        maxIdx = j;
+                    } else if (b.time == a.time && b.name.compareTo(a.name) > 0) {
+                        maxIdx = j;
+                    }
+                }
+                if (maxIdx != i) {
+                    Object tmp = allPhotos.elementAt(i);
+                    allPhotos.setElementAt(allPhotos.elementAt(maxIdx), i);
+                    allPhotos.setElementAt(tmp, maxIdx);
+                }
+            }
+
+            for (int i = 0; i < allPhotos.size() && i < 100; i++) {
+                PhotoItem pi = (PhotoItem) allPhotos.elementAt(i);
+                if (!galleryEntries.contains(pi.url)) {
+                    galleryEntries.addElement(pi.url);
+                    galleryList.append(pi.name, null);
+                }
             }
         } catch (Exception e) {}
 
         display.setCurrent(galleryList);
     }
 
-    private void scanSingleFolder(String folderUrl) {
+    private void scanSingleFolder(String folderUrl, Vector dest) {
         try {
             FileConnection fc = (FileConnection) Connector.open(folderUrl, Connector.READ);
             if (fc.exists() && fc.isDirectory()) {
                 Enumeration list = fc.list();
-                Vector found = new Vector();
+                Vector foundNames = new Vector();
                 while (list.hasMoreElements()) {
                     String name = (String) list.nextElement();
                     if (!name.endsWith("/")) {
                         String lower = name.toLowerCase();
                         if (lower.endsWith(".jpg") || lower.endsWith(".jpeg") || lower.endsWith(".png") || lower.endsWith(".gif")) {
-                            found.addElement(name);
+                            foundNames.addElement(name);
                         }
                     }
                 }
                 fc.close();
 
-                // Add to gallery in reverse order so latest photos come first
-                for (int i = found.size() - 1; i >= 0; i--) {
-                    String fname = (String) found.elementAt(i);
+                for (int i = 0; i < foundNames.size(); i++) {
+                    String fname = (String) foundNames.elementAt(i);
                     String fullUrl = folderUrl + fname;
-                    if (!galleryEntries.contains(fullUrl)) {
-                        galleryEntries.addElement(fullUrl);
-                        galleryList.append(fname, null);
-                    }
-                    if (galleryEntries.size() >= 100) break;
+                    long modTime = 0;
+                    try {
+                        FileConnection itemFc = (FileConnection) Connector.open(fullUrl, Connector.READ);
+                        modTime = itemFc.lastModified();
+                        itemFc.close();
+                    } catch (Exception ex) {}
+                    dest.addElement(new PhotoItem(fullUrl, fname, modTime));
+                    if (dest.size() >= 120) break;
                 }
             } else {
                 fc.close();
@@ -804,15 +858,102 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
         int idx = publicList.getSelectedIndex();
         if (idx < 0 || idx >= publicItems.size()) return;
         UploadRecord rec = (UploadRecord) publicItems.elementAt(idx);
-        showItemDetails(rec, publicList, false);
+        if (rec.hasPassword && (rec.password == null || rec.password.length() == 0)) {
+            promptFilePassword(rec, rec.id, publicList, false);
+        } else {
+            showItemDetails(rec, publicList, false);
+        }
     }
 
     // ------------------------------------------------------------------------
-    // MY UPLOAD HISTORY
+    // MY UPLOAD HISTORY (SERVER ACCOUNT SYNC + LOCAL SESSION)
     // ------------------------------------------------------------------------
     private void openMyUploads() {
+        if (accountId != null && accountId.length() > 0) {
+            final Form loadForm = new Form("Upload History");
+            loadForm.append(new StringItem("Status:", "Fetching account upload history..."));
+            loadForm.append(new Gauge(null, false, Gauge.INDEFINITE, Gauge.CONTINUOUS_RUNNING));
+            display.setCurrent(loadForm);
+
+            Thread t = new Thread(new Runnable() {
+                public void run() {
+                    try {
+                        String base = serverUrl.trim();
+                        if (base.endsWith("/")) base = base.substring(0, base.length() - 1);
+                        String url = base + "/api/mobile/items?account_id=" + urlEncode(accountId);
+
+                        HttpConnection conn = null;
+                        try {
+                            conn = (HttpConnection) Connector.open(url, Connector.READ);
+                            conn.setRequestProperty("User-Agent", "Nullhost-J2ME/1.0");
+                            conn.setRequestProperty("X-Nullhost-Account", accountId);
+                            int code = conn.getResponseCode();
+                            if (code != 200) {
+                                conn.close();
+                                renderUploadHistoryList();
+                                return;
+                            }
+                        } catch (Exception ex) {
+                            if (url.startsWith("https://")) {
+                                String httpUrl = "http://" + url.substring(8);
+                                conn = (HttpConnection) Connector.open(httpUrl, Connector.READ);
+                                conn.setRequestProperty("User-Agent", "Nullhost-J2ME/1.0");
+                                conn.setRequestProperty("X-Nullhost-Account", accountId);
+                                int code = conn.getResponseCode();
+                                if (code != 200) {
+                                    conn.close();
+                                    renderUploadHistoryList();
+                                    return;
+                                }
+                            } else {
+                                renderUploadHistoryList();
+                                return;
+                            }
+                        }
+
+                        InputStream is = conn.openInputStream();
+                        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                        byte[] buf = new byte[512];
+                        int len;
+                        while ((len = is.read(buf)) != -1) {
+                            baos.write(buf, 0, len);
+                        }
+                        is.close();
+                        conn.close();
+
+                        String json = new String(baos.toByteArray(), "UTF-8");
+                        Vector serverItems = parseItemsArray(json);
+
+                        for (int i = 0; i < serverItems.size(); i++) {
+                            UploadRecord sRec = (UploadRecord) serverItems.elementAt(i);
+                            boolean exists = false;
+                            for (int j = 0; j < myUploads.size(); j++) {
+                                UploadRecord mRec = (UploadRecord) myUploads.elementAt(j);
+                                if (sRec.id != null && sRec.id.equals(mRec.id)) {
+                                    exists = true;
+                                    break;
+                                }
+                            }
+                            if (!exists) {
+                                myUploads.addElement(sRec);
+                            }
+                        }
+
+                        renderUploadHistoryList();
+                    } catch (Exception ex) {
+                        renderUploadHistoryList();
+                    }
+                }
+            });
+            t.start();
+        } else {
+            renderUploadHistoryList();
+        }
+    }
+
+    private void renderUploadHistoryList() {
         if (myUploads.isEmpty()) {
-            showAlert("Upload History", "No uploads performed during this session yet.", AlertType.INFO, mainForm);
+            showAlert("Upload History", "No uploads performed during this session yet. Configure your Account ID in Settings to view all your account uploads.", AlertType.INFO, mainForm);
             return;
         }
 
@@ -824,7 +965,8 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
 
         for (int i = 0; i < myUploads.size(); i++) {
             UploadRecord rec = (UploadRecord) myUploads.elementAt(i);
-            histList.append(rec.filename + " - " + formatSize(rec.size), null);
+            String title = (rec.hasPassword ? "[Locked] " : "") + rec.filename + " - " + formatSize(rec.size);
+            histList.append(title, null);
         }
 
         histList.setCommandListener(new CommandListener() {
@@ -833,7 +975,11 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
                     int idx = histList.getSelectedIndex();
                     if (idx >= 0 && idx < myUploads.size()) {
                         UploadRecord rec = (UploadRecord) myUploads.elementAt(idx);
-                        showItemDetails(rec, histList, true);
+                        if (rec.hasPassword && (rec.password == null || rec.password.length() == 0)) {
+                            promptFilePassword(rec, rec.id, histList, true);
+                        } else {
+                            showItemDetails(rec, histList, true);
+                        }
                     }
                 } else if (c == cmdHistBack) {
                     display.setCurrent(mainForm);
@@ -1017,9 +1163,12 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
     }
 
     private void triggerFileDownload(UploadRecord rec, Form parentForm) {
-        String target = (rec.downloadUrl != null && rec.downloadUrl.length() > 0) ? rec.downloadUrl :
-                       ((rec.rawUrl != null && rec.rawUrl.length() > 0) ? rec.rawUrl : rec.url);
+        String target = (rec.rawUrl != null && rec.rawUrl.length() > 0) ? rec.rawUrl :
+                       ((rec.downloadUrl != null && rec.downloadUrl.length() > 0) ? rec.downloadUrl : rec.url);
         if (target != null && target.length() > 0) {
+            if (rec.password != null && rec.password.length() > 0 && target.indexOf("password=") == -1) {
+                target += (target.indexOf('?') != -1 ? "&" : "?") + "password=" + urlEncode(rec.password);
+            }
             try {
                 platformRequest(target);
             } catch (Exception ex) {
@@ -1572,6 +1721,16 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
         });
         successForm.append(btnDownload);
 
+        StringItem btnDel = new StringItem(null, "Delete File", Item.BUTTON);
+        btnDel.setLayout(Item.LAYOUT_EXPAND | Item.LAYOUT_NEWLINE_AFTER);
+        btnDel.setDefaultCommand(cmdItemAction);
+        btnDel.setItemCommandListener(new ItemCommandListener() {
+            public void commandAction(Command c, Item item) {
+                deleteUploadedItem(record);
+            }
+        });
+        successForm.append(btnDel);
+
         StringItem btnOpenBrowser = new StringItem(null, "Open in Browser", Item.BUTTON);
         btnOpenBrowser.setLayout(Item.LAYOUT_EXPAND | Item.LAYOUT_NEWLINE_AFTER);
         btnOpenBrowser.setDefaultCommand(cmdItemAction);
@@ -1604,11 +1763,13 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
         final Command cmdDone = new Command("Home", Command.BACK, 1);
         final Command cmdNew = new Command("Upload Another", Command.SCREEN, 2);
         final Command cmdOpen = new Command("Open in Browser", Command.SCREEN, 3);
-        final Command cmdExitApp = new Command("Exit", Command.EXIT, 4);
+        final Command cmdDel = new Command("Delete File", Command.SCREEN, 4);
+        final Command cmdExitApp = new Command("Exit", Command.EXIT, 5);
 
         successForm.addCommand(cmdDone);
         successForm.addCommand(cmdNew);
         successForm.addCommand(cmdOpen);
+        successForm.addCommand(cmdDel);
         successForm.addCommand(cmdExitApp);
 
         successForm.setCommandListener(new CommandListener() {
@@ -1627,6 +1788,8 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
                     } catch (Exception ex) {
                         showAlert("Browser Error", "Could not open browser: " + ex.getMessage(), AlertType.ERROR, successForm);
                     }
+                } else if (c == cmdDel) {
+                    deleteUploadedItem(record);
                 } else if (c == cmdExitApp) {
                     destroyApp(true);
                     notifyDestroyed();
@@ -1722,10 +1885,146 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
             "Server: " + serverUrl + "\n" +
             "Free Memory: " + freeMem + " KB / " + totalMem + " KB\n" +
             "Platform: " + System.getProperty("microedition.platform") + "\n\n" +
-            "Gelaxiz Labs (c) 2026"));
+            "Gelaxiz (c) 2026"));
         f.addCommand(cmdBack);
         f.setCommandListener(this);
         display.setCurrent(f);
+    }
+
+    private void showTermsOfService() {
+        Form f = new Form("Terms of Service");
+        f.append(new StringItem("1. Limits:", "By uploading, you agree to these rules. Max size 10 GB per upload. Files over 95 MB chunked. If you don't agree, please do not use the service.\n\n"));
+        f.append(new StringItem("2. Responsibility:", "You own whatever you upload. Nullhost is a dumb pipe. We do not actively monitor uploads, but legal notices result in deletion.\n\n"));
+        f.append(new StringItem("3. As-Is Service:", "Nullhost is provided as-is without uptime or retention guarantees. Do not use as sole backup for important files.\n\n"));
+        f.append(new StringItem("4. Liability:", "Nullhost is not responsible for damages resulting from service usage or file loss.\n\n"));
+        f.append(new StringItem("5. Link Reuse Risk:", "Shortcodes may be reused after items expire or are deleted (7-day tombstone cooldown)."));
+        f.addCommand(cmdBack);
+        f.setCommandListener(this);
+        display.setCurrent(f);
+    }
+
+    private void showPrivacyPolicy() {
+        Form f = new Form("Privacy Policy");
+        f.append(new StringItem("1. Data We Host:", "Minimal data only: files and text you upload (stored momentarily until expiration/deletion), session cookies if logged in, basic IP/timestamp web logs.\n\n"));
+        f.append(new StringItem("2. How Data Is Used:", "Solely to provide file hosting. We do not sell data, track browsing across sites, or train AI models.\n\n"));
+        f.append(new StringItem("3. Data Retention:", "Files permanently deleted upon expiry or burn limit. Server logs routinely purged.\n\n"));
+        f.append(new StringItem("4. Third-Party Sharing:", "No sharing with third parties unless compelled by valid legal law enforcement order.\n\n"));
+        f.append(new StringItem("5. Cookies:", "Only strictly necessary session cookies. No tracking or ads."));
+        f.addCommand(cmdBack);
+        f.setCommandListener(this);
+        display.setCurrent(f);
+    }
+
+    private void promptFilePassword(final UploadRecord rec, final String code, final Displayable backTarget, final boolean isMyUpload) {
+        final Form pwdForm = new Form("Password Protected");
+        pwdForm.append(new StringItem("Notice:", "This file is password protected. Enter the password to view and download."));
+        final TextField tfPwd = new TextField("Password:", "", 64, TextField.PASSWORD);
+        pwdForm.append(tfPwd);
+
+        final Command cmdUnlock = new Command("Unlock", Command.OK, 1);
+        final Command cmdCancel = new Command("Cancel", Command.BACK, 2);
+        pwdForm.addCommand(cmdUnlock);
+        pwdForm.addCommand(cmdCancel);
+
+        pwdForm.setCommandListener(new CommandListener() {
+            public void commandAction(Command c, Displayable d) {
+                if (c == cmdUnlock) {
+                    final String entered = tfPwd.getString().trim();
+                    if (entered.length() == 0) {
+                        showAlert("Password Required", "Please enter the password.", AlertType.WARNING, pwdForm);
+                        return;
+                    }
+
+                    final Form unlockingForm = new Form("Verifying Password");
+                    unlockingForm.append(new StringItem("Status:", "Validating password with server..."));
+                    unlockingForm.append(new Gauge(null, false, Gauge.INDEFINITE, Gauge.CONTINUOUS_RUNNING));
+                    display.setCurrent(unlockingForm);
+
+                    Thread t = new Thread(new Runnable() {
+                        public void run() {
+                            try {
+                                String base = serverUrl.trim();
+                                if (base.endsWith("/")) base = base.substring(0, base.length() - 1);
+                                String unlockUrl = base + "/api/mobile/item/" + code + "?password=" + urlEncode(entered);
+
+                                HttpConnection conn = null;
+                                try {
+                                    conn = (HttpConnection) Connector.open(unlockUrl, Connector.READ);
+                                    conn.setRequestProperty("User-Agent", "Nullhost-J2ME/1.0");
+                                    conn.setRequestProperty("X-Nullhost-Password", entered);
+                                    int respCode = conn.getResponseCode();
+                                    if (respCode == 401 || respCode == 403) {
+                                        conn.close();
+                                        showAlert("Incorrect Password", "The password you entered is incorrect.", AlertType.ERROR, pwdForm);
+                                        return;
+                                    }
+                                    if (respCode != 200) {
+                                        conn.close();
+                                        showAlert("Error", "Server returned HTTP " + respCode, AlertType.ERROR, pwdForm);
+                                        return;
+                                    }
+                                } catch (Exception ex) {
+                                    if (unlockUrl.startsWith("https://")) {
+                                        String httpUrl = "http://" + unlockUrl.substring(8);
+                                        conn = (HttpConnection) Connector.open(httpUrl, Connector.READ);
+                                        conn.setRequestProperty("User-Agent", "Nullhost-J2ME/1.0");
+                                        conn.setRequestProperty("X-Nullhost-Password", entered);
+                                        int respCode = conn.getResponseCode();
+                                        if (respCode == 401 || respCode == 403) {
+                                            conn.close();
+                                            showAlert("Incorrect Password", "The password you entered is incorrect.", AlertType.ERROR, pwdForm);
+                                            return;
+                                        }
+                                        if (respCode != 200) {
+                                            conn.close();
+                                            showAlert("Error", "Server returned HTTP " + respCode, AlertType.ERROR, pwdForm);
+                                            return;
+                                        }
+                                    } else {
+                                        throw ex;
+                                    }
+                                }
+
+                                InputStream is = conn.openInputStream();
+                                ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                                byte[] buf = new byte[512];
+                                int len;
+                                while ((len = is.read(buf)) != -1) {
+                                    baos.write(buf, 0, len);
+                                }
+                                is.close();
+                                conn.close();
+
+                                String respJson = new String(baos.toByteArray(), "UTF-8");
+                                boolean ok = "true".equals(extractJsonField(respJson, "password_ok"));
+                                if (!ok) {
+                                    showAlert("Incorrect Password", "The password you entered is incorrect.", AlertType.ERROR, pwdForm);
+                                    return;
+                                }
+
+                                rec.password = entered;
+                                rec.rawUrl = extractJsonField(respJson, "raw_url");
+                                rec.downloadUrl = extractJsonField(respJson, "download_url");
+                                rec.qrUrl = extractJsonField(respJson, "qr_url");
+                                rec.content = extractJsonField(respJson, "content");
+                                String sz = extractJsonField(respJson, "size");
+                                if (sz != null) {
+                                    try { rec.size = Long.parseLong(sz); } catch (Exception ex) {}
+                                }
+
+                                showItemDetails(rec, backTarget, isMyUpload);
+                            } catch (Exception e) {
+                                showAlert("Error", "Connection failed: " + e.getMessage(), AlertType.ERROR, pwdForm);
+                            }
+                        }
+                    });
+                    t.start();
+                } else if (c == cmdCancel) {
+                    display.setCurrent(backTarget);
+                }
+            }
+        });
+        display.setCurrent(pwdForm);
     }
 
     // ------------------------------------------------------------------------
@@ -1776,6 +2075,7 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
                 rec.qrUrl = rec.url + "/qr.png?size=5";
             }
             rec.expiry = formatRetentionDisplay(null, rec.expiresAt);
+            rec.hasPassword = "true".equals(extractJsonField(objStr, "has_password"));
 
             if (rec.filename != null && rec.filename.length() > 0) {
                 list.addElement(rec);
@@ -1871,5 +2171,36 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
         Alert alert = new Alert(title, msg, null, type);
         alert.setTimeout(Alert.FOREVER);
         display.setCurrent(alert, next);
+    }
+
+    private static final String HEX_DIGITS = "0123456789ABCDEF";
+
+    private static String hexByte(int b) {
+        return "%" + HEX_DIGITS.charAt((b >> 4) & 0x0F) + HEX_DIGITS.charAt(b & 0x0F);
+    }
+
+    private static String urlEncode(String s) {
+        if (s == null) return "";
+        StringBuffer sbuf = new StringBuffer();
+        int len = s.length();
+        for (int i = 0; i < len; i++) {
+            int ch = s.charAt(i);
+            if (('A' <= ch && ch <= 'Z') || ('a' <= ch && ch <= 'z') || ('0' <= ch && ch <= '9') ||
+                ch == '-' || ch == '_' || ch == '.' || ch == '~' || ch == '*') {
+                sbuf.append((char)ch);
+            } else if (ch == ' ') {
+                sbuf.append('+');
+            } else if (ch <= 0x007F) {
+                sbuf.append(hexByte(ch));
+            } else if (ch <= 0x07FF) {
+                sbuf.append(hexByte(0xC0 | (ch >> 6)));
+                sbuf.append(hexByte(0x80 | (ch & 0x3F)));
+            } else {
+                sbuf.append(hexByte(0xE0 | (ch >> 12)));
+                sbuf.append(hexByte(0x80 | ((ch >> 6) & 0x3F)));
+                sbuf.append(hexByte(0x80 | (ch & 0x3F)));
+            }
+        }
+        return sbuf.toString();
     }
 }
