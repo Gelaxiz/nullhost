@@ -80,10 +80,11 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
     private VideoControl cameraControl = null;
     private Form scannerForm = null;
     private StringItem scannerStatusItem = null;
+    private StringItem btnTriggerScan = null;
+    private Command cmdScanCapture = null;
     private Command cmdScanQRMenu = null;
     private Command cmdScanGalleryQR = null;
-    private volatile boolean isScanning = false;
-    private Thread scanLoopThread = null;
+    private volatile boolean isCapturing = false;
     private boolean galleryForQR = false;
     private boolean browserForQR = false;
 
@@ -202,6 +203,7 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
         cmdSaveSettings = new Command("Save", Command.OK, 1);
         cmdDoSearch = new Command("Search", Command.OK, 1);
         cmdItemAction = new Command("Go", Command.ITEM, 1);
+        cmdScanCapture = new Command("Scan QR", Command.OK, 1);
         cmdScanQRMenu = new Command("Scan QR Code", Command.SCREEN, 2);
         cmdScanGalleryQR = new Command("Scan from Photo", Command.SCREEN, 3);
     }
@@ -301,6 +303,8 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
             openQRScanner();
         } else if (item == btnScanPhotoFind) {
             openPhotoGalleryForQR();
+        } else if (item == btnTriggerScan) {
+            triggerSingleScan();
         } else if (item == btnFindByCode) {
             openFindByCodeForm();
         } else if (item == btnPublicFiles) {
@@ -314,10 +318,11 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
 
     public void commandAction(Command c, Displayable d) {
         if (c == cmdExit || c == cmdExitSoftkey) {
-            stopAutoScan();
             closeCamera();
             destroyApp(true);
             notifyDestroyed();
+        } else if (c == cmdScanCapture && d == scannerForm) {
+            triggerSingleScan();
         } else if (c == cmdScanQRMenu) {
             openQRScanner();
         } else if (c == cmdScanGalleryQR) {
@@ -344,7 +349,6 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
             showPrivacyPolicy();
         } else if (c == cmdBack) {
             if (d == scannerForm) {
-                stopAutoScan();
                 closeCamera();
                 display.setCurrent(findForm != null ? (Displayable) findForm : mainForm);
             } else if (d == galleryList) {
@@ -603,7 +607,7 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
     // CAMERA QR SCANNER & AUTOMATIC DECODE
     // ------------------------------------------------------------------------
     private void openQRScanner() {
-        stopAutoScan();
+        isCapturing = false;
         closeCamera();
 
         scannerForm = new Form("Scan QR Code");
@@ -615,6 +619,7 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
         try {
             cameraPlayer = Manager.createPlayer("capture://video");
             cameraPlayer.realize();
+            applyCameraFocus(cameraPlayer);
             cameraControl = (VideoControl) cameraPlayer.getControl("VideoControl");
             if (cameraControl != null) {
                 Object guiComponent = cameraControl.initDisplayMode(VideoControl.USE_GUI_PRIMITIVE, null);
@@ -627,6 +632,7 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
                     cameraControl.setVisible(true);
                 } catch (Throwable ignored) {}
                 cameraPlayer.start();
+                applyCameraFocus(cameraPlayer);
                 cameraReady = true;
             }
         } catch (Throwable t) {
@@ -634,68 +640,115 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
             scannerForm.append(new StringItem("Notice:", "Please use 'Scan from Saved Photo' in the Find by Code menu."));
         }
 
+        if (cameraReady) {
+            btnTriggerScan = new StringItem(null, "📸 Focus & Scan QR Now", Item.BUTTON);
+            btnTriggerScan.setLayout(Item.LAYOUT_EXPAND | Item.LAYOUT_NEWLINE_BEFORE | Item.LAYOUT_NEWLINE_AFTER);
+            btnTriggerScan.setDefaultCommand(cmdItemAction);
+            btnTriggerScan.setItemCommandListener(this);
+            scannerForm.append(btnTriggerScan);
+
+            scannerStatusItem.setText("Point camera at QR code (~15-30cm). Press 'Scan QR' when ready.");
+            scannerForm.addCommand(cmdScanCapture);
+        }
+
         scannerForm.addCommand(cmdBack);
         scannerForm.setCommandListener(this);
         display.setCurrent(scannerForm);
-
-        if (cameraReady) {
-            startAutoScan();
-        }
     }
 
-    private void startAutoScan() {
-        isScanning = true;
-        if (scannerStatusItem != null) {
-            scannerStatusItem.setText("Scanning automatically... Hold camera steady at QR code.");
-        }
-        scanLoopThread = new Thread(new Runnable() {
-            public void run() {
-                try { Thread.sleep(600); } catch (Exception ignored) {}
+    private void applyCameraFocus(Player player) {
+        if (player == null) return;
+        try {
+            Object fc = player.getControl("javax.microedition.amms.control.camera.FocusControl");
+            if (fc == null) {
+                fc = player.getControl("FocusControl");
+            }
+            if (fc != null) {
+                Class clazz = fc.getClass();
+                // 1. Try setMacro(true) for close-up scanning (10-30cm)
+                try {
+                    java.lang.reflect.Method mMacro = clazz.getMethod("setMacro", new Class[] { boolean.class });
+                    mMacro.invoke(fc, new Object[] { Boolean.TRUE });
+                } catch (Throwable ignored) {}
 
-                while (isScanning && cameraControl != null) {
+                // 2. Try setFocus(AUTO)
+                try {
+                    int autoVal = -1000;
+                    try {
+                        java.lang.reflect.Field fAuto = clazz.getField("AUTO");
+                        autoVal = fAuto.getInt(null);
+                    } catch (Throwable ignored) {}
+                    java.lang.reflect.Method mFocus = clazz.getMethod("setFocus", new Class[] { int.class });
+                    mFocus.invoke(fc, new Object[] { new Integer(autoVal) });
+                } catch (Throwable ignored) {}
+
+                // 3. Try autofocus()
+                try {
+                    java.lang.reflect.Method mAf = clazz.getMethod("autofocus", new Class[] {});
+                    mAf.invoke(fc, new Object[] {});
+                } catch (Throwable ignored) {}
+            }
+        } catch (Throwable ignored) {}
+    }
+
+    private void triggerSingleScan() {
+        if (isCapturing || cameraControl == null) return;
+        isCapturing = true;
+        scannerStatusItem.setText("Focusing & scanning QR code...");
+        Thread t = new Thread(new Runnable() {
+            public void run() {
+                try {
+                    applyCameraFocus(cameraPlayer);
+                    try { Thread.sleep(220); } catch (Exception ignored) {}
+
                     byte[] snapshot = null;
                     try {
-                        snapshot = cameraControl.getSnapshot("encoding=jpeg");
+                        snapshot = cameraControl.getSnapshot("encoding=jpeg&width=640&height=480");
                     } catch (Throwable t1) {
                         try {
-                            snapshot = cameraControl.getSnapshot(null);
+                            snapshot = cameraControl.getSnapshot("encoding=jpeg");
                         } catch (Throwable t2) {
-                            snapshot = null;
-                        }
-                    }
-
-                    if (snapshot != null && snapshot.length > 0 && isScanning) {
-                        final String foundCode = decodeQRBytesSynchronous(snapshot);
-                        if (foundCode != null && foundCode.length() > 0 && isScanning) {
-                            isScanning = false;
-                            closeCamera();
                             try {
-                                AlertType.CONFIRMATION.playSound(display);
-                            } catch (Throwable ignored) {}
-                            lookupItemByCode(foundCode, mainForm);
-                            return;
+                                snapshot = cameraControl.getSnapshot(null);
+                            } catch (Throwable t3) {
+                                snapshot = null;
+                            }
                         }
                     }
 
-                    try {
-                        Thread.sleep(850);
-                    } catch (InterruptedException ie) {
-                        break;
+                    if (snapshot == null || snapshot.length == 0) {
+                        scannerStatusItem.setText("Could not capture image from camera. Please try again.");
+                        isCapturing = false;
+                        return;
                     }
+
+                    scannerStatusItem.setText("Decoding QR code (" + (snapshot.length / 1024) + " KB)...");
+                    final String foundCode = decodeQRBytesSynchronous(snapshot);
+                    if (foundCode != null && foundCode.length() > 0) {
+                        closeCamera();
+                        try {
+                            AlertType.CONFIRMATION.playSound(display);
+                        } catch (Throwable ignored) {}
+                        lookupItemByCode(foundCode, mainForm);
+                        return;
+                    } else {
+                        scannerStatusItem.setText("No QR code detected. Align QR code in frame (~15-30cm away) and press 'Scan QR' again.");
+                        try {
+                            AlertType.WARNING.playSound(display);
+                        } catch (Throwable ignored) {}
+                    }
+                } catch (Throwable ex) {
+                    scannerStatusItem.setText("Scan error: " + ex.getMessage());
+                } finally {
+                    isCapturing = false;
                 }
             }
         });
-        scanLoopThread.start();
+        t.start();
     }
 
     private void stopAutoScan() {
-        isScanning = false;
-        if (scanLoopThread != null) {
-            try {
-                scanLoopThread.interrupt();
-            } catch (Throwable ignored) {}
-            scanLoopThread = null;
-        }
+        isCapturing = false;
     }
 
     private String decodeQRBytesSynchronous(byte[] imgBytes) {

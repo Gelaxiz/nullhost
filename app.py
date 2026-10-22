@@ -600,13 +600,32 @@ def mobile_qr_decode():
         if image.mode not in ('L', 'RGB'):
             image = image.convert('RGB')
 
-        results = decode(image)
-        if not results:
+        def try_decode(img):
+            res = decode(img)
+            if res:
+                return res
             for angle in (90, 180, 270):
-                rotated = image.rotate(angle, expand=True)
-                results = decode(rotated)
-                if results:
-                    break
+                res = decode(img.rotate(angle, expand=True))
+                if res:
+                    return res
+            return None
+
+        results = try_decode(image)
+        if not results:
+            from PIL import ImageEnhance, ImageOps
+            gray = image.convert('L')
+            results = try_decode(gray)
+            if not results:
+                try:
+                    enhanced = ImageEnhance.Contrast(gray).enhance(1.8)
+                    results = try_decode(enhanced)
+                    if not results:
+                        sharpened = ImageEnhance.Sharpness(enhanced).enhance(2.0)
+                        results = try_decode(sharpened)
+                        if not results:
+                            results = try_decode(ImageOps.autocontrast(gray))
+                except Exception:
+                    pass
 
         if not results:
             return jsonify({'status': 'error', 'message': 'No QR code found in camera view. Hold phone steady and closer, then try again.'}), 404

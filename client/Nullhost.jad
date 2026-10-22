@@ -7,6 +7,6 @@ MIDlet-Description: Anonymous file & photo hosting with live QR codes and explor
 MicroEdition-Configuration: CLDC-1.1
 MicroEdition-Profile: MIDP-2.0
 MIDlet-Jar-URL: Nullhost.jar
-MIDlet-Jar-Size: 66858
+MIDlet-Jar-Size: 68055
 MIDlet-Permissions: javax.microedition.io.Connector.http, javax.microedition.io.Connector.file.read, javax.microedition.io.Connector.file.write
 MIDlet-Permissions-Opt: javax.microedition.media.control.record
