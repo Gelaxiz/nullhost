@@ -28,7 +28,7 @@ import javax.microedition.rms.RecordStore;
  */
 public class NullhostMIDlet extends MIDlet implements CommandListener, ItemCommandListener {
 
-    private static final String APP_VERSION = "1.9.0";
+    private static final String APP_VERSION = "1.9.1";
     private static final String CLIENT_ID = "j2me-universal";
     private static final String MOBILE_SECRET = "nullhost_secret_mobile_app_key_2026";
     private static final String DEFAULT_SERVER = "http://nullhost.gelaxiz.xyz";
@@ -45,7 +45,6 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
     private int burnIndex = 0;   // Disabled default
     private String customPassword = "";
     private String customSlug = "";
-    private boolean galleryThumbnails = false; // Turned off by default as requested
     private boolean fastUpload = false;        // Fast 1080p compression option
 
     private static final String[] EXPIRY_LABELS = {"1 Hour", "24 Hours", "7 Days", "30 Days", "Never Expire"};
@@ -58,8 +57,30 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
     private String selectedFilePath = null;
     private long selectedFileSize = 0;
 
-    // Multi-Selection (Batch Upload)
-    private Vector markedUrls = new Vector();
+    // Data Usage Tracking
+    private static long sessionBytesSent = 0;
+    private static long sessionBytesRecv = 0;
+    private long totalLifetimeBytes = 0;
+
+    // Offline Outbox
+    private Vector outboxUrls = new Vector();
+    private static final String RMS_OUTBOX_NAME = "nullhost_box";
+    private StringItem btnOpenOutbox;
+    private StringItem btnQueueOutbox;
+    private Command cmdOutbox;
+    private Command cmdUploadOutbox;
+    private Command cmdClearOutbox;
+    private Command cmdRemoveOutboxItem;
+
+    // Direct Note Creator
+    private StringItem btnCreateNote;
+    private Command cmdCreateNote;
+
+    // History Export
+    private Command cmdExportHistory;
+
+    // Bandwidth Reset
+    private Command cmdResetData;
 
     // User Upload History (Session Records)
     private Vector myUploads = new Vector();
@@ -90,7 +111,6 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
     private TextField optPassword;
     private TextField optSlug;
     private TextField optAccount;
-    private ChoiceGroup optThumbnails;
     private ChoiceGroup optFastUpload;
 
     // Commands
@@ -110,9 +130,6 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
     private Command cmdSelect;
     private Command cmdSaveSettings;
     private Command cmdItemAction;
-    private Command cmdUploadBatch;
-    private Command cmdClearMarks;
-    private Command cmdChooseSingle;
 
     // File Browser State
     private List browserList;
@@ -123,6 +140,7 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
     private List galleryList;
     private Vector galleryEntries = new Vector();
     private Vector galleryPhotoItems = new Vector();
+    private List outboxList;
 
     // T9 Quick Filter State
     private String publicFilter = "";
@@ -137,12 +155,10 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
         String url;
         String name;
         long time;
-        Image thumb;
         PhotoItem(String u, String n, long t) {
             this.url = u;
             this.name = n;
             this.time = t;
-            this.thumb = null;
         }
     }
 
@@ -173,6 +189,7 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
         if (display == null) {
             display = Display.getDisplay(this);
             loadPersistentSettings();
+            loadOutboxFromRMS();
             initCommands();
             initMainForm();
         }
@@ -184,6 +201,7 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
 
     public void destroyApp(boolean unconditional) {
         savePersistentSettings();
+        saveOutboxToRMS();
     }
 
     private void initCommands() {
@@ -194,11 +212,13 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
         cmdPublicFiles = new Command("Public Files", Command.SCREEN, 5);
         cmdMyUploads = new Command("Upload History", Command.SCREEN, 6);
         cmdSettings = new Command("Settings", Command.SCREEN, 7);
-        cmdTerms = new Command("Terms of Service", Command.SCREEN, 8);
-        cmdPrivacy = new Command("Privacy Policy", Command.SCREEN, 9);
-        cmdAbout = new Command("About", Command.SCREEN, 10);
-        cmdExit = new Command("Exit", Command.SCREEN, 11);
-        cmdExitSoftkey = new Command("Exit", Command.EXIT, 12);
+        cmdCreateNote = new Command("Create Note", Command.SCREEN, 8);
+        cmdOutbox = new Command("Outbox Queue", Command.SCREEN, 9);
+        cmdTerms = new Command("Terms of Service", Command.SCREEN, 10);
+        cmdPrivacy = new Command("Privacy Policy", Command.SCREEN, 11);
+        cmdAbout = new Command("About", Command.SCREEN, 12);
+        cmdExit = new Command("Exit", Command.SCREEN, 13);
+        cmdExitSoftkey = new Command("Exit", Command.EXIT, 14);
 
         cmdBack = new Command("Back", Command.BACK, 1);
         cmdSelect = new Command("Select", Command.OK, 1);
@@ -206,13 +226,16 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
         cmdDoSearch = new Command("Search", Command.OK, 1);
         cmdItemAction = new Command("Go", Command.ITEM, 1);
 
-        cmdUploadBatch = new Command("Upload Checked", Command.OK, 1);
-        cmdClearMarks = new Command("Clear Checked", Command.SCREEN, 4);
-        cmdChooseSingle = new Command("Choose for Upload", Command.SCREEN, 2);
         cmdFilterPublic = new Command("Quick Filter", Command.SCREEN, 2);
         cmdClearFilterPublic = new Command("Clear Filter", Command.SCREEN, 3);
         cmdFilterHistory = new Command("Quick Filter", Command.SCREEN, 2);
         cmdClearFilterHistory = new Command("Clear Filter", Command.SCREEN, 3);
+        cmdExportHistory = new Command("Export Links", Command.SCREEN, 4);
+
+        cmdUploadOutbox = new Command("Upload Outbox Now", Command.OK, 1);
+        cmdRemoveOutboxItem = new Command("Remove Item", Command.SCREEN, 2);
+        cmdClearOutbox = new Command("Clear Outbox", Command.SCREEN, 3);
+        cmdResetData = new Command("Reset Data Counter", Command.SCREEN, 2);
     }
 
     private void initMainForm() {
@@ -238,11 +261,29 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
         btnBrowseFiles.setItemCommandListener(this);
         mainForm.append(btnBrowseFiles);
 
+        btnCreateNote = new StringItem(null, "Create Text Note", Item.BUTTON);
+        btnCreateNote.setLayout(Item.LAYOUT_EXPAND | Item.LAYOUT_NEWLINE_AFTER);
+        btnCreateNote.setDefaultCommand(cmdItemAction);
+        btnCreateNote.setItemCommandListener(this);
+        mainForm.append(btnCreateNote);
+
         btnUploadNow = new StringItem(null, "Upload File Now", Item.BUTTON);
         btnUploadNow.setLayout(Item.LAYOUT_EXPAND | Item.LAYOUT_NEWLINE_AFTER);
         btnUploadNow.setDefaultCommand(cmdItemAction);
         btnUploadNow.setItemCommandListener(this);
         mainForm.append(btnUploadNow);
+
+        btnQueueOutbox = new StringItem(null, "Save to Outbox", Item.BUTTON);
+        btnQueueOutbox.setLayout(Item.LAYOUT_EXPAND | Item.LAYOUT_NEWLINE_AFTER);
+        btnQueueOutbox.setDefaultCommand(cmdItemAction);
+        btnQueueOutbox.setItemCommandListener(this);
+        mainForm.append(btnQueueOutbox);
+
+        btnOpenOutbox = new StringItem(null, "Outbox (0 queued)", Item.BUTTON);
+        btnOpenOutbox.setLayout(Item.LAYOUT_EXPAND | Item.LAYOUT_NEWLINE_AFTER);
+        btnOpenOutbox.setDefaultCommand(cmdItemAction);
+        btnOpenOutbox.setItemCommandListener(this);
+        mainForm.append(btnOpenOutbox);
 
         mainForm.append(new Spacer(10, 8));
 
@@ -278,7 +319,9 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
         btnSettings.setItemCommandListener(this);
         mainForm.append(btnSettings);
 
-        // Softkey Commands (Only non-redundant items in options menu; main actions are on-screen buttons)
+        // Softkey Commands
+        mainForm.addCommand(cmdCreateNote);
+        mainForm.addCommand(cmdOutbox);
         mainForm.addCommand(cmdTerms);
         mainForm.addCommand(cmdPrivacy);
         mainForm.addCommand(cmdAbout);
@@ -316,6 +359,11 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
         } else {
             btnMyUploads.setText("Upload History: " + myUploads.size() + " items");
         }
+        if (outboxUrls.isEmpty()) {
+            btnOpenOutbox.setText("Outbox (0 queued)");
+        } else {
+            btnOpenOutbox.setText("Outbox (" + outboxUrls.size() + " queued)");
+        }
         settingsSummaryItem.setText("Expiry " + EXPIRY_LABELS[expiryIndex] + ", Burn " + BURN_LABELS[burnIndex] + (fastUpload ? ", 1080p Fast" : ""));
     }
 
@@ -324,8 +372,14 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
             openPhotoGallery();
         } else if (item == btnBrowseFiles) {
             openFileBrowser(null);
+        } else if (item == btnCreateNote) {
+            openCreateNoteForm();
         } else if (item == btnUploadNow) {
             startUploadThread();
+        } else if (item == btnQueueOutbox) {
+            queueCurrentFileToOutbox();
+        } else if (item == btnOpenOutbox) {
+            openOutboxScreen();
         } else if (item == btnFindByCode) {
             openFindByCodeForm();
         } else if (item == btnPublicFiles) {
@@ -347,6 +401,10 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
             openPhotoGallery();
         } else if (c == cmdBrowse) {
             openFileBrowser(null);
+        } else if (c == cmdCreateNote) {
+            openCreateNoteForm();
+        } else if (c == cmdOutbox) {
+            openOutboxScreen();
         } else if (c == cmdFindByCodeMenu) {
             openFindByCodeForm();
         } else if (c == cmdPublicFiles) {
@@ -357,6 +415,8 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
             openSettingsForm();
         } else if (c == cmdAbout) {
             showAbout();
+        } else if (c == cmdResetData) {
+            resetDataUsage();
         } else if (c == cmdTerms) {
             showTermsOfService();
         } else if (c == cmdPrivacy) {
@@ -377,29 +437,6 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
             handleGallerySelect();
         } else if ((c == cmdSelect || c == List.SELECT_COMMAND) && d == publicList) {
             handlePublicSelect();
-        } else if (c == cmdChooseSingle) {
-            if (!markedUrls.isEmpty()) {
-                selectedFilePath = (String) markedUrls.elementAt(0);
-                try {
-                    FileConnection fc = (FileConnection) Connector.open(selectedFilePath, Connector.READ);
-                    selectedFileSize = fc.fileSize();
-                    fc.close();
-                } catch (Exception e) {
-                    selectedFileSize = 0;
-                }
-                updateMainFormStatus();
-                display.setCurrent(mainForm);
-            }
-        } else if (c == cmdUploadBatch) {
-            handleBatchUploadAction();
-        } else if (c == cmdClearMarks) {
-            markedUrls.removeAllElements();
-            if (d == galleryList) {
-                renderGalleryRows();
-                updateGalleryCommands();
-            } else if (d == browserList) {
-                openFileBrowser(currentDirectoryUrl);
-            }
         } else if (c == cmdFilterPublic) {
             promptFilterPublic();
         } else if (c == cmdClearFilterPublic) {
@@ -432,8 +469,9 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
             dos.writeInt(burnIndex);
             dos.writeUTF(customPassword != null ? customPassword : "");
             dos.writeUTF(customSlug != null ? customSlug : "");
-            dos.writeBoolean(galleryThumbnails);
+            dos.writeBoolean(false);
             dos.writeBoolean(fastUpload);
+            dos.writeLong(totalLifetimeBytes);
             dos.flush();
             byte[] data = baos.toByteArray();
             if (rs.getNumRecords() == 0) {
@@ -465,10 +503,13 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
                     customPassword = dis.readUTF();
                     customSlug = dis.readUTF();
                     if (dis.available() > 0) {
-                        galleryThumbnails = dis.readBoolean();
+                        dis.readBoolean();
                     }
                     if (dis.available() > 0) {
                         fastUpload = dis.readBoolean();
+                    }
+                    if (dis.available() >= 8) {
+                        totalLifetimeBytes = dis.readLong();
                     }
                 }
             }
@@ -913,53 +954,26 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
             for (int i = 0; i < allPhotos.size() && i < 100; i++) {
                 PhotoItem pi = (PhotoItem) allPhotos.elementAt(i);
                 if (!galleryEntries.contains(pi.url)) {
-                    if (galleryThumbnails) {
-                        pi.thumb = loadThumbnailSafe(pi.url, 28);
-                    }
                     galleryPhotoItems.addElement(pi);
                     galleryEntries.addElement(pi.url);
                 }
             }
         } catch (Exception e) {}
 
-        renderGalleryRows();
-        display.setCurrent(galleryList);
-    }
-
-    private void renderGalleryRows() {
         galleryList = new List("Choose Photo", List.IMPLICIT);
         galleryList.addCommand(cmdSelect);
         galleryList.addCommand(cmdBack);
         galleryList.setCommandListener(this);
 
-        // First item is always manual folder navigation (strictly navigation, no checkbox)
+        // First item is always manual folder navigation
         galleryList.append("📁 Browse Storage Folders", null);
 
         for (int i = 0; i < galleryPhotoItems.size(); i++) {
             PhotoItem pi = (PhotoItem) galleryPhotoItems.elementAt(i);
-            boolean marked = markedUrls.contains(pi.url);
-            String label = (marked ? "[✓] " : "[ ] ") + pi.name;
-            galleryList.append(label, pi.thumb);
+            galleryList.append(pi.name, null);
         }
 
-        updateGalleryCommands();
-    }
-
-    private void updateGalleryCommands() {
-        if (galleryList == null) return;
-        galleryList.removeCommand(cmdUploadBatch);
-        galleryList.removeCommand(cmdClearMarks);
-        galleryList.removeCommand(cmdChooseSingle);
-
-        int count = markedUrls.size();
-        if (count > 0) {
-            cmdUploadBatch = new Command("Upload Checked (" + count + ")", Command.OK, 1);
-            galleryList.addCommand(cmdUploadBatch);
-            galleryList.addCommand(cmdClearMarks);
-            if (count == 1) {
-                galleryList.addCommand(cmdChooseSingle);
-            }
-        }
+        display.setCurrent(galleryList);
     }
 
     private void scanSingleFolder(String folderUrl, Vector dest) {
@@ -1008,20 +1022,20 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
         if (photoIdx < 0 || photoIdx >= galleryPhotoItems.size()) return;
 
         PhotoItem pi = (PhotoItem) galleryPhotoItems.elementAt(photoIdx);
-        if (markedUrls.contains(pi.url)) {
-            markedUrls.removeElement(pi.url);
-        } else {
-            markedUrls.addElement(pi.url);
+        selectedFilePath = pi.url;
+        try {
+            FileConnection fc = (FileConnection) Connector.open(selectedFilePath, Connector.READ);
+            selectedFileSize = fc.fileSize();
+            fc.close();
+        } catch (Exception e) {
+            selectedFileSize = 0;
         }
-
-        boolean marked = markedUrls.contains(pi.url);
-        String label = (marked ? "[✓] " : "[ ] ") + pi.name;
-        galleryList.set(idx, label, pi.thumb);
-        updateGalleryCommands();
+        updateMainFormStatus();
+        display.setCurrent(mainForm);
     }
 
     // ------------------------------------------------------------------------
-    // FILE BROWSER (STORAGE NAVIGATION)
+    // FILE BROWSER (STORAGE NAVIGATION - 1-CLICK SELECT)
     // ------------------------------------------------------------------------
     private void openFileBrowser(String dirUrl) {
         currentEntries.removeAllElements();
@@ -1055,20 +1069,19 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
                         }
                     }
 
-                    // 1. Directories first (strictly navigation, no checkbox, never marked)
+                    // 1. Directories first
                     for (int i = 0; i < subDirs.size(); i++) {
                         String dname = (String) subDirs.elementAt(i);
                         currentEntries.addElement(dirUrl + dname);
                         browserList.append("📁 /" + dname.substring(0, dname.length() - 1), null);
                     }
 
-                    // 2. Files with checkboxes
+                    // 2. Files (1-click selection)
                     for (int i = 0; i < files.size(); i++) {
                         String fname = (String) files.elementAt(i);
                         String furl = dirUrl + fname;
                         currentEntries.addElement(furl);
-                        boolean marked = markedUrls.contains(furl);
-                        browserList.append((marked ? "[✓] " : "[ ] ") + fname, null);
+                        browserList.append(fname, null);
                     }
                 }
                 fc.close();
@@ -1078,25 +1091,7 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
             return;
         }
 
-        updateBrowserCommands();
         display.setCurrent(browserList);
-    }
-
-    private void updateBrowserCommands() {
-        if (browserList == null) return;
-        browserList.removeCommand(cmdUploadBatch);
-        browserList.removeCommand(cmdClearMarks);
-        browserList.removeCommand(cmdChooseSingle);
-
-        int count = markedUrls.size();
-        if (count > 0) {
-            cmdUploadBatch = new Command("Upload Checked (" + count + ")", Command.OK, 1);
-            browserList.addCommand(cmdUploadBatch);
-            browserList.addCommand(cmdClearMarks);
-            if (count == 1) {
-                browserList.addCommand(cmdChooseSingle);
-            }
-        }
     }
 
     private String formatDriveLabel(String root) {
@@ -1114,19 +1109,20 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
 
         String selectedUrl = (String) currentEntries.elementAt(idx);
         if (selectedUrl.endsWith("/")) {
-            // Folders are strictly navigation: cannot be selected for upload
+            // Folders are strictly navigation
             openFileBrowser(selectedUrl);
         } else {
-            // Files toggle checkbox
-            if (markedUrls.contains(selectedUrl)) {
-                markedUrls.removeElement(selectedUrl);
-            } else {
-                markedUrls.addElement(selectedUrl);
+            // 1-Click file selection
+            selectedFilePath = selectedUrl;
+            try {
+                FileConnection fc = (FileConnection) Connector.open(selectedFilePath, Connector.READ);
+                selectedFileSize = fc.fileSize();
+                fc.close();
+            } catch (Exception e) {
+                selectedFileSize = 0;
             }
-            String fname = selectedUrl.substring(selectedUrl.lastIndexOf('/') + 1);
-            boolean marked = markedUrls.contains(selectedUrl);
-            browserList.set(idx, (marked ? "[✓] " : "[ ] ") + fname, null);
-            updateBrowserCommands();
+            updateMainFormStatus();
+            display.setCurrent(mainForm);
         }
     }
 
@@ -1146,78 +1142,194 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
     }
 
     // ------------------------------------------------------------------------
-    // BATCH UPLOAD (MULTI-FILE SELECTION)
+    // OFFLINE OUTBOX (UPLOAD QUEUE)
     // ------------------------------------------------------------------------
-    private void handleBatchUploadAction() {
-        if (markedUrls.isEmpty()) {
-            showAlert("No Files Checked", "Please check at least one file first.", AlertType.WARNING, display.getCurrent());
+    private void saveOutboxToRMS() {
+        RecordStore rs = null;
+        try {
+            try { RecordStore.deleteRecordStore(RMS_OUTBOX_NAME); } catch (Exception ignored) {}
+            rs = RecordStore.openRecordStore(RMS_OUTBOX_NAME, true);
+            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+            DataOutputStream dos = new DataOutputStream(baos);
+            dos.writeInt(outboxUrls.size());
+            for (int i = 0; i < outboxUrls.size(); i++) {
+                dos.writeUTF((String) outboxUrls.elementAt(i));
+            }
+            dos.flush();
+            byte[] data = baos.toByteArray();
+            rs.addRecord(data, 0, data.length);
+        } catch (Exception ex) {
+        } finally {
+            if (rs != null) {
+                try { rs.closeRecordStore(); } catch (Exception e) {}
+            }
+        }
+    }
+
+    private void loadOutboxFromRMS() {
+        outboxUrls.removeAllElements();
+        RecordStore rs = null;
+        try {
+            rs = RecordStore.openRecordStore(RMS_OUTBOX_NAME, false);
+            if (rs != null && rs.getNumRecords() > 0) {
+                byte[] data = rs.getRecord(1);
+                if (data != null && data.length > 0) {
+                    DataInputStream dis = new DataInputStream(new ByteArrayInputStream(data));
+                    int count = dis.readInt();
+                    for (int i = 0; i < count; i++) {
+                        String url = dis.readUTF();
+                        if (!outboxUrls.contains(url)) {
+                            outboxUrls.addElement(url);
+                        }
+                    }
+                }
+            }
+        } catch (Exception ex) {
+        } finally {
+            if (rs != null) {
+                try { rs.closeRecordStore(); } catch (Exception e) {}
+            }
+        }
+    }
+
+    private void queueCurrentFileToOutbox() {
+        if (selectedFilePath == null || selectedFilePath.length() == 0) {
+            showAlert("No File Selected", "Please choose a photo or file first to save to Outbox.", AlertType.WARNING, mainForm);
+            return;
+        }
+        if (outboxUrls.contains(selectedFilePath)) {
+            showAlert("Already Queued", "This file is already in your Outbox.", AlertType.INFO, mainForm);
+            return;
+        }
+        outboxUrls.addElement(selectedFilePath);
+        saveOutboxToRMS();
+        updateMainFormStatus();
+        showAlert("Saved to Outbox", "File queued to Outbox (" + outboxUrls.size() + " items total). When connected, tap Outbox to upload.", AlertType.CONFIRMATION, mainForm);
+    }
+
+    private void openOutboxScreen() {
+        if (outboxUrls.isEmpty()) {
+            showAlert("Outbox Empty", "Your upload Outbox is currently empty. You can save files to Outbox when offline and upload them later.", AlertType.INFO, mainForm);
             return;
         }
 
-        final Vector filesToUpload = new Vector();
-        for (int i = 0; i < markedUrls.size(); i++) {
-            filesToUpload.addElement(markedUrls.elementAt(i));
+        outboxList = new List("Outbox (" + outboxUrls.size() + ")", List.IMPLICIT);
+        outboxList.addCommand(cmdUploadOutbox);
+        outboxList.addCommand(cmdRemoveOutboxItem);
+        outboxList.addCommand(cmdClearOutbox);
+        outboxList.addCommand(cmdBack);
+        outboxList.setCommandListener(new CommandListener() {
+            public void commandAction(Command c, Displayable d) {
+                if (c == cmdUploadOutbox || c == List.SELECT_COMMAND) {
+                    startUploadOutboxThread();
+                } else if (c == cmdRemoveOutboxItem) {
+                    int idx = outboxList.getSelectedIndex();
+                    if (idx >= 0 && idx < outboxUrls.size()) {
+                        outboxUrls.removeElementAt(idx);
+                        saveOutboxToRMS();
+                        updateMainFormStatus();
+                        if (outboxUrls.isEmpty()) {
+                            display.setCurrent(mainForm);
+                        } else {
+                            openOutboxScreen();
+                        }
+                    }
+                } else if (c == cmdClearOutbox) {
+                    outboxUrls.removeAllElements();
+                    saveOutboxToRMS();
+                    updateMainFormStatus();
+                    display.setCurrent(mainForm);
+                } else if (c == cmdBack) {
+                    display.setCurrent(mainForm);
+                }
+            }
+        });
+
+        for (int i = 0; i < outboxUrls.size(); i++) {
+            String u = (String) outboxUrls.elementAt(i);
+            String fname = u.substring(u.lastIndexOf('/') + 1);
+            long sz = 0;
+            try {
+                FileConnection fc = (FileConnection) Connector.open(u, Connector.READ);
+                sz = fc.fileSize();
+                fc.close();
+            } catch (Exception ignored) {}
+            outboxList.append((i + 1) + ". " + fname + " (" + formatSize(sz) + ")", null);
         }
 
-        final Form batchForm = new Form("Batch Upload");
-        final StringItem batchOverall = new StringItem("Progress:", "Preparing " + filesToUpload.size() + " files...");
-        final StringItem batchItemStatus = new StringItem("Current File:", "Connecting...");
-        final Gauge batchGauge = new Gauge(null, false, 100, 0);
-        batchForm.append(batchOverall);
-        batchForm.append(batchItemStatus);
-        batchForm.append(batchGauge);
-        display.setCurrent(batchForm);
+        display.setCurrent(outboxList);
+    }
+
+    private void startUploadOutboxThread() {
+        if (outboxUrls.isEmpty()) {
+            showAlert("Outbox Empty", "No files in Outbox to upload.", AlertType.INFO, mainForm);
+            return;
+        }
+
+        final Form obForm = new Form("Uploading Outbox");
+        final StringItem obOverall = new StringItem("Queue Progress:", "Starting outbox upload...");
+        final StringItem obItemStatus = new StringItem("Current Item:", "Connecting to server...");
+        final Gauge obGauge = new Gauge(null, false, 100, 0);
+        obForm.append(obOverall);
+        obForm.append(obItemStatus);
+        obForm.append(obGauge);
+        display.setCurrent(obForm);
 
         Thread t = new Thread(new Runnable() {
             public void run() {
-                Vector uploadedRecords = new Vector();
-                Vector failedFiles = new Vector();
-                int total = filesToUpload.size();
+                Vector uploaded = new Vector();
+                Vector failed = new Vector();
+                Vector remaining = new Vector();
 
-                for (int i = 0; i < total; i++) {
-                    String fileUrl = (String) filesToUpload.elementAt(i);
+                for (int i = 0; i < outboxUrls.size(); i++) {
+                    String fileUrl = (String) outboxUrls.elementAt(i);
                     String fname = fileUrl.substring(fileUrl.lastIndexOf('/') + 1);
-                    batchOverall.setText("File " + (i + 1) + " of " + total + ": " + fname);
-                    batchGauge.setValue(0);
+                    obOverall.setText("Item " + (i + 1) + " of " + outboxUrls.size() + ": " + fname);
+                    obGauge.setValue(0);
 
                     try {
-                        UploadRecord rec = executeUpload(batchItemStatus, batchGauge, fileUrl);
+                        UploadRecord rec = executeUpload(obItemStatus, obGauge, fileUrl);
                         if (rec != null) {
-                            uploadedRecords.addElement(rec);
+                            uploaded.addElement(rec);
                         } else {
-                            failedFiles.addElement(fname);
+                            failed.addElement(fname);
+                            remaining.addElement(fileUrl);
                         }
                     } catch (Exception ex) {
-                        failedFiles.addElement(fname + " (" + (ex.getMessage() != null ? ex.getMessage() : "Error") + ")");
+                        failed.addElement(fname + " (" + (ex.getMessage() != null ? ex.getMessage() : "Failed") + ")");
+                        remaining.addElement(fileUrl);
                     }
                 }
 
-                markedUrls.removeAllElements();
-                showBatchSuccessScreen(uploadedRecords, failedFiles);
+                outboxUrls = remaining;
+                saveOutboxToRMS();
+                updateMainFormStatus();
+
+                showOutboxResultScreen(uploaded, failed);
             }
         });
         t.start();
     }
 
-    private void showBatchSuccessScreen(final Vector uploadedRecords, final Vector failedFiles) {
-        final Form f = new Form("Batch Complete");
-        f.append(new StringItem("Summary:", uploadedRecords.size() + " uploaded, " + failedFiles.size() + " failed.\n"));
+    private void showOutboxResultScreen(final Vector uploaded, final Vector failed) {
+        final Form resForm = new Form("Outbox Complete");
+        resForm.append(new StringItem("Summary:", uploaded.size() + " uploaded, " + failed.size() + " remaining in Outbox.\n"));
 
-        for (int i = 0; i < uploadedRecords.size(); i++) {
-            UploadRecord rec = (UploadRecord) uploadedRecords.elementAt(i);
-            f.append(new StringItem((i + 1) + ". " + rec.filename, rec.url));
+        for (int i = 0; i < uploaded.size(); i++) {
+            UploadRecord rec = (UploadRecord) uploaded.elementAt(i);
+            resForm.append(new StringItem((i + 1) + ". " + rec.filename, rec.url));
         }
 
-        if (!failedFiles.isEmpty()) {
-            f.append(new StringItem("Failed Files:", ""));
-            for (int i = 0; i < failedFiles.size(); i++) {
-                f.append(new StringItem("- ", (String) failedFiles.elementAt(i)));
+        if (!failed.isEmpty()) {
+            resForm.append(new StringItem("Items Remaining in Outbox:", ""));
+            for (int i = 0; i < failed.size(); i++) {
+                resForm.append(new StringItem("- ", (String) failed.elementAt(i)));
             }
         }
 
         final Command cmdDone = new Command("Done", Command.OK, 1);
-        f.addCommand(cmdDone);
-        f.setCommandListener(new CommandListener() {
+        resForm.addCommand(cmdDone);
+        resForm.setCommandListener(new CommandListener() {
             public void commandAction(Command c, Displayable d) {
                 if (c == cmdDone) {
                     updateMainFormStatus();
@@ -1226,7 +1338,158 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
             }
         });
 
-        display.setCurrent(f);
+        display.setCurrent(resForm);
+    }
+
+    // ------------------------------------------------------------------------
+    // IN-APP DIRECT TEXT NOTE CREATOR
+    // ------------------------------------------------------------------------
+    private void openCreateNoteForm() {
+        final Form noteForm = new Form("Create Text Note");
+        final TextField titleField = new TextField("Note Title (optional):", "", 32, TextField.ANY);
+        final TextField contentField = new TextField("Note Content:", "", 4096, TextField.ANY);
+        noteForm.append(titleField);
+        noteForm.append(contentField);
+
+        final Command cmdUploadNote = new Command("Upload Now", Command.OK, 1);
+        final Command cmdQueueNote = new Command("Save to Outbox", Command.SCREEN, 2);
+        final Command cmdNoteBack = new Command("Back", Command.BACK, 3);
+        noteForm.addCommand(cmdUploadNote);
+        noteForm.addCommand(cmdQueueNote);
+        noteForm.addCommand(cmdNoteBack);
+
+        noteForm.setCommandListener(new CommandListener() {
+            public void commandAction(Command c, Displayable d) {
+                if (c == cmdUploadNote) {
+                    String content = contentField.getString();
+                    if (content == null || content.trim().length() == 0) {
+                        showAlert("Empty Note", "Please enter some note content first.", AlertType.WARNING, noteForm);
+                        return;
+                    }
+                    String rawTitle = titleField.getString().trim();
+                    if (rawTitle.length() == 0) {
+                        rawTitle = "note_" + (System.currentTimeMillis() / 1000L) + ".txt";
+                    } else if (rawTitle.indexOf('.') == -1) {
+                        rawTitle = rawTitle + ".txt";
+                    }
+
+                    try {
+                        String localPath = saveLocalTextFile(rawTitle, content);
+                        selectedFilePath = localPath;
+                        selectedFileSize = content.getBytes("UTF-8").length;
+                        updateMainFormStatus();
+                        startUploadThread();
+                    } catch (Exception ex) {
+                        showAlert("Save Error", "Could not write note file: " + ex.getMessage(), AlertType.ERROR, noteForm);
+                    }
+                } else if (c == cmdQueueNote) {
+                    String content = contentField.getString();
+                    if (content == null || content.trim().length() == 0) {
+                        showAlert("Empty Note", "Please enter some note content first.", AlertType.WARNING, noteForm);
+                        return;
+                    }
+                    String rawTitle = titleField.getString().trim();
+                    if (rawTitle.length() == 0) {
+                        rawTitle = "note_" + (System.currentTimeMillis() / 1000L) + ".txt";
+                    } else if (rawTitle.indexOf('.') == -1) {
+                        rawTitle = rawTitle + ".txt";
+                    }
+
+                    try {
+                        String localPath = saveLocalTextFile(rawTitle, content);
+                        if (!outboxUrls.contains(localPath)) {
+                            outboxUrls.addElement(localPath);
+                            saveOutboxToRMS();
+                        }
+                        updateMainFormStatus();
+                        showAlert("Saved to Outbox", "Note saved and queued to Outbox.", AlertType.CONFIRMATION, mainForm);
+                    } catch (Exception ex) {
+                        showAlert("Save Error", "Could not write note file: " + ex.getMessage(), AlertType.ERROR, noteForm);
+                    }
+                } else if (c == cmdNoteBack) {
+                    display.setCurrent(mainForm);
+                }
+            }
+        });
+
+        display.setCurrent(noteForm);
+    }
+
+    private String saveLocalTextFile(String fname, String content) throws Exception {
+        String[] roots = {"file:///E:/Data/", "file:///E:/", "file:///C:/Data/", "file:///C:/"};
+        String targetUrl = null;
+
+        for (int i = 0; i < roots.length; i++) {
+            try {
+                FileConnection fc = (FileConnection) Connector.open(roots[i], Connector.READ);
+                if (fc.exists() && fc.isDirectory()) {
+                    fc.close();
+                    targetUrl = roots[i] + fname;
+                    break;
+                }
+                fc.close();
+            } catch (Exception ignored) {}
+        }
+
+        if (targetUrl == null) {
+            Enumeration en = FileSystemRegistry.listRoots();
+            if (en.hasMoreElements()) {
+                String r = (String) en.nextElement();
+                String rUrl = "file:///" + r;
+                if (!rUrl.endsWith("/")) rUrl += "/";
+                targetUrl = rUrl + fname;
+            } else {
+                throw new IOException("No storage drives accessible");
+            }
+        }
+
+        FileConnection outFc = (FileConnection) Connector.open(targetUrl, Connector.READ_WRITE);
+        if (outFc.exists()) {
+            outFc.delete();
+        }
+        outFc.create();
+        OutputStream os = outFc.openOutputStream();
+        os.write(content.getBytes("UTF-8"));
+        os.flush();
+        os.close();
+        outFc.close();
+        return targetUrl;
+    }
+
+    // ------------------------------------------------------------------------
+    // EXPORT UPLOAD HISTORY TO LOCAL FILE & NOTES
+    // ------------------------------------------------------------------------
+    private void exportUploadHistory(Displayable backTarget) {
+        if (myUploads == null || myUploads.isEmpty()) {
+            showAlert("No Uploads", "There are no upload links in history to export.", AlertType.INFO, backTarget);
+            return;
+        }
+
+        StringBuffer sb = new StringBuffer();
+        sb.append("=== Nullhost Upload Links ===\n");
+        sb.append("Total Items: ").append(myUploads.size()).append("\n\n");
+
+        for (int i = 0; i < myUploads.size(); i++) {
+            UploadRecord rec = (UploadRecord) myUploads.elementAt(i);
+            sb.append((i + 1)).append(". ").append(rec.filename).append(" (").append(formatSize(rec.size)).append(")\n");
+            sb.append("   Link: ").append(rec.url).append("\n");
+            if (rec.rawUrl != null && !rec.rawUrl.equals(rec.url)) {
+                sb.append("   Direct: ").append(rec.rawUrl).append("\n");
+            }
+            if (rec.deleteUrl != null && rec.deleteUrl.length() > 0) {
+                sb.append("   Delete: ").append(rec.deleteUrl).append("\n");
+            }
+            sb.append("\n");
+        }
+
+        String exportText = sb.toString();
+        String savedLoc = null;
+        try {
+            savedLoc = saveLocalTextFile("Nullhost_Links.txt", exportText);
+        } catch (Exception ex) {}
+
+        String title = savedLoc != null ? "Saved: " + savedLoc.substring(savedLoc.lastIndexOf('/') + 1) : "Exported Links";
+        showCustomTextViewer(title, exportText, backTarget);
     }
 
     // ------------------------------------------------------------------------
@@ -1305,22 +1568,23 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
         }
 
         currentFilteredPublic.removeAllElements();
+        String filterClean = publicFilter != null ? publicFilter.trim().toLowerCase() : "";
         for (int i = 0; i < publicItems.size(); i++) {
             UploadRecord rec = (UploadRecord) publicItems.elementAt(i);
-            if (publicFilter.length() == 0 || (rec.filename != null && rec.filename.toLowerCase().indexOf(publicFilter) != -1)) {
+            if (filterClean.length() == 0 || (rec.filename != null && rec.filename.toLowerCase().indexOf(filterClean) != -1)) {
                 currentFilteredPublic.addElement(rec);
             }
         }
 
         String title = "Public: " + currentFilteredPublic.size() + "/" + publicItems.size();
-        if (publicFilter.length() > 0) {
+        if (filterClean.length() > 0) {
             title = "Filter: \"" + publicFilter + "\" (" + currentFilteredPublic.size() + ")";
         }
 
         publicList = new List(title, List.IMPLICIT);
         publicList.addCommand(cmdSelect);
         publicList.addCommand(cmdFilterPublic);
-        if (publicFilter.length() > 0) {
+        if (filterClean.length() > 0) {
             publicList.addCommand(cmdClearFilterPublic);
         }
         publicList.addCommand(cmdBack);
@@ -1343,7 +1607,7 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
         tb.setCommandListener(new CommandListener() {
             public void commandAction(Command c, Displayable d) {
                 if (c == cmdOk) {
-                    publicFilter = tb.getString().toLowerCase().trim();
+                    publicFilter = tb.getString().trim();
                     renderPublicFilesList();
                 } else if (c == cmdCancel) {
                     renderPublicFilesList();
@@ -1457,15 +1721,16 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
         }
 
         final Vector filtered = new Vector();
+        String filterClean = historyFilter != null ? historyFilter.trim().toLowerCase() : "";
         for (int i = 0; i < myUploads.size(); i++) {
             UploadRecord rec = (UploadRecord) myUploads.elementAt(i);
-            if (historyFilter.length() == 0 || (rec.filename != null && rec.filename.toLowerCase().indexOf(historyFilter) != -1)) {
+            if (filterClean.length() == 0 || (rec.filename != null && rec.filename.toLowerCase().indexOf(filterClean) != -1)) {
                 filtered.addElement(rec);
             }
         }
 
         String title = "History: " + filtered.size() + "/" + myUploads.size();
-        if (historyFilter.length() > 0) {
+        if (filterClean.length() > 0) {
             title = "Filter: \"" + historyFilter + "\" (" + filtered.size() + ")";
         }
 
@@ -1474,9 +1739,10 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
         final Command cmdHistBack = new Command("Back", Command.BACK, 2);
         histList.addCommand(cmdHistSelect);
         histList.addCommand(cmdFilterHistory);
-        if (historyFilter.length() > 0) {
+        if (filterClean.length() > 0) {
             histList.addCommand(cmdClearFilterHistory);
         }
+        histList.addCommand(cmdExportHistory);
         histList.addCommand(cmdHistBack);
 
         for (int i = 0; i < filtered.size(); i++) {
@@ -1502,6 +1768,8 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
                 } else if (c == cmdClearFilterHistory) {
                     historyFilter = "";
                     renderUploadHistoryList();
+                } else if (c == cmdExportHistory) {
+                    exportUploadHistory(histList);
                 } else if (c == cmdHistBack) {
                     display.setCurrent(mainForm);
                 }
@@ -1520,7 +1788,7 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
         tb.setCommandListener(new CommandListener() {
             public void commandAction(Command c, Displayable d) {
                 if (c == cmdOk) {
-                    historyFilter = tb.getString().toLowerCase().trim();
+                    historyFilter = tb.getString().trim();
                     renderUploadHistoryList();
                 } else if (c == cmdCancel) {
                     renderUploadHistoryList();
@@ -1810,6 +2078,37 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
             }
         });
         t.start();
+    }
+
+    private void showCustomTextViewer(final String title, final String text, final Displayable backTarget) {
+        final Form viewForm = new Form(title != null ? title : "Text Viewer");
+        StringItem textItem = new StringItem(null, text);
+        textItem.setLayout(Item.LAYOUT_EXPAND | Item.LAYOUT_NEWLINE_AFTER);
+        viewForm.append(textItem);
+
+        viewForm.append(new Spacer(10, 8));
+
+        StringItem btnEdit = new StringItem(null, "Edit / Copy in App", Item.BUTTON);
+        btnEdit.setLayout(Item.LAYOUT_EXPAND | Item.LAYOUT_NEWLINE_AFTER);
+        btnEdit.setDefaultCommand(cmdItemAction);
+        btnEdit.setItemCommandListener(new ItemCommandListener() {
+            public void commandAction(Command c, Item item) {
+                showEditableTextBox(title, text, viewForm);
+            }
+        });
+        viewForm.append(btnEdit);
+
+        final Command cmdDone = new Command("Back", Command.BACK, 1);
+        viewForm.addCommand(cmdDone);
+        viewForm.setCommandListener(new CommandListener() {
+            public void commandAction(Command c, Displayable d) {
+                if (c == cmdDone) {
+                    display.setCurrent(backTarget != null ? backTarget : mainForm);
+                }
+            }
+        });
+
+        display.setCurrent(viewForm);
     }
 
     private void showCustomTextViewer(final UploadRecord rec, final String text, final Displayable backTarget) {
@@ -2288,6 +2587,8 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
         while ((flen = fis.read(fbuf)) != -1) {
             os.write(fbuf, 0, flen);
             sent += flen;
+            sessionBytesSent += flen;
+            totalLifetimeBytes += flen;
             long now = System.currentTimeMillis();
             if (now - lastUpdate >= 250 || sent == totalBytes) {
                 lastUpdate = now;
@@ -2317,6 +2618,8 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
         int rLen;
         while ((rLen = is.read(rBuf)) != -1) {
             baos.write(rBuf, 0, rLen);
+            sessionBytesRecv += rLen;
+            totalLifetimeBytes += rLen;
         }
         is.close();
         conn.close();
@@ -2354,6 +2657,7 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
             if (record.qrUrl == null && record.url != null) record.qrUrl = record.url + "/qr.png?size=5";
 
             myUploads.insertElementAt(record, 0);
+            savePersistentSettings();
             return record;
         }
 
@@ -2540,10 +2844,6 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
         optAccount = new TextField("Account ID (Optional):", accountId, 32, TextField.ANY);
         settingsForm.append(optAccount);
 
-        optThumbnails = new ChoiceGroup("Gallery Thumbnails:", Choice.EXCLUSIVE, new String[]{"Disabled (Faster)", "Enabled (Show Icons)"}, null);
-        optThumbnails.setSelectedIndex(galleryThumbnails ? 1 : 0, true);
-        settingsForm.append(optThumbnails);
-
         optFastUpload = new ChoiceGroup("Photo Quality:", Choice.EXCLUSIVE, new String[]{"Original (Full Quality)", "Fast Mobile (1080p Optimized)"}, null);
         optFastUpload.setSelectedIndex(fastUpload ? 1 : 0, true);
         settingsForm.append(optFastUpload);
@@ -2579,7 +2879,6 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
         customPassword = optPassword.getString().trim();
         customSlug = optSlug.getString().trim();
         accountId = enteredAcc;
-        galleryThumbnails = optThumbnails.getSelectedIndex() == 1;
         fastUpload = optFastUpload.getSelectedIndex() == 1;
 
         savePersistentSettings();
@@ -2596,24 +2895,40 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
         f.append(new StringItem("Nullhost Universal J2ME", "Version " + APP_VERSION + "\n\n" +
             "Fast, anonymous file and photo hosting for Symbian and vintage phones.\n\n" +
             "Features:\n" +
-            "- Multi-selection batch uploads with checkboxes\n" +
             "- Byte-accurate progress with speed & ETA\n" +
+            "- Offline Outbox & upload queue\n" +
+            "- In-app text note & code snippet creator\n" +
             "- In-app image viewer for hosted photos\n" +
-            "- Instant photo dimensions & thumbnail preview\n" +
-            "- Fast 1080p mobile photo compression\n" +
+            "- Instant photo dimensions & preview\n" +
+            "- Export upload history to local text & notes\n" +
+            "- Session & lifetime cellular data counter\n" +
             "- T9 quick filter for public files & history\n" +
             "- Auto-retry resilience on network drops\n" +
             "- In-app text viewer & phone editor launcher\n" +
             "- Direct Symbian download manager\n" +
             "- Persistent RMS settings & Account ID\n" +
             "- Live centered QR code generation\n\n" +
+            "Data Usage:\n" +
+            "Session Sent: " + formatSize(sessionBytesSent) + "\n" +
+            "Session Recv: " + formatSize(sessionBytesRecv) + "\n" +
+            "Session Total: " + formatSize(sessionBytesSent + sessionBytesRecv) + "\n" +
+            "Lifetime Total: " + formatSize(totalLifetimeBytes) + "\n\n" +
             "Server: " + serverUrl + "\n" +
             "Free Memory: " + freeMem + " KB / " + totalMem + " KB\n" +
             "Platform: " + System.getProperty("microedition.platform") + "\n\n" +
             "Gelaxiz (c) 2026"));
+        f.addCommand(cmdResetData);
         f.addCommand(cmdBack);
         f.setCommandListener(this);
         display.setCurrent(f);
+    }
+
+    private void resetDataUsage() {
+        sessionBytesSent = 0;
+        sessionBytesRecv = 0;
+        totalLifetimeBytes = 0;
+        savePersistentSettings();
+        showAlert("Data Counter Reset", "Cellular data usage counters have been reset to 0.", AlertType.CONFIRMATION, mainForm);
     }
 
     private void showTermsOfService() {
