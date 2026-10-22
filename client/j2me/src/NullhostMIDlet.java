@@ -28,7 +28,7 @@ import javax.microedition.rms.RecordStore;
  */
 public class NullhostMIDlet extends MIDlet implements CommandListener, ItemCommandListener {
 
-    private static final String APP_VERSION = "1.9.2";
+    private static final String APP_VERSION = "1.9.3";
     private static final String CLIENT_ID = "j2me-universal";
     private static final String MOBILE_SECRET = "nullhost_secret_mobile_app_key_2026";
     private static final String DEFAULT_SERVER = "http://nullhost.gelaxiz.xyz";
@@ -59,7 +59,6 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
 
     // Direct Text Paste Creator
     private StringItem btnCreatePaste;
-    private Command cmdCreatePaste;
 
     // History Export
     private Command cmdExportHistory;
@@ -187,7 +186,6 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
         cmdUpload = new Command("Upload File Now", Command.OK, 1);
         cmdPhoto = new Command("Choose Photo", Command.SCREEN, 2);
         cmdBrowse = new Command("Browse Storage", Command.SCREEN, 3);
-        cmdCreatePaste = new Command("New Paste", Command.SCREEN, 4);
         cmdFindByCodeMenu = new Command("Find by Code", Command.SCREEN, 5);
         cmdPublicFiles = new Command("Public Files", Command.SCREEN, 6);
         cmdMyUploads = new Command("Upload History", Command.SCREEN, 7);
@@ -281,7 +279,6 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
         mainForm.append(btnSettings);
 
         // Softkey Commands
-        mainForm.addCommand(cmdCreatePaste);
         mainForm.addCommand(cmdTerms);
         mainForm.addCommand(cmdPrivacy);
         mainForm.addCommand(cmdAbout);
@@ -301,7 +298,7 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
             if (isImg) {
                 int[] dims = readImageDimensions(selectedFilePath);
                 if (dims != null && dims.length >= 2) {
-                    fileStatusItem.setText(fname + " (" + dims[0] + "x" + dims[1] + " · " + formatSize(selectedFileSize) + ")");
+                    fileStatusItem.setText(fname + " (" + dims[0] + "x" + dims[1] + ", " + formatSize(selectedFileSize) + ")");
                 } else {
                     fileStatusItem.setText(fname + " (" + formatSize(selectedFileSize) + ")");
                 }
@@ -352,8 +349,6 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
             openPhotoGallery();
         } else if (c == cmdBrowse) {
             openFileBrowser(null);
-        } else if (c == cmdCreatePaste) {
-            openCreatePasteForm();
         } else if (c == cmdFindByCodeMenu) {
             openFindByCodeForm();
         } else if (c == cmdPublicFiles) {
@@ -909,7 +904,7 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
         galleryList.setCommandListener(this);
 
         // First item is always manual folder navigation
-        galleryList.append("📁 Browse Storage Folders", null);
+        galleryList.append("Browse Storage Folders", null);
 
         for (int i = 0; i < galleryPhotoItems.size(); i++) {
             PhotoItem pi = (PhotoItem) galleryPhotoItems.elementAt(i);
@@ -995,7 +990,7 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
                 while (roots.hasMoreElements()) {
                     String root = (String) roots.nextElement();
                     currentEntries.addElement("file:///" + root);
-                    browserList.append("📁 " + formatDriveLabel(root), null);
+                    browserList.append(formatDriveLabel(root), null);
                 }
             } else {
                 FileConnection fc = (FileConnection) Connector.open(dirUrl, Connector.READ);
@@ -1016,7 +1011,7 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
                     for (int i = 0; i < subDirs.size(); i++) {
                         String dname = (String) subDirs.elementAt(i);
                         currentEntries.addElement(dirUrl + dname);
-                        browserList.append("📁 /" + dname.substring(0, dname.length() - 1), null);
+                        browserList.append("/" + dname.substring(0, dname.length() - 1), null);
                     }
 
                     // 2. Files (1-click selection)
@@ -2448,7 +2443,7 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
                 long kbps = elapsed > 200 ? ((sent * 1000L / elapsed) / 1024L) : 0;
                 long remBytes = totalBytes - sent;
                 long etaSec = (kbps > 0 && remBytes > 0) ? (remBytes / (kbps * 1024L)) : 0;
-                statusText.setText(pct + "% (" + formatSize(sent) + " / " + formatSize(totalBytes) + ") · " + kbps + " KB/s · " + etaSec + "s left");
+                statusText.setText(pct + "% (" + formatSize(sent) + " / " + formatSize(totalBytes) + ") - " + kbps + " KB/s - " + etaSec + "s left");
             }
         }
         fis.close();
