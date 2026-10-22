@@ -28,7 +28,7 @@ import javax.microedition.rms.RecordStore;
  */
 public class NullhostMIDlet extends MIDlet implements CommandListener, ItemCommandListener {
 
-    private static final String APP_VERSION = "1.9.1";
+    private static final String APP_VERSION = "1.9.2";
     private static final String CLIENT_ID = "j2me-universal";
     private static final String MOBILE_SECRET = "nullhost_secret_mobile_app_key_2026";
     private static final String DEFAULT_SERVER = "http://nullhost.gelaxiz.xyz";
@@ -57,30 +57,12 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
     private String selectedFilePath = null;
     private long selectedFileSize = 0;
 
-    // Data Usage Tracking
-    private static long sessionBytesSent = 0;
-    private static long sessionBytesRecv = 0;
-    private long totalLifetimeBytes = 0;
-
-    // Offline Outbox
-    private Vector outboxUrls = new Vector();
-    private static final String RMS_OUTBOX_NAME = "nullhost_box";
-    private StringItem btnOpenOutbox;
-    private StringItem btnQueueOutbox;
-    private Command cmdOutbox;
-    private Command cmdUploadOutbox;
-    private Command cmdClearOutbox;
-    private Command cmdRemoveOutboxItem;
-
-    // Direct Note Creator
-    private StringItem btnCreateNote;
-    private Command cmdCreateNote;
+    // Direct Text Paste Creator
+    private StringItem btnCreatePaste;
+    private Command cmdCreatePaste;
 
     // History Export
     private Command cmdExportHistory;
-
-    // Bandwidth Reset
-    private Command cmdResetData;
 
     // User Upload History (Session Records)
     private Vector myUploads = new Vector();
@@ -140,7 +122,6 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
     private List galleryList;
     private Vector galleryEntries = new Vector();
     private Vector galleryPhotoItems = new Vector();
-    private List outboxList;
 
     // T9 Quick Filter State
     private String publicFilter = "";
@@ -189,7 +170,6 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
         if (display == null) {
             display = Display.getDisplay(this);
             loadPersistentSettings();
-            loadOutboxFromRMS();
             initCommands();
             initMainForm();
         }
@@ -201,24 +181,22 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
 
     public void destroyApp(boolean unconditional) {
         savePersistentSettings();
-        saveOutboxToRMS();
     }
 
     private void initCommands() {
         cmdUpload = new Command("Upload File Now", Command.OK, 1);
         cmdPhoto = new Command("Choose Photo", Command.SCREEN, 2);
         cmdBrowse = new Command("Browse Storage", Command.SCREEN, 3);
-        cmdFindByCodeMenu = new Command("Find by Code", Command.SCREEN, 4);
-        cmdPublicFiles = new Command("Public Files", Command.SCREEN, 5);
-        cmdMyUploads = new Command("Upload History", Command.SCREEN, 6);
-        cmdSettings = new Command("Settings", Command.SCREEN, 7);
-        cmdCreateNote = new Command("Create Note", Command.SCREEN, 8);
-        cmdOutbox = new Command("Outbox Queue", Command.SCREEN, 9);
-        cmdTerms = new Command("Terms of Service", Command.SCREEN, 10);
-        cmdPrivacy = new Command("Privacy Policy", Command.SCREEN, 11);
-        cmdAbout = new Command("About", Command.SCREEN, 12);
-        cmdExit = new Command("Exit", Command.SCREEN, 13);
-        cmdExitSoftkey = new Command("Exit", Command.EXIT, 14);
+        cmdCreatePaste = new Command("New Paste", Command.SCREEN, 4);
+        cmdFindByCodeMenu = new Command("Find by Code", Command.SCREEN, 5);
+        cmdPublicFiles = new Command("Public Files", Command.SCREEN, 6);
+        cmdMyUploads = new Command("Upload History", Command.SCREEN, 7);
+        cmdSettings = new Command("Settings", Command.SCREEN, 8);
+        cmdTerms = new Command("Terms of Service", Command.SCREEN, 9);
+        cmdPrivacy = new Command("Privacy Policy", Command.SCREEN, 10);
+        cmdAbout = new Command("About", Command.SCREEN, 11);
+        cmdExit = new Command("Exit", Command.SCREEN, 12);
+        cmdExitSoftkey = new Command("Exit", Command.EXIT, 13);
 
         cmdBack = new Command("Back", Command.BACK, 1);
         cmdSelect = new Command("Select", Command.OK, 1);
@@ -231,11 +209,6 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
         cmdFilterHistory = new Command("Quick Filter", Command.SCREEN, 2);
         cmdClearFilterHistory = new Command("Clear Filter", Command.SCREEN, 3);
         cmdExportHistory = new Command("Export Links", Command.SCREEN, 4);
-
-        cmdUploadOutbox = new Command("Upload Outbox Now", Command.OK, 1);
-        cmdRemoveOutboxItem = new Command("Remove Item", Command.SCREEN, 2);
-        cmdClearOutbox = new Command("Clear Outbox", Command.SCREEN, 3);
-        cmdResetData = new Command("Reset Data Counter", Command.SCREEN, 2);
     }
 
     private void initMainForm() {
@@ -261,29 +234,17 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
         btnBrowseFiles.setItemCommandListener(this);
         mainForm.append(btnBrowseFiles);
 
-        btnCreateNote = new StringItem(null, "Create Text Note", Item.BUTTON);
-        btnCreateNote.setLayout(Item.LAYOUT_EXPAND | Item.LAYOUT_NEWLINE_AFTER);
-        btnCreateNote.setDefaultCommand(cmdItemAction);
-        btnCreateNote.setItemCommandListener(this);
-        mainForm.append(btnCreateNote);
-
         btnUploadNow = new StringItem(null, "Upload File Now", Item.BUTTON);
         btnUploadNow.setLayout(Item.LAYOUT_EXPAND | Item.LAYOUT_NEWLINE_AFTER);
         btnUploadNow.setDefaultCommand(cmdItemAction);
         btnUploadNow.setItemCommandListener(this);
         mainForm.append(btnUploadNow);
 
-        btnQueueOutbox = new StringItem(null, "Save to Outbox", Item.BUTTON);
-        btnQueueOutbox.setLayout(Item.LAYOUT_EXPAND | Item.LAYOUT_NEWLINE_AFTER);
-        btnQueueOutbox.setDefaultCommand(cmdItemAction);
-        btnQueueOutbox.setItemCommandListener(this);
-        mainForm.append(btnQueueOutbox);
-
-        btnOpenOutbox = new StringItem(null, "Outbox (0 queued)", Item.BUTTON);
-        btnOpenOutbox.setLayout(Item.LAYOUT_EXPAND | Item.LAYOUT_NEWLINE_AFTER);
-        btnOpenOutbox.setDefaultCommand(cmdItemAction);
-        btnOpenOutbox.setItemCommandListener(this);
-        mainForm.append(btnOpenOutbox);
+        btnCreatePaste = new StringItem(null, "Create Paste", Item.BUTTON);
+        btnCreatePaste.setLayout(Item.LAYOUT_EXPAND | Item.LAYOUT_NEWLINE_AFTER);
+        btnCreatePaste.setDefaultCommand(cmdItemAction);
+        btnCreatePaste.setItemCommandListener(this);
+        mainForm.append(btnCreatePaste);
 
         mainForm.append(new Spacer(10, 8));
 
@@ -320,8 +281,7 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
         mainForm.append(btnSettings);
 
         // Softkey Commands
-        mainForm.addCommand(cmdCreateNote);
-        mainForm.addCommand(cmdOutbox);
+        mainForm.addCommand(cmdCreatePaste);
         mainForm.addCommand(cmdTerms);
         mainForm.addCommand(cmdPrivacy);
         mainForm.addCommand(cmdAbout);
@@ -359,11 +319,6 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
         } else {
             btnMyUploads.setText("Upload History: " + myUploads.size() + " items");
         }
-        if (outboxUrls.isEmpty()) {
-            btnOpenOutbox.setText("Outbox (0 queued)");
-        } else {
-            btnOpenOutbox.setText("Outbox (" + outboxUrls.size() + " queued)");
-        }
         settingsSummaryItem.setText("Expiry " + EXPIRY_LABELS[expiryIndex] + ", Burn " + BURN_LABELS[burnIndex] + (fastUpload ? ", 1080p Fast" : ""));
     }
 
@@ -372,14 +327,10 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
             openPhotoGallery();
         } else if (item == btnBrowseFiles) {
             openFileBrowser(null);
-        } else if (item == btnCreateNote) {
-            openCreateNoteForm();
         } else if (item == btnUploadNow) {
             startUploadThread();
-        } else if (item == btnQueueOutbox) {
-            queueCurrentFileToOutbox();
-        } else if (item == btnOpenOutbox) {
-            openOutboxScreen();
+        } else if (item == btnCreatePaste) {
+            openCreatePasteForm();
         } else if (item == btnFindByCode) {
             openFindByCodeForm();
         } else if (item == btnPublicFiles) {
@@ -401,10 +352,8 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
             openPhotoGallery();
         } else if (c == cmdBrowse) {
             openFileBrowser(null);
-        } else if (c == cmdCreateNote) {
-            openCreateNoteForm();
-        } else if (c == cmdOutbox) {
-            openOutboxScreen();
+        } else if (c == cmdCreatePaste) {
+            openCreatePasteForm();
         } else if (c == cmdFindByCodeMenu) {
             openFindByCodeForm();
         } else if (c == cmdPublicFiles) {
@@ -415,8 +364,6 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
             openSettingsForm();
         } else if (c == cmdAbout) {
             showAbout();
-        } else if (c == cmdResetData) {
-            resetDataUsage();
         } else if (c == cmdTerms) {
             showTermsOfService();
         } else if (c == cmdPrivacy) {
@@ -471,7 +418,6 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
             dos.writeUTF(customSlug != null ? customSlug : "");
             dos.writeBoolean(false);
             dos.writeBoolean(fastUpload);
-            dos.writeLong(totalLifetimeBytes);
             dos.flush();
             byte[] data = baos.toByteArray();
             if (rs.getNumRecords() == 0) {
@@ -507,9 +453,6 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
                     }
                     if (dis.available() > 0) {
                         fastUpload = dis.readBoolean();
-                    }
-                    if (dis.available() >= 8) {
-                        totalLifetimeBytes = dis.readLong();
                     }
                 }
             }
@@ -1142,277 +1085,185 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
     }
 
     // ------------------------------------------------------------------------
-    // OFFLINE OUTBOX (UPLOAD QUEUE)
+    // IN-APP DIRECT TEXT PASTE CREATOR (PASTE ONLY)
     // ------------------------------------------------------------------------
-    private void saveOutboxToRMS() {
-        RecordStore rs = null;
-        try {
-            try { RecordStore.deleteRecordStore(RMS_OUTBOX_NAME); } catch (Exception ignored) {}
-            rs = RecordStore.openRecordStore(RMS_OUTBOX_NAME, true);
-            ByteArrayOutputStream baos = new ByteArrayOutputStream();
-            DataOutputStream dos = new DataOutputStream(baos);
-            dos.writeInt(outboxUrls.size());
-            for (int i = 0; i < outboxUrls.size(); i++) {
-                dos.writeUTF((String) outboxUrls.elementAt(i));
-            }
-            dos.flush();
-            byte[] data = baos.toByteArray();
-            rs.addRecord(data, 0, data.length);
-        } catch (Exception ex) {
-        } finally {
-            if (rs != null) {
-                try { rs.closeRecordStore(); } catch (Exception e) {}
-            }
-        }
-    }
+    private void openCreatePasteForm() {
+        final TextBox pasteBox = new TextBox("New Text Paste", "", 4096, TextField.ANY);
+        final Command cmdUploadPaste = new Command("Upload Paste", Command.OK, 1);
+        final Command cmdCancel = new Command("Cancel", Command.BACK, 2);
+        pasteBox.addCommand(cmdUploadPaste);
+        pasteBox.addCommand(cmdCancel);
 
-    private void loadOutboxFromRMS() {
-        outboxUrls.removeAllElements();
-        RecordStore rs = null;
-        try {
-            rs = RecordStore.openRecordStore(RMS_OUTBOX_NAME, false);
-            if (rs != null && rs.getNumRecords() > 0) {
-                byte[] data = rs.getRecord(1);
-                if (data != null && data.length > 0) {
-                    DataInputStream dis = new DataInputStream(new ByteArrayInputStream(data));
-                    int count = dis.readInt();
-                    for (int i = 0; i < count; i++) {
-                        String url = dis.readUTF();
-                        if (!outboxUrls.contains(url)) {
-                            outboxUrls.addElement(url);
-                        }
-                    }
-                }
-            }
-        } catch (Exception ex) {
-        } finally {
-            if (rs != null) {
-                try { rs.closeRecordStore(); } catch (Exception e) {}
-            }
-        }
-    }
-
-    private void queueCurrentFileToOutbox() {
-        if (selectedFilePath == null || selectedFilePath.length() == 0) {
-            showAlert("No File Selected", "Please choose a photo or file first to save to Outbox.", AlertType.WARNING, mainForm);
-            return;
-        }
-        if (outboxUrls.contains(selectedFilePath)) {
-            showAlert("Already Queued", "This file is already in your Outbox.", AlertType.INFO, mainForm);
-            return;
-        }
-        outboxUrls.addElement(selectedFilePath);
-        saveOutboxToRMS();
-        updateMainFormStatus();
-        showAlert("Saved to Outbox", "File queued to Outbox (" + outboxUrls.size() + " items total). When connected, tap Outbox to upload.", AlertType.CONFIRMATION, mainForm);
-    }
-
-    private void openOutboxScreen() {
-        if (outboxUrls.isEmpty()) {
-            showAlert("Outbox Empty", "Your upload Outbox is currently empty. You can save files to Outbox when offline and upload them later.", AlertType.INFO, mainForm);
-            return;
-        }
-
-        outboxList = new List("Outbox (" + outboxUrls.size() + ")", List.IMPLICIT);
-        outboxList.addCommand(cmdUploadOutbox);
-        outboxList.addCommand(cmdRemoveOutboxItem);
-        outboxList.addCommand(cmdClearOutbox);
-        outboxList.addCommand(cmdBack);
-        outboxList.setCommandListener(new CommandListener() {
+        pasteBox.setCommandListener(new CommandListener() {
             public void commandAction(Command c, Displayable d) {
-                if (c == cmdUploadOutbox || c == List.SELECT_COMMAND) {
-                    startUploadOutboxThread();
-                } else if (c == cmdRemoveOutboxItem) {
-                    int idx = outboxList.getSelectedIndex();
-                    if (idx >= 0 && idx < outboxUrls.size()) {
-                        outboxUrls.removeElementAt(idx);
-                        saveOutboxToRMS();
-                        updateMainFormStatus();
-                        if (outboxUrls.isEmpty()) {
-                            display.setCurrent(mainForm);
-                        } else {
-                            openOutboxScreen();
-                        }
+                if (c == cmdUploadPaste) {
+                    String text = pasteBox.getString();
+                    if (text == null || text.trim().length() == 0) {
+                        showAlert("Empty Paste", "Please enter or paste some text first.", AlertType.WARNING, pasteBox);
+                        return;
                     }
-                } else if (c == cmdClearOutbox) {
-                    outboxUrls.removeAllElements();
-                    saveOutboxToRMS();
-                    updateMainFormStatus();
-                    display.setCurrent(mainForm);
-                } else if (c == cmdBack) {
+                    startPasteUploadThread(text.trim());
+                } else if (c == cmdCancel) {
                     display.setCurrent(mainForm);
                 }
             }
         });
 
-        for (int i = 0; i < outboxUrls.size(); i++) {
-            String u = (String) outboxUrls.elementAt(i);
-            String fname = u.substring(u.lastIndexOf('/') + 1);
-            long sz = 0;
-            try {
-                FileConnection fc = (FileConnection) Connector.open(u, Connector.READ);
-                sz = fc.fileSize();
-                fc.close();
-            } catch (Exception ignored) {}
-            outboxList.append((i + 1) + ". " + fname + " (" + formatSize(sz) + ")", null);
-        }
-
-        display.setCurrent(outboxList);
+        display.setCurrent(pasteBox);
     }
 
-    private void startUploadOutboxThread() {
-        if (outboxUrls.isEmpty()) {
-            showAlert("Outbox Empty", "No files in Outbox to upload.", AlertType.INFO, mainForm);
-            return;
-        }
-
-        final Form obForm = new Form("Uploading Outbox");
-        final StringItem obOverall = new StringItem("Queue Progress:", "Starting outbox upload...");
-        final StringItem obItemStatus = new StringItem("Current Item:", "Connecting to server...");
-        final Gauge obGauge = new Gauge(null, false, 100, 0);
-        obForm.append(obOverall);
-        obForm.append(obItemStatus);
-        obForm.append(obGauge);
-        display.setCurrent(obForm);
+    private void startPasteUploadThread(final String text) {
+        final Form progressForm = new Form("Uploading Paste");
+        final StringItem statusText = new StringItem("Status:", "Uploading text paste to server...");
+        final Gauge gauge = new Gauge(null, false, Gauge.INDEFINITE, Gauge.CONTINUOUS_RUNNING);
+        progressForm.append(statusText);
+        progressForm.append(gauge);
+        display.setCurrent(progressForm);
 
         Thread t = new Thread(new Runnable() {
             public void run() {
-                Vector uploaded = new Vector();
-                Vector failed = new Vector();
-                Vector remaining = new Vector();
+                try {
+                    String base = serverUrl.trim();
+                    if (base.endsWith("/")) base = base.substring(0, base.length() - 1);
+                    String uploadTarget = base + "/api/mobile/upload";
 
-                for (int i = 0; i < outboxUrls.size(); i++) {
-                    String fileUrl = (String) outboxUrls.elementAt(i);
-                    String fname = fileUrl.substring(fileUrl.lastIndexOf('/') + 1);
-                    obOverall.setText("Item " + (i + 1) + " of " + outboxUrls.size() + ": " + fname);
-                    obGauge.setValue(0);
-
-                    try {
-                        UploadRecord rec = executeUpload(obItemStatus, obGauge, fileUrl);
-                        if (rec != null) {
-                            uploaded.addElement(rec);
-                        } else {
-                            failed.addElement(fname);
-                            remaining.addElement(fileUrl);
+                    UploadRecord record = null;
+                    int maxAttempts = 3;
+                    for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+                        try {
+                            if (attempt > 1) {
+                                statusText.setText("Connection drop. Retry " + attempt + " of " + maxAttempts + "...");
+                                try { Thread.sleep(1200); } catch (Exception ignored) {}
+                            }
+                            record = performPasteRequest(uploadTarget, statusText, text);
+                            if (record != null) break;
+                        } catch (Exception ex) {
+                            if (attempt == maxAttempts) {
+                                if (uploadTarget.startsWith("https://")) {
+                                    statusText.setText("Retrying over HTTP fallback...");
+                                    String fallbackTarget = "http://" + uploadTarget.substring(8);
+                                    record = performPasteRequest(fallbackTarget, statusText, text);
+                                } else {
+                                    throw ex;
+                                }
+                            }
                         }
-                    } catch (Exception ex) {
-                        failed.addElement(fname + " (" + (ex.getMessage() != null ? ex.getMessage() : "Failed") + ")");
-                        remaining.addElement(fileUrl);
                     }
+
+                    if (record != null) {
+                        if (record.qrUrl != null && record.qrUrl.length() > 0) {
+                            statusText.setText("Generating QR code image...");
+                            try {
+                                HttpConnection qrConn = (HttpConnection) Connector.open(record.qrUrl, Connector.READ);
+                                qrConn.setRequestProperty("User-Agent", "Nullhost-J2ME/1.0");
+                                if (qrConn.getResponseCode() == 200) {
+                                    InputStream qris = qrConn.openInputStream();
+                                    record.qrImage = Image.createImage(qris);
+                                    qris.close();
+                                }
+                                qrConn.close();
+                            } catch (Exception ignored) {}
+                        }
+                        showSuccessScreen(record);
+                    } else {
+                        showAlert("Upload Failed", "Server did not return a valid response.", AlertType.ERROR, mainForm);
+                    }
+                } catch (Exception ex) {
+                    showAlert("Upload Error", "Failed to upload paste: " + ex.getMessage(), AlertType.ERROR, mainForm);
                 }
-
-                outboxUrls = remaining;
-                saveOutboxToRMS();
-                updateMainFormStatus();
-
-                showOutboxResultScreen(uploaded, failed);
             }
         });
         t.start();
     }
 
-    private void showOutboxResultScreen(final Vector uploaded, final Vector failed) {
-        final Form resForm = new Form("Outbox Complete");
-        resForm.append(new StringItem("Summary:", uploaded.size() + " uploaded, " + failed.size() + " remaining in Outbox.\n"));
+    private UploadRecord performPasteRequest(String targetUrl, StringItem statusText, String text) throws Exception {
+        String expiry = EXPIRY_VALS[expiryIndex];
+        String burn = BURN_VALS[burnIndex];
 
-        for (int i = 0; i < uploaded.size(); i++) {
-            UploadRecord rec = (UploadRecord) uploaded.elementAt(i);
-            resForm.append(new StringItem((i + 1) + ". " + rec.filename, rec.url));
+        String boundary = "----NullhostBoundary" + System.currentTimeMillis();
+        long nowSec = System.currentTimeMillis() / 1000L;
+        String nonce = Long.toString(System.currentTimeMillis(), 16);
+        String tokenPayload = CLIENT_ID + ":" + nowSec + ":" + nonce;
+        String tokenSig = CryptoHelper.hmacSha256Hex(MOBILE_SECRET, tokenPayload);
+        String appToken = tokenPayload + ":" + tokenSig;
+
+        HttpConnection conn = (HttpConnection) Connector.open(targetUrl, Connector.READ_WRITE);
+        conn.setRequestMethod(HttpConnection.POST);
+        conn.setRequestProperty("User-Agent", "Nullhost-J2ME/1.0");
+        conn.setRequestProperty("Content-Type", "multipart/form-data; boundary=" + boundary);
+        conn.setRequestProperty("X-Nullhost-App-Token", appToken);
+        if (accountId.length() > 0) {
+            conn.setRequestProperty("X-Nullhost-Account", accountId);
         }
 
-        if (!failed.isEmpty()) {
-            resForm.append(new StringItem("Items Remaining in Outbox:", ""));
-            for (int i = 0; i < failed.size(); i++) {
-                resForm.append(new StringItem("- ", (String) failed.elementAt(i)));
+        statusText.setText("Sending paste data...");
+        OutputStream os = conn.openOutputStream();
+
+        writeField(os, boundary, "format", "json");
+        writeField(os, boundary, "expiry", expiry);
+        if (!burn.equals("0")) {
+            writeField(os, boundary, "burn_views", burn);
+        }
+        if (customPassword.length() > 0) {
+            writeField(os, boundary, "password", customPassword);
+        }
+        if (customSlug.length() > 0) {
+            writeField(os, boundary, "custom_id", customSlug);
+        }
+        if (accountId.length() > 0) {
+            writeField(os, boundary, "account_id", accountId);
+        }
+        writeField(os, boundary, "paste_content", text);
+
+        os.write(("--" + boundary + "--\r\n").getBytes("UTF-8"));
+        os.flush();
+        os.close();
+
+        statusText.setText("Waiting for server response...");
+        int respCode = conn.getResponseCode();
+
+        InputStream is = conn.openInputStream();
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        byte[] rBuf = new byte[256];
+        int rLen;
+        while ((rLen = is.read(rBuf)) != -1) {
+            baos.write(rBuf, 0, rLen);
+        }
+        is.close();
+        conn.close();
+
+        if (respCode == 200 || respCode == 201) {
+            String respStr = new String(baos.toByteArray(), "UTF-8");
+            UploadRecord record = new UploadRecord();
+            record.id = extractJsonField(respStr, "id");
+            record.type = "paste";
+            record.filename = "paste.txt";
+            record.content = text;
+            record.size = text.getBytes("UTF-8").length;
+
+            String expStr = extractJsonField(respStr, "expires_at");
+            if (expStr != null) {
+                try { record.expiresAt = Long.parseLong(expStr); } catch (Exception e) {}
             }
+
+            record.url = extractJsonField(respStr, "url");
+            record.rawUrl = extractJsonField(respStr, "raw_url");
+            record.downloadUrl = extractJsonField(respStr, "download_url");
+            record.qrUrl = extractJsonField(respStr, "qr_url");
+            record.deleteUrl = extractJsonField(respStr, "delete_url");
+            record.expiry = formatRetentionDisplay(EXPIRY_LABELS[expiryIndex], record.expiresAt);
+            record.burn = BURN_LABELS[burnIndex];
+
+            if (record.url == null) record.url = targetUrl;
+            if (record.rawUrl == null) record.rawUrl = record.url;
+            if (record.downloadUrl == null) record.downloadUrl = record.rawUrl;
+            if (record.qrUrl == null && record.url != null) record.qrUrl = record.url + "/qr.png?size=5";
+
+            myUploads.insertElementAt(record, 0);
+            return record;
         }
 
-        final Command cmdDone = new Command("Done", Command.OK, 1);
-        resForm.addCommand(cmdDone);
-        resForm.setCommandListener(new CommandListener() {
-            public void commandAction(Command c, Displayable d) {
-                if (c == cmdDone) {
-                    updateMainFormStatus();
-                    display.setCurrent(mainForm);
-                }
-            }
-        });
-
-        display.setCurrent(resForm);
-    }
-
-    // ------------------------------------------------------------------------
-    // IN-APP DIRECT TEXT NOTE CREATOR
-    // ------------------------------------------------------------------------
-    private void openCreateNoteForm() {
-        final Form noteForm = new Form("Create Text Note");
-        final TextField titleField = new TextField("Note Title (optional):", "", 32, TextField.ANY);
-        final TextField contentField = new TextField("Note Content:", "", 4096, TextField.ANY);
-        noteForm.append(titleField);
-        noteForm.append(contentField);
-
-        final Command cmdUploadNote = new Command("Upload Now", Command.OK, 1);
-        final Command cmdQueueNote = new Command("Save to Outbox", Command.SCREEN, 2);
-        final Command cmdNoteBack = new Command("Back", Command.BACK, 3);
-        noteForm.addCommand(cmdUploadNote);
-        noteForm.addCommand(cmdQueueNote);
-        noteForm.addCommand(cmdNoteBack);
-
-        noteForm.setCommandListener(new CommandListener() {
-            public void commandAction(Command c, Displayable d) {
-                if (c == cmdUploadNote) {
-                    String content = contentField.getString();
-                    if (content == null || content.trim().length() == 0) {
-                        showAlert("Empty Note", "Please enter some note content first.", AlertType.WARNING, noteForm);
-                        return;
-                    }
-                    String rawTitle = titleField.getString().trim();
-                    if (rawTitle.length() == 0) {
-                        rawTitle = "note_" + (System.currentTimeMillis() / 1000L) + ".txt";
-                    } else if (rawTitle.indexOf('.') == -1) {
-                        rawTitle = rawTitle + ".txt";
-                    }
-
-                    try {
-                        String localPath = saveLocalTextFile(rawTitle, content);
-                        selectedFilePath = localPath;
-                        selectedFileSize = content.getBytes("UTF-8").length;
-                        updateMainFormStatus();
-                        startUploadThread();
-                    } catch (Exception ex) {
-                        showAlert("Save Error", "Could not write note file: " + ex.getMessage(), AlertType.ERROR, noteForm);
-                    }
-                } else if (c == cmdQueueNote) {
-                    String content = contentField.getString();
-                    if (content == null || content.trim().length() == 0) {
-                        showAlert("Empty Note", "Please enter some note content first.", AlertType.WARNING, noteForm);
-                        return;
-                    }
-                    String rawTitle = titleField.getString().trim();
-                    if (rawTitle.length() == 0) {
-                        rawTitle = "note_" + (System.currentTimeMillis() / 1000L) + ".txt";
-                    } else if (rawTitle.indexOf('.') == -1) {
-                        rawTitle = rawTitle + ".txt";
-                    }
-
-                    try {
-                        String localPath = saveLocalTextFile(rawTitle, content);
-                        if (!outboxUrls.contains(localPath)) {
-                            outboxUrls.addElement(localPath);
-                            saveOutboxToRMS();
-                        }
-                        updateMainFormStatus();
-                        showAlert("Saved to Outbox", "Note saved and queued to Outbox.", AlertType.CONFIRMATION, mainForm);
-                    } catch (Exception ex) {
-                        showAlert("Save Error", "Could not write note file: " + ex.getMessage(), AlertType.ERROR, noteForm);
-                    }
-                } else if (c == cmdNoteBack) {
-                    display.setCurrent(mainForm);
-                }
-            }
-        });
-
-        display.setCurrent(noteForm);
+        return null;
     }
 
     private String saveLocalTextFile(String fname, String content) throws Exception {
@@ -2587,8 +2438,6 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
         while ((flen = fis.read(fbuf)) != -1) {
             os.write(fbuf, 0, flen);
             sent += flen;
-            sessionBytesSent += flen;
-            totalLifetimeBytes += flen;
             long now = System.currentTimeMillis();
             if (now - lastUpdate >= 250 || sent == totalBytes) {
                 lastUpdate = now;
@@ -2618,8 +2467,6 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
         int rLen;
         while ((rLen = is.read(rBuf)) != -1) {
             baos.write(rBuf, 0, rLen);
-            sessionBytesRecv += rLen;
-            totalLifetimeBytes += rLen;
         }
         is.close();
         conn.close();
@@ -2896,39 +2743,23 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
             "Fast, anonymous file and photo hosting for Symbian and vintage phones.\n\n" +
             "Features:\n" +
             "- Byte-accurate progress with speed & ETA\n" +
-            "- Offline Outbox & upload queue\n" +
-            "- In-app text note & code snippet creator\n" +
+            "- In-app direct text paste creator\n" +
             "- In-app image viewer for hosted photos\n" +
             "- Instant photo dimensions & preview\n" +
             "- Export upload history to local text & notes\n" +
-            "- Session & lifetime cellular data counter\n" +
             "- T9 quick filter for public files & history\n" +
             "- Auto-retry resilience on network drops\n" +
             "- In-app text viewer & phone editor launcher\n" +
             "- Direct Symbian download manager\n" +
             "- Persistent RMS settings & Account ID\n" +
             "- Live centered QR code generation\n\n" +
-            "Data Usage:\n" +
-            "Session Sent: " + formatSize(sessionBytesSent) + "\n" +
-            "Session Recv: " + formatSize(sessionBytesRecv) + "\n" +
-            "Session Total: " + formatSize(sessionBytesSent + sessionBytesRecv) + "\n" +
-            "Lifetime Total: " + formatSize(totalLifetimeBytes) + "\n\n" +
             "Server: " + serverUrl + "\n" +
             "Free Memory: " + freeMem + " KB / " + totalMem + " KB\n" +
             "Platform: " + System.getProperty("microedition.platform") + "\n\n" +
             "Gelaxiz (c) 2026"));
-        f.addCommand(cmdResetData);
         f.addCommand(cmdBack);
         f.setCommandListener(this);
         display.setCurrent(f);
-    }
-
-    private void resetDataUsage() {
-        sessionBytesSent = 0;
-        sessionBytesRecv = 0;
-        totalLifetimeBytes = 0;
-        savePersistentSettings();
-        showAlert("Data Counter Reset", "Cellular data usage counters have been reset to 0.", AlertType.CONFIRMATION, mainForm);
     }
 
     private void showTermsOfService() {
