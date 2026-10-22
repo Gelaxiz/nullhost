@@ -2,7 +2,10 @@ package org.gelaxiz.nullhost;
 
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
 import java.io.IOException;
 import java.util.Enumeration;
 import java.util.Vector;
@@ -13,20 +16,23 @@ import javax.microedition.io.Connector;
 import javax.microedition.io.HttpConnection;
 import javax.microedition.io.file.FileConnection;
 import javax.microedition.io.file.FileSystemRegistry;
+import javax.microedition.rms.RecordStore;
 
 /**
  * Nullhost Universal Java ME (MIDP 2.0 / CLDC 1.1 / JSR-75) Client.
  * Complete mobile client with native touch buttons, background photo scanner,
- * in-app code search, server file deletion, text file/paste viewer, and live QR code display.
+ * in-app code search, server file deletion, custom text viewer & native editor launcher,
+ * persistent RMS settings storage, and live centered QR code display.
  * Pure Java 1.4 (Major version 48) - 100% Dependency-Free.
  * Copyright (c) 2026 Gelaxiz. All rights reserved.
  */
 public class NullhostMIDlet extends MIDlet implements CommandListener, ItemCommandListener {
 
-    private static final String APP_VERSION = "1.6.0";
+    private static final String APP_VERSION = "1.6.1";
     private static final String CLIENT_ID = "j2me-universal";
     private static final String MOBILE_SECRET = "nullhost_secret_mobile_app_key_2026";
     private static final String DEFAULT_SERVER = "http://nullhost.gelaxiz.xyz";
+    private static final String RMS_CONFIG_NAME = "nullhost_cfg";
 
     private Display display;
 
@@ -40,7 +46,7 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
     private String customPassword = "";
     private String customSlug = "";
 
-    private static final String[] EXPIRY_LABELS = {"1 Hour", "24 Hours (Default)", "7 Days (Account)", "30 Days (Account)", "Never Expire (Account)"};
+    private static final String[] EXPIRY_LABELS = {"1 Hour", "24 Hours", "7 Days", "30 Days", "Never Expire"};
     private static final String[] EXPIRY_VALS = {"1h", "24h", "7d", "30d", "never"};
 
     private static final String[] BURN_LABELS = {"Disabled", "1 View", "5 Views", "10 Views"};
@@ -127,6 +133,7 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
     public void startApp() {
         if (display == null) {
             display = Display.getDisplay(this);
+            loadPersistentSettings();
             initCommands();
             initMainForm();
         }
@@ -135,7 +142,9 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
 
     public void pauseApp() {}
 
-    public void destroyApp(boolean unconditional) {}
+    public void destroyApp(boolean unconditional) {
+        savePersistentSettings();
+    }
 
     private void initCommands() {
         cmdUpload = new Command("Upload File Now", Command.OK, 1);
@@ -205,7 +214,7 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
         mainForm.append(new Spacer(10, 8));
 
         // 3. Consolidated Settings Section
-        settingsSummaryItem = new StringItem("Settings:", "Expiry 24h, Burn Off");
+        settingsSummaryItem = new StringItem("Settings:", "Expiry " + EXPIRY_LABELS[expiryIndex] + ", Burn " + BURN_LABELS[burnIndex]);
         settingsSummaryItem.setLayout(Item.LAYOUT_EXPAND | Item.LAYOUT_NEWLINE_AFTER);
         mainForm.append(settingsSummaryItem);
 
@@ -284,6 +293,8 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
         } else if (c == cmdBack) {
             if (d == browserList) {
                 handleBrowserBack();
+            } else if (d == settingsForm) {
+                saveSettings();
             } else {
                 display.setCurrent(mainForm);
             }
@@ -298,6 +309,70 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
         } else if (c == cmdDoSearch && d == findForm) {
             executeSearchByCode();
         }
+    }
+
+    // ------------------------------------------------------------------------
+    // RMS PERSISTENT SETTINGS (SAVE & LOAD)
+    // ------------------------------------------------------------------------
+    private void savePersistentSettings() {
+        RecordStore rs = null;
+        try {
+            rs = RecordStore.openRecordStore(RMS_CONFIG_NAME, true);
+            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+            DataOutputStream dos = new DataOutputStream(baos);
+            dos.writeUTF(serverUrl != null ? serverUrl : DEFAULT_SERVER);
+            dos.writeUTF(accountId != null ? accountId : "");
+            dos.writeInt(expiryIndex);
+            dos.writeInt(burnIndex);
+            dos.writeUTF(customPassword != null ? customPassword : "");
+            dos.writeUTF(customSlug != null ? customSlug : "");
+            dos.flush();
+            byte[] data = baos.toByteArray();
+            if (rs.getNumRecords() == 0) {
+                rs.addRecord(data, 0, data.length);
+            } else {
+                rs.setRecord(1, data, 0, data.length);
+            }
+        } catch (Exception ex) {
+            // Ignore RMS exception
+        } finally {
+            if (rs != null) {
+                try { rs.closeRecordStore(); } catch (Exception e) {}
+            }
+        }
+    }
+
+    private void loadPersistentSettings() {
+        RecordStore rs = null;
+        try {
+            rs = RecordStore.openRecordStore(RMS_CONFIG_NAME, false);
+            if (rs != null && rs.getNumRecords() > 0) {
+                byte[] data = rs.getRecord(1);
+                if (data != null && data.length > 0) {
+                    DataInputStream dis = new DataInputStream(new ByteArrayInputStream(data));
+                    serverUrl = dis.readUTF();
+                    accountId = dis.readUTF();
+                    expiryIndex = dis.readInt();
+                    burnIndex = dis.readInt();
+                    customPassword = dis.readUTF();
+                    customSlug = dis.readUTF();
+                }
+            }
+        } catch (Exception ex) {
+            // RecordStore does not exist yet (first launch)
+        } finally {
+            if (rs != null) {
+                try { rs.closeRecordStore(); } catch (Exception e) {}
+            }
+        }
+
+        // Sanity checks
+        if (serverUrl == null || serverUrl.length() == 0) serverUrl = DEFAULT_SERVER;
+        if (accountId == null) accountId = "";
+        if (expiryIndex < 0 || expiryIndex >= EXPIRY_LABELS.length) expiryIndex = 1;
+        if (burnIndex < 0 || burnIndex >= BURN_LABELS.length) burnIndex = 0;
+        if (customPassword == null) customPassword = "";
+        if (customSlug == null) customSlug = "";
     }
 
     // ------------------------------------------------------------------------
@@ -800,7 +875,32 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
 
         f.append(new Spacer(10, 6));
 
-        // 1. Prominent Download Button (triggers native Symbian download manager)
+        // 1. Text Actions (if text file or paste)
+        if (isTextItem(rec)) {
+            // Button to open our clean in-app text viewer ("sun oma")
+            StringItem btnViewText = new StringItem(null, "View Text Content", Item.BUTTON);
+            btnViewText.setLayout(Item.LAYOUT_EXPAND | Item.LAYOUT_NEWLINE_AFTER);
+            btnViewText.setDefaultCommand(cmdItemAction);
+            btnViewText.setItemCommandListener(new ItemCommandListener() {
+                public void commandAction(Command c, Item item) {
+                    openTextContent(rec, f, false);
+                }
+            });
+            f.append(btnViewText);
+
+            // Button to open in the phone's native text editor ("oikeassa puhelimen tekstieditorissa")
+            StringItem btnNativeEditor = new StringItem(null, "Open in Phone Editor", Item.BUTTON);
+            btnNativeEditor.setLayout(Item.LAYOUT_EXPAND | Item.LAYOUT_NEWLINE_AFTER);
+            btnNativeEditor.setDefaultCommand(cmdItemAction);
+            btnNativeEditor.setItemCommandListener(new ItemCommandListener() {
+                public void commandAction(Command c, Item item) {
+                    openTextContent(rec, f, true);
+                }
+            });
+            f.append(btnNativeEditor);
+        }
+
+        // 2. Prominent Download Button (triggers native Symbian download manager)
         StringItem btnDownload = new StringItem(null, "Download File", Item.BUTTON);
         btnDownload.setLayout(Item.LAYOUT_EXPAND | Item.LAYOUT_NEWLINE_AFTER);
         btnDownload.setDefaultCommand(cmdItemAction);
@@ -810,19 +910,6 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
             }
         });
         f.append(btnDownload);
-
-        // 2. View Text Content Button (for text files & pastes)
-        if (isTextItem(rec)) {
-            StringItem btnViewText = new StringItem(null, "View Text Content", Item.BUTTON);
-            btnViewText.setLayout(Item.LAYOUT_EXPAND | Item.LAYOUT_NEWLINE_AFTER);
-            btnViewText.setDefaultCommand(cmdItemAction);
-            btnViewText.setItemCommandListener(new ItemCommandListener() {
-                public void commandAction(Command c, Item item) {
-                    openTextContent(rec, f);
-                }
-            });
-            f.append(btnViewText);
-        }
 
         // 3. Open in Browser Button
         StringItem btnOpenBrowser = new StringItem(null, "Open in Browser", Item.BUTTON);
@@ -858,11 +945,13 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
         final Command cmdDetailsBack = new Command("Back", Command.BACK, 1);
         final Command cmdDownloadMenu = new Command("Download File", Command.SCREEN, 2);
         final Command cmdOpenMenu = new Command("Open in Browser", Command.SCREEN, 3);
-        final Command cmdDelMenu = isMyUpload ? new Command("Delete File", Command.SCREEN, 4) : null;
+        final Command cmdNativeMenu = isTextItem(rec) ? new Command("Open in Phone Editor", Command.SCREEN, 4) : null;
+        final Command cmdDelMenu = isMyUpload ? new Command("Delete File", Command.SCREEN, 5) : null;
 
         f.addCommand(cmdDetailsBack);
         f.addCommand(cmdDownloadMenu);
         f.addCommand(cmdOpenMenu);
+        if (cmdNativeMenu != null) f.addCommand(cmdNativeMenu);
         if (cmdDelMenu != null) f.addCommand(cmdDelMenu);
 
         f.setCommandListener(new CommandListener() {
@@ -879,6 +968,8 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
                             showAlert("Browser Error", "Could not open browser: " + ex.getMessage(), AlertType.ERROR, f);
                         }
                     }
+                } else if (c == cmdNativeMenu) {
+                    openTextContent(rec, f, true);
                 } else if (c == cmdDelMenu) {
                     deleteUploadedItem(rec);
                 }
@@ -937,9 +1028,13 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
         }
     }
 
-    private void openTextContent(final UploadRecord rec, final Form parentForm) {
+    private void openTextContent(final UploadRecord rec, final Form parentForm, final boolean launchNative) {
         if (rec.content != null && rec.content.length() > 0) {
-            showTextBoxViewer(rec.filename, rec.content, parentForm);
+            if (launchNative) {
+                openInNativePhoneEditor(rec, rec.content, parentForm);
+            } else {
+                showCustomTextViewer(rec, rec.content, parentForm);
+            }
             return;
         }
 
@@ -998,7 +1093,11 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
 
                     String text = new String(baos.toByteArray(), "UTF-8");
                     rec.content = text;
-                    showTextBoxViewer(rec.filename, text, parentForm);
+                    if (launchNative) {
+                        openInNativePhoneEditor(rec, text, parentForm);
+                    } else {
+                        showCustomTextViewer(rec, text, parentForm);
+                    }
                 } catch (Exception e) {
                     showAlert("Error", "Could not load text: " + e.getMessage(), AlertType.ERROR, parentForm);
                 }
@@ -1007,10 +1106,65 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
         t.start();
     }
 
-    private void showTextBoxViewer(String title, String text, final Displayable backTarget) {
+    private void showCustomTextViewer(final UploadRecord rec, final String text, final Displayable backTarget) {
+        final Form viewForm = new Form(rec.filename != null ? rec.filename : "Text Viewer");
+
+        // Clean readable text view (native LCDUI word-wrapping & kinetic scroll)
+        StringItem textItem = new StringItem(null, text);
+        textItem.setLayout(Item.LAYOUT_EXPAND | Item.LAYOUT_NEWLINE_AFTER);
+        viewForm.append(textItem);
+
+        viewForm.append(new Spacer(10, 8));
+
+        // Action button to launch native phone editor
+        StringItem btnPhone = new StringItem(null, "Open in Phone Editor", Item.BUTTON);
+        btnPhone.setLayout(Item.LAYOUT_EXPAND | Item.LAYOUT_NEWLINE_AFTER);
+        btnPhone.setDefaultCommand(cmdItemAction);
+        btnPhone.setItemCommandListener(new ItemCommandListener() {
+            public void commandAction(Command c, Item item) {
+                openInNativePhoneEditor(rec, text, viewForm);
+            }
+        });
+        viewForm.append(btnPhone);
+
+        // Action button to edit in editable TextBox (if desired)
+        StringItem btnEdit = new StringItem(null, "Edit in App", Item.BUTTON);
+        btnEdit.setLayout(Item.LAYOUT_EXPAND | Item.LAYOUT_NEWLINE_AFTER);
+        btnEdit.setDefaultCommand(cmdItemAction);
+        btnEdit.setItemCommandListener(new ItemCommandListener() {
+            public void commandAction(Command c, Item item) {
+                showEditableTextBox(rec.filename, text, viewForm);
+            }
+        });
+        viewForm.append(btnEdit);
+
+        final Command cmdViewerBack = new Command("Back", Command.BACK, 1);
+        final Command cmdNative = new Command("Open in Phone Editor", Command.SCREEN, 2);
+        final Command cmdEdit = new Command("Edit in App", Command.SCREEN, 3);
+
+        viewForm.addCommand(cmdViewerBack);
+        viewForm.addCommand(cmdNative);
+        viewForm.addCommand(cmdEdit);
+
+        viewForm.setCommandListener(new CommandListener() {
+            public void commandAction(Command c, Displayable d) {
+                if (c == cmdViewerBack) {
+                    display.setCurrent(backTarget);
+                } else if (c == cmdNative) {
+                    openInNativePhoneEditor(rec, text, viewForm);
+                } else if (c == cmdEdit) {
+                    showEditableTextBox(rec.filename, text, viewForm);
+                }
+            }
+        });
+
+        display.setCurrent(viewForm);
+    }
+
+    private void showEditableTextBox(String title, String text, final Displayable backTarget) {
         int maxChars = text.length() > 2048 ? text.length() + 1024 : 2048;
-        TextBox tb = new TextBox(title != null ? title : "Text Viewer", text, maxChars, TextField.ANY);
-        final Command cmdTbBack = new Command("Back", Command.BACK, 1);
+        TextBox tb = new TextBox(title != null ? title : "Edit Text", text, maxChars, TextField.ANY);
+        final Command cmdTbBack = new Command("Done", Command.BACK, 1);
         tb.addCommand(cmdTbBack);
         tb.setCommandListener(new CommandListener() {
             public void commandAction(Command c, Displayable d) {
@@ -1020,6 +1174,54 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
             }
         });
         display.setCurrent(tb);
+    }
+
+    private void openInNativePhoneEditor(UploadRecord rec, String text, Form parentForm) {
+        String fname = (rec.filename != null && rec.filename.length() > 0) ? rec.filename : "paste.txt";
+        if (!fname.toLowerCase().endsWith(".txt")) {
+            fname += ".txt";
+        }
+
+        // Try writing to device storage and platformRequest() it
+        String[] candidateDirs = {"file:///E:/Data/", "file:///E:/", "file:///C:/Data/", "file:///C:/"};
+        String savedFileUrl = null;
+
+        for (int i = 0; i < candidateDirs.length; i++) {
+            try {
+                String targetUrl = candidateDirs[i] + fname;
+                FileConnection fc = (FileConnection) Connector.open(targetUrl, Connector.READ_WRITE);
+                if (fc.exists()) {
+                    fc.delete();
+                }
+                fc.create();
+                OutputStream os = fc.openOutputStream();
+                os.write(text.getBytes("UTF-8"));
+                os.flush();
+                os.close();
+                fc.close();
+                savedFileUrl = targetUrl;
+                break;
+            } catch (Exception ex) {}
+        }
+
+        if (savedFileUrl != null) {
+            try {
+                boolean launched = platformRequest(savedFileUrl);
+                if (launched) {
+                    return;
+                }
+            } catch (Exception ex) {}
+        }
+
+        // Fallback: use downloadUrl/rawUrl which Symbian browser/download manager prompts to Open with Text Editor
+        String fallback = (rec.downloadUrl != null && rec.downloadUrl.length() > 0) ? rec.downloadUrl : rec.rawUrl;
+        if (fallback != null && fallback.length() > 0) {
+            try {
+                platformRequest(fallback);
+            } catch (Exception e) {
+                showAlert("Editor Error", "Could not open in phone editor: " + e.getMessage(), AlertType.ERROR, parentForm);
+            }
+        }
     }
 
     private static boolean isTextItem(UploadRecord rec) {
@@ -1330,7 +1532,7 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
         successForm.append(new StringItem("Item Code:", record.id));
         successForm.append(new StringItem("File Name:", record.filename));
         successForm.append(new StringItem("File Size:", formatSize(record.size)));
-        successForm.append(new StringItem("Retention:", record.expiry));
+        successForm.append(new StringItem("Retention:", formatRetentionDisplay(record.expiry, record.expiresAt)));
         successForm.append(new StringItem("Burn Limit:", record.burn));
         successForm.append(new StringItem("Short URL:", record.url));
         successForm.append(new StringItem("Direct Raw Link:", record.rawUrl));
@@ -1338,6 +1540,28 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
         successForm.append(new Spacer(10, 6));
 
         // In-form action buttons (NO Command.OK -> NO checkmark button on Belle toolbar!)
+        if (isTextItem(record)) {
+            StringItem btnViewText = new StringItem(null, "View Text Content", Item.BUTTON);
+            btnViewText.setLayout(Item.LAYOUT_EXPAND | Item.LAYOUT_NEWLINE_AFTER);
+            btnViewText.setDefaultCommand(cmdItemAction);
+            btnViewText.setItemCommandListener(new ItemCommandListener() {
+                public void commandAction(Command c, Item item) {
+                    openTextContent(record, successForm, false);
+                }
+            });
+            successForm.append(btnViewText);
+
+            StringItem btnNative = new StringItem(null, "Open in Phone Editor", Item.BUTTON);
+            btnNative.setLayout(Item.LAYOUT_EXPAND | Item.LAYOUT_NEWLINE_AFTER);
+            btnNative.setDefaultCommand(cmdItemAction);
+            btnNative.setItemCommandListener(new ItemCommandListener() {
+                public void commandAction(Command c, Item item) {
+                    openTextContent(record, successForm, true);
+                }
+            });
+            successForm.append(btnNative);
+        }
+
         StringItem btnDownload = new StringItem(null, "Download File", Item.BUTTON);
         btnDownload.setLayout(Item.LAYOUT_EXPAND | Item.LAYOUT_NEWLINE_AFTER);
         btnDownload.setDefaultCommand(cmdItemAction);
@@ -1347,18 +1571,6 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
             }
         });
         successForm.append(btnDownload);
-
-        if (isTextItem(record)) {
-            StringItem btnViewText = new StringItem(null, "View Text Content", Item.BUTTON);
-            btnViewText.setLayout(Item.LAYOUT_EXPAND | Item.LAYOUT_NEWLINE_AFTER);
-            btnViewText.setDefaultCommand(cmdItemAction);
-            btnViewText.setItemCommandListener(new ItemCommandListener() {
-                public void commandAction(Command c, Item item) {
-                    openTextContent(record, successForm);
-                }
-            });
-            successForm.append(btnViewText);
-        }
 
         StringItem btnOpenBrowser = new StringItem(null, "Open in Browser", Item.BUTTON);
         btnOpenBrowser.setLayout(Item.LAYOUT_EXPAND | Item.LAYOUT_NEWLINE_AFTER);
@@ -1426,7 +1638,7 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
     }
 
     // ------------------------------------------------------------------------
-    // CONSOLIDATED SETTINGS FORM (SERVER + UPLOAD PARAMETERS)
+    // CONSOLIDATED SETTINGS FORM (SERVER + UPLOAD PARAMETERS + RMS PERSISTENCE)
     // ------------------------------------------------------------------------
     private void openSettingsForm() {
         settingsForm = new Form("Settings");
@@ -1483,8 +1695,10 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
         customSlug = optSlug.getString().trim();
         accountId = enteredAcc;
 
+        savePersistentSettings();
+
         updateMainFormStatus();
-        display.setCurrent(mainForm);
+        showAlert("Settings Saved", "Settings and Account ID saved successfully.", AlertType.CONFIRMATION, mainForm);
     }
 
     private void showAbout() {
@@ -1497,11 +1711,12 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
             "Features:\n" +
             "- Instant camera photo picker\n" +
             "- Find files by code or URL\n" +
-            "- Native text viewer & paste display\n" +
+            "- In-app text viewer & native phone editor launcher\n" +
             "- Direct Symbian file download manager\n" +
+            "- Persistent RMS settings & Account ID storage\n" +
             "- Delete files from upload history\n" +
             "- JSR-75 filesystem navigation\n" +
-            "- Live QR code generation\n" +
+            "- Live centered QR code generation\n" +
             "- Browse public files & upload history\n" +
             "- Direct HMAC mobile uploads\n\n" +
             "Server: " + serverUrl + "\n" +
@@ -1618,11 +1833,19 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
     private static String formatRetentionDisplay(String label, long expiresAtSec) {
         if (expiresAtSec >= 2000000000L) return "Never Expire";
         String left = formatTimeLeft(expiresAtSec);
-        if (left.length() == 0) {
-            return (label != null && label.length() > 0) ? label : "24 Hours";
+        String cleanLabel = label;
+        if (cleanLabel != null) {
+            int defIdx = cleanLabel.indexOf("(Default)");
+            if (defIdx != -1) {
+                cleanLabel = cleanLabel.substring(0, defIdx).trim() + " " + cleanLabel.substring(defIdx + 9).trim();
+                cleanLabel = cleanLabel.trim();
+            }
         }
-        if (label != null && label.length() > 0 && !label.equals(left)) {
-            return label + " (" + left + ")";
+        if (left.length() == 0) {
+            return (cleanLabel != null && cleanLabel.length() > 0) ? cleanLabel : "24 Hours";
+        }
+        if (cleanLabel != null && cleanLabel.length() > 0 && !cleanLabel.equals(left)) {
+            return cleanLabel + " (" + left + ")";
         }
         return left;
     }
