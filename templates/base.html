@@ -222,6 +222,11 @@
         <a href="/privacy">[privacy]</a>
         <a href="/dmca">[dmca]</a>
         <a href="/about">[about]</a>
+        {% if legacy_mode %}
+        <a href="/?lite=0">[full version]</a>
+        {% else %}
+        <a href="/?lite=1">[lite]</a>
+        {% endif %}
     </div>
     {% if not legacy_mode %}
     <script>
