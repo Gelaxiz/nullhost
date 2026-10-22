@@ -573,6 +573,64 @@ def mobile_item_lookup(item_id):
             'qr_url': url_for('item_qr', item_id=item['id'], _external=True) + '?size=5'
         })
 
+@app.route('/api/mobile/qr-decode', methods=['POST'])
+def mobile_qr_decode():
+    img_bytes = None
+    if request.files:
+        for fkey in ('image', 'file', 'photo'):
+            if fkey in request.files:
+                img_bytes = request.files[fkey].read()
+                break
+        if not img_bytes:
+            for f in request.files.values():
+                img_bytes = f.read()
+                break
+    if not img_bytes:
+        img_bytes = request.get_data()
+
+    if not img_bytes:
+        return jsonify({'status': 'error', 'message': 'No image data received'}), 400
+
+    try:
+        from pyzbar.pyzbar import decode
+        from PIL import Image
+        import io
+
+        image = Image.open(io.BytesIO(img_bytes))
+        if image.mode not in ('L', 'RGB'):
+            image = image.convert('RGB')
+
+        results = decode(image)
+        if not results:
+            for angle in (90, 180, 270):
+                rotated = image.rotate(angle, expand=True)
+                results = decode(rotated)
+                if results:
+                    break
+
+        if not results:
+            return jsonify({'status': 'error', 'message': 'No QR code found in camera view. Hold phone steady and closer, then try again.'}), 404
+
+        qr_text = results[0].data.decode('utf-8', errors='ignore').strip()
+        code = qr_text
+        if '/v/' in code:
+            code = code.split('/v/')[1].split('/')[0].split('?')[0]
+        elif '/raw/' in code:
+            code = code.split('/raw/')[1].split('/')[0].split('?')[0]
+        elif '/' in code:
+            code = code.rstrip('/').split('/')[-1].split('?')[0]
+        if '?' in code:
+            code = code.split('?')[0]
+        code = code.strip()
+
+        return jsonify({
+            'status': 'ok',
+            'code': code,
+            'data': qr_text
+        })
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': f'QR decode error: {str(e)}'}), 500
+
 @app.route('/api/client/update')
 def client_update_manifest():
     client_path = os.path.join(os.path.dirname(__file__), 'client', 'Nullhost.exe')
