@@ -28,7 +28,7 @@ import javax.microedition.rms.RecordStore;
  */
 public class NullhostMIDlet extends MIDlet implements CommandListener, ItemCommandListener {
 
-    private static final String APP_VERSION = "1.6.1";
+    private static final String APP_VERSION = "1.6.2";
     private static final String CLIENT_ID = "j2me-universal";
     private static final String MOBILE_SECRET = "nullhost_secret_mobile_app_key_2026";
     private static final String DEFAULT_SERVER = "http://nullhost.gelaxiz.xyz";
@@ -1532,7 +1532,7 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
         successForm.append(new StringItem("Item Code:", record.id));
         successForm.append(new StringItem("File Name:", record.filename));
         successForm.append(new StringItem("File Size:", formatSize(record.size)));
-        successForm.append(new StringItem("Retention:", formatRetentionDisplay(record.expiry, record.expiresAt)));
+        successForm.append(new StringItem("Retention:", record.expiry));
         successForm.append(new StringItem("Burn Limit:", record.burn));
         successForm.append(new StringItem("Short URL:", record.url));
         successForm.append(new StringItem("Direct Raw Link:", record.rawUrl));
@@ -1835,9 +1835,13 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
         String left = formatTimeLeft(expiresAtSec);
         String cleanLabel = label;
         if (cleanLabel != null) {
-            int defIdx = cleanLabel.indexOf("(Default)");
+            int pIdx = cleanLabel.indexOf('(');
+            if (pIdx != -1) {
+                cleanLabel = cleanLabel.substring(0, pIdx).trim();
+            }
+            int defIdx = cleanLabel.indexOf("Default");
             if (defIdx != -1) {
-                cleanLabel = cleanLabel.substring(0, defIdx).trim() + " " + cleanLabel.substring(defIdx + 9).trim();
+                cleanLabel = cleanLabel.substring(0, defIdx).trim() + " " + cleanLabel.substring(defIdx + 7).trim();
                 cleanLabel = cleanLabel.trim();
             }
         }
