@@ -28,7 +28,7 @@ import javax.microedition.rms.RecordStore;
  */
 public class NullhostMIDlet extends MIDlet implements CommandListener, ItemCommandListener {
 
-    private static final String APP_VERSION = "1.7.1";
+    private static final String APP_VERSION = "1.7.2";
     private static final String CLIENT_ID = "j2me-universal";
     private static final String MOBILE_SECRET = "nullhost_secret_mobile_app_key_2026";
     private static final String DEFAULT_SERVER = "http://nullhost.gelaxiz.xyz";
@@ -956,7 +956,7 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
 
     private void renderUploadHistoryList() {
         if (myUploads.isEmpty()) {
-            showAlert("Upload History", "No uploads performed during this session yet. Configure your Account ID in Settings to view all your account uploads.", AlertType.INFO, mainForm);
+            showAlert("Upload History", "No uploads performed or account doesn't have uploads.", AlertType.INFO, mainForm);
             return;
         }
 
