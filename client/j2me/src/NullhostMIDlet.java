@@ -17,21 +17,18 @@ import javax.microedition.io.HttpConnection;
 import javax.microedition.io.file.FileConnection;
 import javax.microedition.io.file.FileSystemRegistry;
 import javax.microedition.rms.RecordStore;
-import javax.microedition.media.Manager;
-import javax.microedition.media.Player;
-import javax.microedition.media.control.VideoControl;
 
 /**
- * Nullhost Universal Java ME (MIDP 2.0 / CLDC 1.1 / JSR-75 / MMAPI) Client.
- * Complete mobile client with native touch buttons, live camera QR code scanner,
- * background photo scanner, in-app code search, server file deletion, custom text viewer,
+ * Nullhost Universal Java ME (MIDP 2.0 / CLDC 1.1 / JSR-75) Client.
+ * Complete mobile client with native touch buttons, photo QR code scanner,
+ * storage explorer, in-app code search, server file deletion, custom text viewer,
  * persistent RMS settings storage, and live centered QR code display.
  * Pure Java 1.4 (Major version 48) - 100% Dependency-Free.
  * Copyright (c) 2026 Gelaxiz. All rights reserved.
  */
 public class NullhostMIDlet extends MIDlet implements CommandListener, ItemCommandListener {
 
-    private static final String APP_VERSION = "1.8.1";
+    private static final String APP_VERSION = "1.8.2";
     private static final String CLIENT_ID = "j2me-universal";
     private static final String MOBILE_SECRET = "nullhost_secret_mobile_app_key_2026";
     private static final String DEFAULT_SERVER = "http://nullhost.gelaxiz.xyz";
@@ -68,30 +65,20 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
     private StringItem btnSelectPhoto;
     private StringItem btnBrowseFiles;
     private StringItem btnUploadNow;
-    private StringItem btnScanQRMain;
     private StringItem btnFindByCode;
     private StringItem btnPublicFiles;
     private StringItem btnMyUploads;
     private StringItem settingsSummaryItem;
     private StringItem btnSettings;
 
-    // Camera & QR Scanner State
-    private Player cameraPlayer = null;
-    private VideoControl cameraControl = null;
-    private Form scannerForm = null;
-    private StringItem scannerStatusItem = null;
-    private StringItem btnTriggerScan = null;
-    private Command cmdScanCapture = null;
-    private Command cmdScanQRMenu = null;
+    // QR Scanner from Photo State
     private Command cmdScanGalleryQR = null;
-    private volatile boolean isCapturing = false;
     private boolean galleryForQR = false;
     private boolean browserForQR = false;
 
     // Search by Code Form
     private Form findForm;
     private TextField findCodeField;
-    private StringItem btnScanQRFind;
     private StringItem btnScanPhotoFind;
     private Command cmdDoSearch;
 
@@ -176,11 +163,9 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
     }
 
     public void pauseApp() {
-        closeCamera();
     }
 
     public void destroyApp(boolean unconditional) {
-        closeCamera();
         savePersistentSettings();
     }
 
@@ -203,9 +188,7 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
         cmdSaveSettings = new Command("Save", Command.OK, 1);
         cmdDoSearch = new Command("Search", Command.OK, 1);
         cmdItemAction = new Command("Go", Command.ITEM, 1);
-        cmdScanCapture = new Command("Scan QR", Command.OK, 1);
-        cmdScanQRMenu = new Command("Scan QR Code", Command.SCREEN, 2);
-        cmdScanGalleryQR = new Command("Scan from Photo", Command.SCREEN, 3);
+        cmdScanGalleryQR = new Command("Scan QR from Photo", Command.SCREEN, 2);
     }
 
     private void initMainForm() {
@@ -299,12 +282,8 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
             openFileBrowser(null);
         } else if (item == btnUploadNow) {
             startUploadThread();
-        } else if (item == btnScanQRFind) {
-            openQRScanner();
         } else if (item == btnScanPhotoFind) {
             openPhotoGalleryForQR();
-        } else if (item == btnTriggerScan) {
-            triggerSingleScan();
         } else if (item == btnFindByCode) {
             openFindByCodeForm();
         } else if (item == btnPublicFiles) {
@@ -318,13 +297,8 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
 
     public void commandAction(Command c, Displayable d) {
         if (c == cmdExit || c == cmdExitSoftkey) {
-            closeCamera();
             destroyApp(true);
             notifyDestroyed();
-        } else if (c == cmdScanCapture && d == scannerForm) {
-            triggerSingleScan();
-        } else if (c == cmdScanQRMenu) {
-            openQRScanner();
         } else if (c == cmdScanGalleryQR) {
             openPhotoGalleryForQR();
         } else if (c == cmdUpload) {
@@ -348,10 +322,7 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
         } else if (c == cmdPrivacy) {
             showPrivacyPolicy();
         } else if (c == cmdBack) {
-            if (d == scannerForm) {
-                closeCamera();
-                display.setCurrent(findForm != null ? (Displayable) findForm : mainForm);
-            } else if (d == galleryList) {
+            if (d == galleryList) {
                 if (galleryForQR) {
                     galleryForQR = false;
                     display.setCurrent(findForm != null ? (Displayable) findForm : mainForm);
@@ -450,22 +421,15 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
         findCodeField = new TextField("Enter Item Code or URL:", "", 64, TextField.ANY);
         findForm.append(findCodeField);
 
-        findForm.append(new Spacer(10, 6));
+        findForm.append(new Spacer(10, 8));
 
-        btnScanQRFind = new StringItem(null, "Scan QR with Camera", Item.BUTTON);
-        btnScanQRFind.setLayout(Item.LAYOUT_EXPAND | Item.LAYOUT_NEWLINE_AFTER);
-        btnScanQRFind.setDefaultCommand(cmdItemAction);
-        btnScanQRFind.setItemCommandListener(this);
-        findForm.append(btnScanQRFind);
-
-        btnScanPhotoFind = new StringItem(null, "Scan from Saved Photo", Item.BUTTON);
+        btnScanPhotoFind = new StringItem(null, "Scan QR from Photo Gallery", Item.BUTTON);
         btnScanPhotoFind.setLayout(Item.LAYOUT_EXPAND | Item.LAYOUT_NEWLINE_AFTER);
         btnScanPhotoFind.setDefaultCommand(cmdItemAction);
         btnScanPhotoFind.setItemCommandListener(this);
         findForm.append(btnScanPhotoFind);
 
         findForm.addCommand(cmdDoSearch);
-        findForm.addCommand(cmdScanQRMenu);
         findForm.addCommand(cmdScanGalleryQR);
         findForm.addCommand(cmdBack);
         findForm.setCommandListener(this);
@@ -604,181 +568,8 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
     }
 
     // ------------------------------------------------------------------------
-    // CAMERA QR SCANNER & AUTOMATIC DECODE
+    // QR CODE SCANNING VIA PHOTO GALLERY
     // ------------------------------------------------------------------------
-    private void openQRScanner() {
-        isCapturing = false;
-        closeCamera();
-
-        scannerForm = new Form("Scan QR Code");
-        scannerStatusItem = new StringItem("Status:", "Starting camera...");
-        scannerStatusItem.setLayout(Item.LAYOUT_EXPAND | Item.LAYOUT_NEWLINE_AFTER);
-        scannerForm.append(scannerStatusItem);
-
-        boolean cameraReady = false;
-        try {
-            cameraPlayer = Manager.createPlayer("capture://video");
-            cameraPlayer.realize();
-            cameraControl = (VideoControl) cameraPlayer.getControl("VideoControl");
-            if (cameraControl != null) {
-                Object guiComponent = cameraControl.initDisplayMode(VideoControl.USE_GUI_PRIMITIVE, null);
-                if (guiComponent instanceof Item) {
-                    Item vItem = (Item) guiComponent;
-                    vItem.setLayout(Item.LAYOUT_CENTER | Item.LAYOUT_NEWLINE_BEFORE | Item.LAYOUT_NEWLINE_AFTER);
-                    scannerForm.append(vItem);
-                }
-                try {
-                    cameraControl.setVisible(true);
-                } catch (Throwable ignored) {}
-                cameraPlayer.start();
-                cameraReady = true;
-            }
-        } catch (Throwable t) {
-            scannerStatusItem.setText("Live camera preview unavailable (" + t.getMessage() + ").");
-            scannerForm.append(new StringItem("Notice:", "Please use 'Scan from Saved Photo' in the Find by Code menu."));
-        }
-
-        if (cameraReady) {
-            btnTriggerScan = new StringItem(null, "📸 Focus & Scan QR Now", Item.BUTTON);
-            btnTriggerScan.setLayout(Item.LAYOUT_EXPAND | Item.LAYOUT_NEWLINE_BEFORE | Item.LAYOUT_NEWLINE_AFTER);
-            btnTriggerScan.setDefaultCommand(cmdItemAction);
-            btnTriggerScan.setItemCommandListener(this);
-            scannerForm.append(btnTriggerScan);
-
-            scannerStatusItem.setText("Point camera at QR code (~15-30cm). Press 'Scan QR' when ready.");
-            scannerForm.addCommand(cmdScanCapture);
-        }
-
-        scannerForm.addCommand(cmdBack);
-        scannerForm.setCommandListener(this);
-        display.setCurrent(scannerForm);
-    }
-
-    private void triggerSingleScan() {
-        if (isCapturing || cameraControl == null) return;
-        isCapturing = true;
-        scannerStatusItem.setText("Scanning QR code...");
-        Thread t = new Thread(new Runnable() {
-            public void run() {
-                try {
-
-                    byte[] snapshot = null;
-                    try {
-                        snapshot = cameraControl.getSnapshot("encoding=jpeg&width=640&height=480");
-                    } catch (Throwable t1) {
-                        try {
-                            snapshot = cameraControl.getSnapshot("encoding=jpeg");
-                        } catch (Throwable t2) {
-                            try {
-                                snapshot = cameraControl.getSnapshot(null);
-                            } catch (Throwable t3) {
-                                snapshot = null;
-                            }
-                        }
-                    }
-
-                    if (snapshot == null || snapshot.length == 0) {
-                        scannerStatusItem.setText("Could not capture image from camera. Please try again.");
-                        isCapturing = false;
-                        return;
-                    }
-
-                    scannerStatusItem.setText("Decoding QR code (" + (snapshot.length / 1024) + " KB)...");
-                    final String foundCode = decodeQRBytesSynchronous(snapshot);
-                    if (foundCode != null && foundCode.length() > 0) {
-                        closeCamera();
-                        try {
-                            AlertType.CONFIRMATION.playSound(display);
-                        } catch (Throwable ignored) {}
-                        lookupItemByCode(foundCode, mainForm);
-                        return;
-                    } else {
-                        scannerStatusItem.setText("No QR code detected. Align QR code in frame (~15-30cm away) and press 'Scan QR' again.");
-                        try {
-                            AlertType.WARNING.playSound(display);
-                        } catch (Throwable ignored) {}
-                    }
-                } catch (Throwable ex) {
-                    scannerStatusItem.setText("Scan error: " + ex.getMessage());
-                } finally {
-                    isCapturing = false;
-                }
-            }
-        });
-        t.start();
-    }
-
-    private void stopAutoScan() {
-        isCapturing = false;
-    }
-
-    private String decodeQRBytesSynchronous(byte[] imgBytes) {
-        HttpConnection conn = null;
-        InputStream is = null;
-        try {
-            String base = serverUrl.trim();
-            if (base.endsWith("/")) base = base.substring(0, base.length() - 1);
-            String url = base + "/api/mobile/qr-decode";
-
-            try {
-                conn = (HttpConnection) Connector.open(url, Connector.READ_WRITE);
-                conn.setRequestMethod(HttpConnection.POST);
-                conn.setRequestProperty("User-Agent", "Nullhost-J2ME/1.0");
-                conn.setRequestProperty("Content-Type", "application/octet-stream");
-                conn.setRequestProperty("Content-Length", String.valueOf(imgBytes.length));
-                OutputStream os = conn.openOutputStream();
-                os.write(imgBytes);
-                os.flush();
-                os.close();
-            } catch (Exception ex) {
-                if (url.startsWith("https://")) {
-                    String httpUrl = "http://" + url.substring(8);
-                    conn = (HttpConnection) Connector.open(httpUrl, Connector.READ_WRITE);
-                    conn.setRequestMethod(HttpConnection.POST);
-                    conn.setRequestProperty("User-Agent", "Nullhost-J2ME/1.0");
-                    conn.setRequestProperty("Content-Type", "application/octet-stream");
-                    conn.setRequestProperty("Content-Length", String.valueOf(imgBytes.length));
-                    OutputStream os = conn.openOutputStream();
-                    os.write(imgBytes);
-                    os.flush();
-                    os.close();
-                } else {
-                    return null;
-                }
-            }
-
-            int respCode = conn.getResponseCode();
-            if (respCode >= 400) {
-                try { is = conn.openDataInputStream(); } catch (Exception ignored) {}
-            } else {
-                is = conn.openInputStream();
-            }
-
-            ByteArrayOutputStream baos = new ByteArrayOutputStream();
-            if (is != null) {
-                byte[] buf = new byte[512];
-                int len;
-                while ((len = is.read(buf)) != -1) {
-                    baos.write(buf, 0, len);
-                }
-                is.close();
-            }
-            conn.close();
-
-            String json = new String(baos.toByteArray(), "UTF-8");
-            String status = extractJsonField(json, "status");
-            if ("ok".equals(status)) {
-                return extractJsonField(json, "code");
-            }
-        } catch (Throwable t) {
-            // Frame analysis error, retry next frame
-        } finally {
-            if (is != null) { try { is.close(); } catch (Exception ignored) {} }
-            if (conn != null) { try { conn.close(); } catch (Exception ignored) {} }
-        }
-        return null;
-    }
-
     private void sendImageToDecodeQR(final byte[] imgBytes, final Displayable returnTarget) {
         final Form processingForm = new Form("Decoding QR");
         processingForm.append(new StringItem("Status:", "Analyzing image for QR code (" + (imgBytes.length / 1024) + " KB)..."));
@@ -862,7 +653,6 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
         if ("ok".equals(status)) {
             String code = extractJsonField(json, "code");
             if (code != null && code.length() > 0) {
-                closeCamera();
                 try {
                     AlertType.CONFIRMATION.playSound(display);
                 } catch (Exception ignored) {}
@@ -917,23 +707,6 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
         galleryForQR = true;
         browserForQR = false;
         openPhotoGallery();
-    }
-
-    private void closeCamera() {
-        stopAutoScan();
-        if (cameraPlayer != null) {
-            try {
-                cameraPlayer.stop();
-            } catch (Throwable ignored) {}
-            try {
-                cameraPlayer.deallocate();
-            } catch (Throwable ignored) {}
-            try {
-                cameraPlayer.close();
-            } catch (Throwable ignored) {}
-            cameraPlayer = null;
-            cameraControl = null;
-        }
     }
 
     // ------------------------------------------------------------------------
@@ -2296,7 +2069,7 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
         f.append(new StringItem("Nullhost Universal J2ME", "Version " + APP_VERSION + "\n\n" +
             "Fast, anonymous file and photo hosting for Symbian and vintage phones.\n\n" +
             "Features:\n" +
-            "- Live camera QR code scanner with instant file preview\n" +
+            "- Scan QR codes directly from saved photos & gallery\n" +
             "- Instant camera photo picker & storage scanner\n" +
             "- Find files by code, URL, or scanned QR\n" +
             "- In-app text viewer & native phone editor launcher\n" +

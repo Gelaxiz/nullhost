@@ -1,12 +1,11 @@
 MIDlet-Name: Nullhost
-MIDlet-Version: 1.8.1
+MIDlet-Version: 1.8.2
 MIDlet-Vendor: Gelaxiz
 MIDlet-Icon: /icon.png
 MIDlet-1: Nullhost, /icon.png, org.gelaxiz.nullhost.NullhostMIDlet
-MIDlet-Description: Anonymous file & photo hosting with live QR codes and explorer
+MIDlet-Description: Anonymous file & photo hosting with QR gallery decoder and explorer
 MicroEdition-Configuration: CLDC-1.1
 MicroEdition-Profile: MIDP-2.0
 MIDlet-Jar-URL: Nullhost.jar
-MIDlet-Jar-Size: 67332
+MIDlet-Jar-Size: 63694
 MIDlet-Permissions: javax.microedition.io.Connector.http, javax.microedition.io.Connector.file.read, javax.microedition.io.Connector.file.write
-MIDlet-Permissions-Opt: javax.microedition.media.control.record
