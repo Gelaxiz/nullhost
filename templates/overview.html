@@ -83,8 +83,8 @@
     <button type="button" id="more-btn" onclick="toggleMore()" aria-expanded="false">more info</button>
 </div>
 
-<details class="qr-share share-menu">
-    <summary>share with other devices (QR code &amp; links)</summary>
+<details class="device-panel" id="device-sync-dropdown">
+    <summary>send to another device (QR code &amp; links)</summary>
     <div class="qr-box-wrapper" style="margin: 14px 0 16px; display: flex; align-items: center; gap: 18px; flex-wrap: wrap; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px;">
         <img id="item-qr" src="/v/{{ item['id'] }}/qr.png?target=info" alt="QR code for this item" width="160" height="160" style="display: block; width: 160px; height: 160px; padding: 6px; background: #ffffff; border-radius: 6px;">
         <div class="qr-meta-wrap" style="flex: 1; min-width: 200px;">
@@ -96,25 +96,25 @@
             </div>
         </div>
     </div>
-    <div class="share-links" aria-label="Share links">
-      <div class="share-link-row">
-        <div class="share-link-copy">
+    <div class="access-urls" aria-label="Access links">
+      <div class="access-url-row">
+        <div class="access-url-meta">
             <label for="info-url-input">view page</label>
             <small>opens this information page</small>
         </div>
         <input type="text" id="info-url-input" value="{{ info_url }}" readonly spellcheck="false">
         <button type="button" class="copy-link-btn" data-copy-target="info-url-input">copy link</button>
       </div>
-      <div class="share-link-row">
-        <div class="share-link-copy">
+      <div class="access-url-row">
+        <div class="access-url-meta">
             <label for="raw-url-input">raw file</label>
             <small>{% if item['is_partial'] %}<span style="color:var(--amber);">[Partial file] </span>{% endif %}{% if item['type'] == 'file' %}opens previewable files directly. formats your browser cannot preview download automatically, so quick download is unnecessary for them.{% else %}opens the paste directly{% endif %}</small>
         </div>
         <input type="text" id="raw-url-input" value="{{ raw_url }}" readonly spellcheck="false">
         <button type="button" class="copy-link-btn" data-copy-target="raw-url-input">copy link</button>
       </div>
-      <div class="share-link-row">
-        <div class="share-link-copy">
+      <div class="access-url-row">
+        <div class="access-url-meta">
             <label for="download-url-input">quick download</label>
             <small>{% if item['is_partial'] %}<span style="color:var(--amber);">[Partial file] </span>{% endif %}downloads the item immediately</small>
         </div>
@@ -186,7 +186,7 @@ document.querySelectorAll('.copy-link-btn').forEach(function(button) {
     button.addEventListener('click', function() { copyShareLink(button); });
 });
 
-document.querySelectorAll('.share-link-row input').forEach(function(input) {
+document.querySelectorAll('.access-url-row input').forEach(function(input) {
     input.addEventListener('click', function() { input.select(); });
 });
 

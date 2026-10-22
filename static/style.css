@@ -204,12 +204,12 @@ hr {
     margin-bottom: 36px;
 }
 
-.share-links {
+.access-urls {
     width: min(620px, calc(100vw - 44px));
     margin-top: 14px;
 }
 
-.share-link-row {
+.access-url-row {
     display: grid;
     grid-template-columns: minmax(112px, .55fr) minmax(0, 2fr) auto;
     align-items: end;
@@ -217,12 +217,12 @@ hr {
     padding: 10px 0;
 }
 
-.share-link-copy {
+.access-url-meta {
     min-width: 0;
     padding-bottom: 5px;
 }
 
-.share-link-copy label {
+.access-url-meta label {
     margin: 0;
     color: var(--text-1);
     font-size: .78rem;
@@ -230,7 +230,7 @@ hr {
     text-transform: none;
 }
 
-.share-link-copy small {
+.access-url-meta small {
     display: block;
     margin-top: 2px;
     color: var(--text-2);
@@ -238,7 +238,7 @@ hr {
     line-height: 1.35;
 }
 
-.share-link-row input[type="text"] {
+.access-url-row input[type="text"] {
     max-width: none;
     min-width: 0;
     font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
@@ -246,7 +246,7 @@ hr {
     cursor: text;
 }
 
-.share-link-row button {
+.access-url-row button {
     min-width: 92px;
     white-space: nowrap;
 }
@@ -259,13 +259,13 @@ hr {
 }
 
 @media (max-width: 620px) {
-    .share-link-row {
+    .access-url-row {
         grid-template-columns: minmax(0, 1fr) auto;
         align-items: end;
     }
-    .share-link-copy { grid-column: 1 / -1; padding-bottom: 0; }
-    .share-link-row input[type="text"] { font-size: 16px; }
-    .share-link-row button { min-height: 42px; }
+    .access-url-meta { grid-column: 1 / -1; padding-bottom: 0; }
+    .access-url-row input[type="text"] { font-size: 16px; }
+    .access-url-row button { min-height: 42px; }
 }
 
 .turnstile-wrap {
@@ -371,7 +371,7 @@ textarea {
 
 .account-key-panel,
 .collection-create-panel,
-.collection-share-panel,
+.collection-device-panel,
 .collection-manage-panel {
     border: 1px solid var(--border);
     border-radius: var(--radius);
@@ -380,7 +380,7 @@ textarea {
 
 .account-key-panel > summary,
 .collection-create-panel > summary,
-.collection-share-panel > summary,
+.collection-device-panel > summary,
 .collection-manage-panel > summary {
     padding: 12px 14px;
     color: var(--text-2);
@@ -392,7 +392,7 @@ textarea {
 
 .account-key-panel[open] > summary,
 .collection-create-panel[open] > summary,
-.collection-share-panel[open] > summary,
+.collection-device-panel[open] > summary,
 .collection-manage-panel[open] > summary {
     border-bottom: 1px solid var(--border);
 }
@@ -743,19 +743,19 @@ textarea {
 .collection-header-actions .button,
 .collection-header-actions button { min-height: 40px; }
 
-.collection-share-panel,
+.collection-device-panel,
 .collection-manage-panel {
     margin-bottom: 12px;
 }
 
-.collection-share-content {
+.collection-device-content {
     display: flex;
     align-items: center;
     gap: 16px;
     padding: 16px;
 }
 
-.collection-share-content p {
+.collection-device-content p {
     margin: 3px 0 0;
     font-size: .78rem;
 }
@@ -856,7 +856,7 @@ textarea {
     .account-item { grid-template-columns: auto minmax(0, 1fr); }
     .account-item-actions { grid-column: 2; flex-wrap: wrap; }
     .collection-manage-grid { grid-template-columns: 1fr; }
-    .collection-share-content { align-items: flex-start; }
+    .collection-device-content { align-items: flex-start; }
     .collection-toolbar { align-items: stretch; }
     .collection-selection-control { flex: 1 1 100%; justify-content: space-between; }
     .collection-toolbar .collection-move-form { flex: 1 1 100%; grid-template-columns: 1fr auto; }
@@ -874,7 +874,7 @@ textarea {
     .account-item-actions form { flex: 1 1 calc(50% - 5px); }
     .account-item-actions form button { width: 100%; }
     .form-row.compact-row { grid-template-columns: 1fr; }
-    .collection-share-content { flex-direction: column; }
+    .collection-device-content { flex-direction: column; }
     .inline-folder-row { grid-template-columns: 1fr; }
 }
 
@@ -2203,13 +2203,13 @@ code {
     padding: 8px 16px;
 }
 
-.qr-share {
+.device-panel {
     width: fit-content;
     margin-top: 22px;
     color: var(--text-2);
 }
 
-.qr-share summary {
+.device-panel summary {
     cursor: pointer;
 }
 
@@ -2238,7 +2238,7 @@ code {
     color: var(--text);
 }
 
-.qr-share img {
+.device-panel img {
     display: block;
     width: 150px;
     height: 150px;
