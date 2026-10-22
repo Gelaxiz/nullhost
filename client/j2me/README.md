@@ -18,7 +18,7 @@ Universal Java ME application compatible with virtually any mobile phone support
 Compiled against MIDP 2.0 and JSR-75 standard APIs:
 ```bash
 mkdir -p build
-javac -source 1.6 -target 1.6 -cp microemulator.jar:microemu-jsr-75.jar -d build src/*.java
+javac -source 1.4 -target 1.4 -cp microemulator.jar:microemu-jsr-75.jar -d build src/*.java
 jar cfm Nullhost.jar Manifest.mf -C build .
 ```
 Output:
