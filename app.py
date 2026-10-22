@@ -361,8 +361,6 @@ def download_app(filename=None):
         'j2me': ('Nullhost.jar', 'application/java-archive'),
         'jar': ('Nullhost.jar', 'application/java-archive'),
         'jad': ('Nullhost.jad', 'text/vnd.sun.j2me.app-descriptor'),
-        'belle-source': ('Nullhost_Symbian_Belle_Source.zip', 'application/zip'),
-        's60-source': ('Nullhost_S60_Keypad_Source.zip', 'application/zip'),
     }
     
     if target in file_map:
