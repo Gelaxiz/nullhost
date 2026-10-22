@@ -20,15 +20,15 @@ import javax.microedition.rms.RecordStore;
 
 /**
  * Nullhost Universal Java ME (MIDP 2.0 / CLDC 1.1 / JSR-75) Client.
- * Complete mobile client with native touch buttons, photo QR code scanner,
- * storage explorer, in-app code search, server file deletion, custom text viewer,
+ * Complete mobile client with native touch buttons, storage explorer,
+ * in-app code search, server file deletion, custom text viewer,
  * persistent RMS settings storage, and live centered QR code display.
  * Pure Java 1.4 (Major version 48) - 100% Dependency-Free.
  * Copyright (c) 2026 Gelaxiz. All rights reserved.
  */
 public class NullhostMIDlet extends MIDlet implements CommandListener, ItemCommandListener {
 
-    private static final String APP_VERSION = "1.8.2";
+    private static final String APP_VERSION = "1.8.3";
     private static final String CLIENT_ID = "j2me-universal";
     private static final String MOBILE_SECRET = "nullhost_secret_mobile_app_key_2026";
     private static final String DEFAULT_SERVER = "http://nullhost.gelaxiz.xyz";
@@ -71,15 +71,9 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
     private StringItem settingsSummaryItem;
     private StringItem btnSettings;
 
-    // QR Scanner from Photo State
-    private Command cmdScanGalleryQR = null;
-    private boolean galleryForQR = false;
-    private boolean browserForQR = false;
-
     // Search by Code Form
     private Form findForm;
     private TextField findCodeField;
-    private StringItem btnScanPhotoFind;
     private Command cmdDoSearch;
 
     // Consolidated Settings Form
@@ -188,7 +182,6 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
         cmdSaveSettings = new Command("Save", Command.OK, 1);
         cmdDoSearch = new Command("Search", Command.OK, 1);
         cmdItemAction = new Command("Go", Command.ITEM, 1);
-        cmdScanGalleryQR = new Command("Scan QR from Photo", Command.SCREEN, 2);
     }
 
     private void initMainForm() {
@@ -282,8 +275,6 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
             openFileBrowser(null);
         } else if (item == btnUploadNow) {
             startUploadThread();
-        } else if (item == btnScanPhotoFind) {
-            openPhotoGalleryForQR();
         } else if (item == btnFindByCode) {
             openFindByCodeForm();
         } else if (item == btnPublicFiles) {
@@ -299,8 +290,6 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
         if (c == cmdExit || c == cmdExitSoftkey) {
             destroyApp(true);
             notifyDestroyed();
-        } else if (c == cmdScanGalleryQR) {
-            openPhotoGalleryForQR();
         } else if (c == cmdUpload) {
             startUploadThread();
         } else if (c == cmdPhoto) {
@@ -323,12 +312,7 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
             showPrivacyPolicy();
         } else if (c == cmdBack) {
             if (d == galleryList) {
-                if (galleryForQR) {
-                    galleryForQR = false;
-                    display.setCurrent(findForm != null ? (Displayable) findForm : mainForm);
-                } else {
-                    display.setCurrent(mainForm);
-                }
+                display.setCurrent(mainForm);
             } else if (d == browserList) {
                 handleBrowserBack();
             } else if (d == settingsForm) {
@@ -421,16 +405,7 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
         findCodeField = new TextField("Enter Item Code or URL:", "", 64, TextField.ANY);
         findForm.append(findCodeField);
 
-        findForm.append(new Spacer(10, 8));
-
-        btnScanPhotoFind = new StringItem(null, "Scan QR from Photo Gallery", Item.BUTTON);
-        btnScanPhotoFind.setLayout(Item.LAYOUT_EXPAND | Item.LAYOUT_NEWLINE_AFTER);
-        btnScanPhotoFind.setDefaultCommand(cmdItemAction);
-        btnScanPhotoFind.setItemCommandListener(this);
-        findForm.append(btnScanPhotoFind);
-
         findForm.addCommand(cmdDoSearch);
-        findForm.addCommand(cmdScanGalleryQR);
         findForm.addCommand(cmdBack);
         findForm.setCommandListener(this);
         display.setCurrent(findForm);
@@ -565,148 +540,6 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
             }
         });
         t.start();
-    }
-
-    // ------------------------------------------------------------------------
-    // QR CODE SCANNING VIA PHOTO GALLERY
-    // ------------------------------------------------------------------------
-    private void sendImageToDecodeQR(final byte[] imgBytes, final Displayable returnTarget) {
-        final Form processingForm = new Form("Decoding QR");
-        processingForm.append(new StringItem("Status:", "Analyzing image for QR code (" + (imgBytes.length / 1024) + " KB)..."));
-        processingForm.append(new Gauge(null, false, Gauge.INDEFINITE, Gauge.CONTINUOUS_RUNNING));
-        display.setCurrent(processingForm);
-
-        Thread t = new Thread(new Runnable() {
-            public void run() {
-                try {
-                    String base = serverUrl.trim();
-                    if (base.endsWith("/")) base = base.substring(0, base.length() - 1);
-                    String url = base + "/api/mobile/qr-decode";
-
-                    HttpConnection conn = null;
-                    try {
-                        conn = (HttpConnection) Connector.open(url, Connector.READ_WRITE);
-                        conn.setRequestMethod(HttpConnection.POST);
-                        conn.setRequestProperty("User-Agent", "Nullhost-J2ME/1.0");
-                        conn.setRequestProperty("Content-Type", "application/octet-stream");
-                        conn.setRequestProperty("Content-Length", String.valueOf(imgBytes.length));
-                        OutputStream os = conn.openOutputStream();
-                        os.write(imgBytes);
-                        os.flush();
-                        os.close();
-
-                        int respCode = conn.getResponseCode();
-                        handleQRResponse(conn, respCode, returnTarget);
-                    } catch (Exception ex) {
-                        if (url.startsWith("https://")) {
-                            String httpUrl = "http://" + url.substring(8);
-                            conn = (HttpConnection) Connector.open(httpUrl, Connector.READ_WRITE);
-                            conn.setRequestMethod(HttpConnection.POST);
-                            conn.setRequestProperty("User-Agent", "Nullhost-J2ME/1.0");
-                            conn.setRequestProperty("Content-Type", "application/octet-stream");
-                            conn.setRequestProperty("Content-Length", String.valueOf(imgBytes.length));
-                            OutputStream os = conn.openOutputStream();
-                            os.write(imgBytes);
-                            os.flush();
-                            os.close();
-
-                            int respCode = conn.getResponseCode();
-                            handleQRResponse(conn, respCode, returnTarget);
-                        } else {
-                            throw ex;
-                        }
-                    }
-                } catch (Exception e) {
-                    showAlert("QR Error", "Connection failed: " + e.getMessage(), AlertType.ERROR, returnTarget);
-                }
-            }
-        });
-        t.start();
-    }
-
-    private void handleQRResponse(HttpConnection conn, int respCode, Displayable returnTarget) throws IOException {
-        InputStream is = null;
-        try {
-            if (respCode >= 400) {
-                is = conn.openDataInputStream();
-            } else {
-                is = conn.openInputStream();
-            }
-        } catch (Exception e) {
-            try { is = conn.openInputStream(); } catch (Exception ignored) {}
-        }
-
-        ByteArrayOutputStream baos = new ByteArrayOutputStream();
-        if (is != null) {
-            byte[] buf = new byte[512];
-            int len;
-            while ((len = is.read(buf)) != -1) {
-                baos.write(buf, 0, len);
-            }
-            is.close();
-        }
-        conn.close();
-
-        String json = new String(baos.toByteArray(), "UTF-8");
-        String status = extractJsonField(json, "status");
-
-        if ("ok".equals(status)) {
-            String code = extractJsonField(json, "code");
-            if (code != null && code.length() > 0) {
-                try {
-                    AlertType.CONFIRMATION.playSound(display);
-                } catch (Exception ignored) {}
-                lookupItemByCode(code, mainForm);
-                return;
-            }
-        }
-
-        String msg = extractJsonField(json, "message");
-        if (msg == null || msg.length() == 0) {
-            msg = "No QR code could be detected in the image. Please make sure the code is centered and in focus.";
-        }
-        showAlert("Scan Result", msg, AlertType.WARNING, returnTarget);
-    }
-
-    private void readAndDecodePhotoFile(final String photoUrl) {
-        final Form readingForm = new Form("Reading Photo");
-        readingForm.append(new StringItem("Status:", "Reading image file for QR decoding..."));
-        readingForm.append(new Gauge(null, false, Gauge.INDEFINITE, Gauge.CONTINUOUS_RUNNING));
-        display.setCurrent(readingForm);
-
-        Thread t = new Thread(new Runnable() {
-            public void run() {
-                try {
-                    FileConnection fc = (FileConnection) Connector.open(photoUrl, Connector.READ);
-                    long sz = fc.fileSize();
-                    if (sz > 4 * 1024 * 1024) {
-                        fc.close();
-                        showAlert("Photo Too Large", "Photo exceeds 4 MB. Please select a smaller photo.", AlertType.WARNING, findForm != null ? (Displayable) findForm : mainForm);
-                        return;
-                    }
-                    InputStream is = fc.openInputStream();
-                    ByteArrayOutputStream baos = new ByteArrayOutputStream();
-                    byte[] buf = new byte[2048];
-                    int r;
-                    while ((r = is.read(buf)) != -1) {
-                        baos.write(buf, 0, r);
-                    }
-                    is.close();
-                    fc.close();
-                    byte[] imgBytes = baos.toByteArray();
-                    sendImageToDecodeQR(imgBytes, findForm != null ? (Displayable) findForm : mainForm);
-                } catch (Exception ex) {
-                    showAlert("Read Error", "Could not read photo: " + ex.getMessage(), AlertType.ERROR, findForm != null ? (Displayable) findForm : mainForm);
-                }
-            }
-        });
-        t.start();
-    }
-
-    private void openPhotoGalleryForQR() {
-        galleryForQR = true;
-        browserForQR = false;
-        openPhotoGallery();
     }
 
     // ------------------------------------------------------------------------
@@ -845,21 +678,11 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
 
         if (idx == 0) {
             // First item is Browse Storage Folders
-            if (galleryForQR) {
-                galleryForQR = false;
-                browserForQR = true;
-            }
             openFileBrowser(null);
             return;
         }
 
         String selectedUrl = (String) galleryEntries.elementAt(idx);
-        if (galleryForQR) {
-            galleryForQR = false;
-            readAndDecodePhotoFile(selectedUrl);
-            return;
-        }
-
         selectedFilePath = selectedUrl;
         try {
             FileConnection fc = (FileConnection) Connector.open(selectedUrl, Connector.READ);
@@ -934,11 +757,6 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
         if (selectedUrl.endsWith("/")) {
             openFileBrowser(selectedUrl);
         } else {
-            if (browserForQR) {
-                browserForQR = false;
-                readAndDecodePhotoFile(selectedUrl);
-                return;
-            }
             selectedFilePath = selectedUrl;
             try {
                 FileConnection fc = (FileConnection) Connector.open(selectedUrl, Connector.READ);
@@ -954,12 +772,7 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
 
     private void handleBrowserBack() {
         if (currentDirectoryUrl == null) {
-            if (browserForQR) {
-                browserForQR = false;
-                display.setCurrent(findForm != null ? (Displayable) findForm : mainForm);
-            } else {
-                display.setCurrent(mainForm);
-            }
+            display.setCurrent(mainForm);
             return;
         }
         String trimmed = currentDirectoryUrl.endsWith("/") ? currentDirectoryUrl.substring(0, currentDirectoryUrl.length() - 1) : currentDirectoryUrl;
@@ -2069,9 +1882,8 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
         f.append(new StringItem("Nullhost Universal J2ME", "Version " + APP_VERSION + "\n\n" +
             "Fast, anonymous file and photo hosting for Symbian and vintage phones.\n\n" +
             "Features:\n" +
-            "- Scan QR codes directly from saved photos & gallery\n" +
             "- Instant camera photo picker & storage scanner\n" +
-            "- Find files by code, URL, or scanned QR\n" +
+            "- Find files by code or URL\n" +
             "- In-app text viewer & native phone editor launcher\n" +
             "- Direct Symbian file download manager\n" +
             "- Persistent RMS settings & Account ID storage\n" +
