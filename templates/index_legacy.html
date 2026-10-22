@@ -1,89 +1,46 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="card" style="border-left: 3px solid #38bdf8;">
-    <h1 style="margin-top: 0; font-size: 1.3rem;">nullhost lite</h1>
-    <p style="color: #9ca3af; font-size: 0.9rem; margin-bottom: 0;">Streamlined lightweight interface optimized for Nokia Symbian, Series 40/60, Java phones, and low-bandwidth connections.</p>
+<div class="card">
+    <h1 style="margin-top: 0; font-size: 1.15rem;">nullhost lite</h1>
+    <p style="color: #a1a1aa; font-size: 0.85rem; margin-bottom: 0;">Simple read-only interface optimized for vintage Nokia Symbian, Series 40/60, Java phones, and low-bandwidth mobile browsers.</p>
 </div>
 
-<!-- Native Apps Notice -->
-<div class="card" style="background: #101926; border-color: #1e3a5f;">
-    <h2 style="color: #38bdf8; margin-top: 0; border: none; font-size: 1.05rem;">Looking for Native Mobile Apps?</h2>
-    <p style="font-size: 0.85rem; color: #93c5fd; margin-bottom: 10px;">We offer standalone native apps with instant HMAC uploads and in-app file browsers for vintage devices:</p>
-    <p style="margin: 0;">
-        <a href="/app" style="display: inline-block; background: #0284c7; color: #ffffff; padding: 6px 12px; border-radius: 4px; font-weight: bold; text-decoration: none;">Download Native Mobile Apps</a>
-        <span style="font-size: 0.8rem; color: #94a3b8; margin-left: 8px;">(Symbian Belle, S60 Keypad, Java ME)</span>
+<!-- Uploads disabled notice & Native App solution -->
+<div class="card">
+    <h2 style="margin-top: 0; font-size: 0.95rem;">Uploads & Mobile Application</h2>
+    <p style="font-size: 0.85rem; color: #d4d4d8; line-height: 1.45;">
+        Web browser uploads are disabled in Lite mode because browser uploads require Cloudflare Turnstile verification, which vintage mobile browsers cannot execute.
     </p>
+    <p style="font-size: 0.85rem; color: #a1a1aa; line-height: 1.45;">
+        To upload photos and files directly from your phone <strong>without any captcha or setup</strong>, download and use the official native Java ME mobile app:
+    </p>
+    <div style="margin: 10px 0 6px;">
+        <a href="/download-app?platform=j2me" class="btn" style="text-align: center; margin-bottom: 8px;">Download Nullhost Mobile (.JAR)</a>
+        <a href="/download-app?platform=jad" class="btn" style="text-align: center; background: transparent; border-color: #3f3f46;">Download .JAD Descriptor</a>
+    </div>
+    <p style="font-size: 0.78rem; color: #71717a; margin-top: 6px; margin-bottom: 0;">Runs natively on Nokia 808 PureView (Belle FP2), N8, E7, C7, Series 60, and Series 40 devices.</p>
 </div>
 
-<!-- Upload File -->
+<!-- Find File or Paste -->
 <div class="card">
-    <h2 style="margin-top: 0;">Upload File</h2>
-    <form action="/upload" method="post" enctype="multipart/form-data">
-        <label style="font-weight: bold; font-size: 0.85rem; color: #9ca3af;">Select File</label>
-        <input type="file" name="file" required>
-
-        <label style="font-weight: bold; font-size: 0.85rem; color: #9ca3af;">Retention Time</label>
-        <select name="expiry">
-            <option value="3600">1 Hour</option>
-            <option value="86400" selected>24 Hours (1 Day)</option>
-            <option value="604800">7 Days (1 Week)</option>
-            <option value="2592000">30 Days (1 Month)</option>
-            <option value="9999999999">Never Expire</option>
-        </select>
-
-        <label style="font-weight: bold; font-size: 0.85rem; color: #9ca3af;">Burn After Reading</label>
-        <select name="burn_limit">
-            <option value="0" selected>Do not burn (keep until expiry)</option>
-            <option value="1">Self-destruct after 1 view</option>
-            <option value="5">Self-destruct after 5 views</option>
-            <option value="10">Self-destruct after 10 views</option>
-        </select>
-
-        <label style="font-weight: bold; font-size: 0.85rem; color: #9ca3af;">Password Protection (optional)</label>
-        <input type="password" name="password" placeholder="Leave blank for no password">
-
-        <input type="submit" value="Upload File" class="btn">
-    </form>
-</div>
-
-<!-- Paste Text -->
-<div class="card">
-    <h2 style="margin-top: 0;">New Text Paste</h2>
-    <form action="/upload" method="post">
-        <label style="font-weight: bold; font-size: 0.85rem; color: #9ca3af;">Text Content</label>
-        <textarea name="text" rows="6" placeholder="Paste or type raw text here..." required></textarea>
-
-        <label style="font-weight: bold; font-size: 0.85rem; color: #9ca3af;">Retention Time</label>
-        <select name="expiry">
-            <option value="3600">1 Hour</option>
-            <option value="86400" selected>24 Hours (1 Day)</option>
-            <option value="604800">7 Days (1 Week)</option>
-            <option value="2592000">30 Days (1 Month)</option>
-            <option value="9999999999">Never Expire</option>
-        </select>
-
-        <input type="submit" value="Upload Paste" class="btn">
-    </form>
-</div>
-
-<!-- Find File -->
-<div class="card">
-    <h2 style="margin-top: 0;">Find File or Paste</h2>
+    <h2 style="margin-top: 0; font-size: 0.95rem;">Find File or Paste</h2>
     <form action="/search" method="get">
-        <label style="font-weight: bold; font-size: 0.85rem; color: #9ca3af;">Item Code / ID</label>
-        <input type="text" name="id" maxlength="32" placeholder="e.g. a1b2c3d4" required>
+        <label style="font-weight: 600; font-size: 0.82rem; color: #a1a1aa;" for="item-id-input">Item Code or ID (8 characters):</label>
+        <input type="text" id="item-id-input" name="id" maxlength="32" placeholder="e.g. 7k9m2p4x" required>
         <input type="submit" value="Retrieve File" class="btn">
     </form>
 </div>
 
-<!-- Navigation Links -->
+<!-- Quick Navigation -->
 <div class="card">
-    <h2 style="margin-top: 0;">Quick Navigation</h2>
-    <ul>
+    <h2 style="margin-top: 0; font-size: 0.95rem;">Navigation</h2>
+    <ul style="padding-left: 18px; margin-bottom: 0; font-size: 0.85rem;">
         <li><a href="/uploads/">Browse Public Files</a></li>
         <li><a href="/a">User Account & Collections</a></li>
-        <li><a href="/app">Native Apps (Symbian, Java ME, Windows)</a></li>
-        <li><a href="/?lite=0">Switch to Full Modern Interface</a></li>
+        <li><a href="/app">Native Apps & Downloads</a></li>
+        <li><a href="/tos">Terms of Service</a></li>
+        <li><a href="/privacy">Privacy Policy</a></li>
+        <li><a href="/?lite=0">Switch to Full Web Version</a></li>
     </ul>
 </div>
 {% endblock %}

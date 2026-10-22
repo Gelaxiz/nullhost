@@ -16,74 +16,81 @@
             width: 100%;
             min-height: 100%;
             background-color: #0c0d10 !important;
-            color: #d8dadf !important;
+            color: #d4d4d8 !important;
             font-family: Arial, Helvetica, sans-serif;
-            font-size: 15px;
-            line-height: 1.4;
+            font-size: 14px;
+            line-height: 1.45;
         }
         body {
             width: 100%;
-            max-width: 600px;
+            max-width: 580px;
             margin: 0 auto;
             padding: 10px 12px 32px;
             box-sizing: border-box;
             background-color: #0c0d10 !important;
         }
         a {
-            color: #38bdf8;
-            text-decoration: none;
+            color: #e4e4e7;
+            text-decoration: underline;
         }
         a:hover, a:focus {
+            color: #ffffff;
             text-decoration: underline;
-            color: #7dd3fc;
         }
         .nav-container, .content, .footer-links {
             width: 100%;
             box-sizing: border-box;
         }
         .nav {
-            border-bottom: 1px solid #262930;
-            padding-bottom: 10px;
-            margin-bottom: 14px;
+            border-bottom: 1px solid #27272a;
+            padding-bottom: 8px;
+            margin-bottom: 12px;
             display: block;
         }
         .nav-brand {
             font-weight: bold;
-            font-size: 16px;
+            font-size: 15px;
             color: #ffffff;
             margin-right: 12px;
-            letter-spacing: -0.02em;
+            text-decoration: none;
         }
         .nav-links {
             display: inline;
         }
         .nav-links a {
             margin-right: 8px;
-            color: #9ca3af;
+            color: #a1a1aa;
+            text-decoration: none;
         }
         .nav-links a:hover {
             color: #ffffff;
+            text-decoration: underline;
         }
         .footer-links {
-            border-top: 1px solid #262930;
-            margin-top: 24px;
-            padding-top: 12px;
-            font-size: 13px;
+            border-top: 1px solid #27272a;
+            margin-top: 20px;
+            padding-top: 10px;
+            font-size: 12px;
         }
         .footer-links a {
-            margin-right: 12px;
-            color: #9ca3af;
+            margin-right: 10px;
+            color: #a1a1aa;
+            text-decoration: none;
+        }
+        .footer-links a:hover {
+            color: #ffffff;
+            text-decoration: underline;
         }
         h1, h2, h3 {
-            margin: 14px 0 6px;
+            margin: 12px 0 6px;
             color: #ffffff;
             font-weight: 600;
         }
-        h1 { font-size: 20px; }
-        h2 { font-size: 16px; border-bottom: 1px solid #1f232b; padding-bottom: 4px; }
-        h3 { font-size: 14px; }
+        h1 { font-size: 18px; }
+        h2 { font-size: 15px; border-bottom: 1px solid #27272a; padding-bottom: 4px; }
+        h3 { font-size: 13px; }
         p, ul, ol {
-            margin: 8px 0;
+            margin: 6px 0;
         }
         ul, ol {
             padding-left: 20px;
@@ -93,8 +100,8 @@
         }
         hr {
             border: 0;
-            border-top: 1px solid #262930;
-            margin: 16px 0;
+            border-top: 1px solid #27272a;
+            margin: 14px 0;
         }
         table {
             border-collapse: collapse;
@@ -102,54 +109,59 @@
             margin: 10px 0;
         }
         th, td {
-            border: 1px solid #262930;
+            border: 1px solid #27272a;
             padding: 6px 8px;
             text-align: left;
             vertical-align: top;
         }
         th {
-            background-color: #17191e;
+            background-color: #18181b;
             color: #ffffff;
         }
         .card {
-            background: #14161b;
-            border: 1px solid #262930;
-            border-radius: 8px;
-            padding: 14px;
-            margin: 12px 0;
+            background: #141416;
+            border: 1px solid #27272a;
+            border-radius: 4px;
+            padding: 12px;
+            margin: 10px 0;
             box-sizing: border-box;
         }
         input, select, textarea, button {
             font: inherit;
             box-sizing: border-box;
         }
-        input[type="text"], input[type="password"], input[type="file"], select, textarea {
+        input[type="text"], input[type="password"], select, textarea {
             width: 100%;
-            background: #090a0d;
+            background: #09090b;
             color: #ffffff;
-            border: 1px solid #323742;
-            border-radius: 6px;
-            padding: 10px 12px;
-            margin: 4px 0 14px;
+            border: 1px solid #3f3f46;
+            border-radius: 4px;
+            padding: 8px 10px;
+            margin: 4px 0 12px;
             display: block;
-            min-height: 42px;
+            min-height: 38px;
         }
-        input[type="submit"], button.btn {
-            background: #00a6e2;
+        input[type="submit"], button.btn, .btn {
+            background: #27272a;
             color: #ffffff;
-            border: 1px solid #00a6e2;
-            border-radius: 6px;
-            padding: 12px 18px;
-            font-size: 16px;
-            font-weight: bold;
+            border: 1px solid #3f3f46;
+            border-radius: 4px;
+            padding: 10px 14px;
+            font-size: 14px;
+            font-weight: 600;
             cursor: pointer;
             display: block;
             width: 100%;
-            min-height: 46px;
+            min-height: 40px;
             text-align: center;
+            text-decoration: none;
+            box-sizing: border-box;
         }
-        input[type="submit"]:hover, button.btn:hover {
-            background: #008cc0;
+        input[type="submit"]:hover, button.btn:hover, .btn:hover {
+            background: #3f3f46;
+            border-color: #52525b;
+            color: #ffffff;
+            text-decoration: none;
         }
         .theme-toggle { display: none; }
     </style>
@@ -186,9 +198,13 @@
     -->
     <div class="nav-container">
         <div class="nav">
-            <span class="nav-brand">nullhost</span>
+            <span class="nav-brand">nullhost{% if legacy_mode %} lite{% endif %}</span>
             <div class="nav-links">
+                {% if legacy_mode %}
+                <a href="/">[home]</a>
+                {% else %}
                 <a href="/">[upload]</a>
+                {% endif %}
                 <a href="/uploads/">[public]</a>
                 <a href="/app">[apps]</a>
                 <a href="/a">[account]</a>
