@@ -163,9 +163,9 @@ The repository includes dedicated standalone client applications built specifica
 - **HMAC Handshake & Multipart Upload**: Secure HMAC-SHA256 authentication and direct upload engine.
 
 ### Windows Desktop Client
-- **System Tray & Explorer Integration**: Right-click any file in Windows Explorer and choose "Upload to Nullhost".
+- **Explorer Context Menu Integration**: Right-click any file in Windows Explorer and choose "Upload to Nullhost".
 - **Authentic Logo**: Official multi-resolution `logo.ico` embedded directly into the PE executable.
-- **Automatic Background Updates**: Lightweight background check alerts when new desktop releases are available.
+- **Direct Update Prompt**: Automatically checks for updates when opened or used to upload, downloading the newest version directly upon confirmation.
 - **Chunked Upload Engine**: Streams files larger than 95 MB in chunks to bypass proxy upload limits.
 
 ---

@@ -112,6 +112,22 @@ namespace NullhostClient
                 if (selectedFiles == null) return; // This Explorer helper joined the leading upload process.
                 if (selectedFiles.Count > 0)
                 {
+                    // Update check when the app is used (e.g. file upload)
+                    try {
+                        ClientUpdate update = CheckForUpdate(2500);
+                        if (update != null) {
+                            DialogResult dr = MessageBox.Show(
+                                "A newer version of Nullhost (" + update.Version + ") is available.\n\nWould you like to download and install the update now?",
+                                "Nullhost Update",
+                                MessageBoxButtons.YesNo,
+                                MessageBoxIcon.Information);
+                            if (dr == DialogResult.Yes) {
+                                DownloadAndInstallUpdate(update, args);
+                                return;
+                            }
+                        }
+                    } catch { }
+
                     UploadOptions opt = new UploadOptions() { FilePath = selectedFiles[0], FilePaths = selectedFiles.ToArray() };
                     opt.IsRawLink = rawInvocation;
                     opt.IsDownloadLink = downloadInvocation;
@@ -122,11 +138,7 @@ namespace NullhostClient
                         }
                     }
                     
-                    Application.Run(new TrayContext(opt));
-                }
-                else if (args.Length > 0 && args[0] == "-tray")
-                {
-                    Application.Run(new TrayContext(null));
+                    Application.Run(new UploadContext(opt));
                 }
                 else if (Array.IndexOf(args, "-upload") >= 0)
                 {
@@ -381,32 +393,37 @@ namespace NullhostClient
             t.Join();
         }
 
-        public static ClientUpdate CheckForUpdate()
+        public static ClientUpdate CheckForUpdate(int timeoutMs = 3000)
         {
-            HttpWebRequest request = CreateRequest(ServerUrl.TrimEnd(new char[] { '/' }) + "/api/client/update", 8000);
-            request.Method = "GET";
-            request.Headers[HttpRequestHeader.CacheControl] = "no-cache";
-            using (WebResponse response = request.GetResponse())
-            using (StreamReader reader = new StreamReader(response.GetResponseStream())) {
-                string json = reader.ReadToEnd();
-                Dictionary<string, object> manifest = new JavaScriptSerializer().Deserialize<Dictionary<string, object>>(json);
-                Version version;
-                string versionText = manifest.ContainsKey("version") ? Convert.ToString(manifest["version"]) : "";
-                string downloadUrl = manifest.ContainsKey("download_url") ? Convert.ToString(manifest["download_url"]) : "";
-                string sha256 = manifest.ContainsKey("sha256") ? Convert.ToString(manifest["sha256"]) : "";
-                Uri serverUri, downloadUri;
-                if (!Version.TryParse(versionText, out version) || version <= ClientVersion) return null;
-                if (!Uri.TryCreate(ServerUrl, UriKind.Absolute, out serverUri) ||
-                    !Uri.TryCreate(downloadUrl, UriKind.Absolute, out downloadUri) ||
-                    downloadUri.Scheme != Uri.UriSchemeHttps ||
-                    !string.Equals(serverUri.Host, downloadUri.Host, StringComparison.OrdinalIgnoreCase) ||
-                    !Regex.IsMatch(sha256 ?? "", "^[0-9a-fA-F]{64}$"))
-                    throw new InvalidDataException("The update manifest is not trusted.");
-                return new ClientUpdate { Version = version, DownloadUrl = downloadUrl, Sha256 = sha256.ToLowerInvariant() };
+            try {
+                HttpWebRequest request = CreateRequest(ServerUrl.TrimEnd(new char[] { '/' }) + "/api/client/update", timeoutMs);
+                request.Method = "GET";
+                request.Headers[HttpRequestHeader.CacheControl] = "no-cache";
+                using (WebResponse response = request.GetResponse())
+                using (StreamReader reader = new StreamReader(response.GetResponseStream())) {
+                    string json = reader.ReadToEnd();
+                    Dictionary<string, object> manifest = new JavaScriptSerializer().Deserialize<Dictionary<string, object>>(json);
+                    if (manifest == null) return null;
+                    Version version;
+                    string versionText = manifest.ContainsKey("version") ? Convert.ToString(manifest["version"]) : "";
+                    string downloadUrl = manifest.ContainsKey("download_url") ? Convert.ToString(manifest["download_url"]) : "";
+                    string sha256 = manifest.ContainsKey("sha256") ? Convert.ToString(manifest["sha256"]) : "";
+                    Uri serverUri, downloadUri;
+                    if (!Version.TryParse(versionText, out version) || version <= ClientVersion) return null;
+                    if (!Uri.TryCreate(ServerUrl, UriKind.Absolute, out serverUri) ||
+                        !Uri.TryCreate(downloadUrl, UriKind.Absolute, out downloadUri) ||
+                        (downloadUri.Scheme != Uri.UriSchemeHttps && !serverUri.IsLoopback) ||
+                        !string.Equals(serverUri.Host, downloadUri.Host, StringComparison.OrdinalIgnoreCase) ||
+                        !Regex.IsMatch(sha256 ?? "", "^[0-9a-fA-F]{64}$"))
+                        return null;
+                    return new ClientUpdate { Version = version, DownloadUrl = downloadUrl, Sha256 = sha256.ToLowerInvariant() };
+                }
+            } catch {
+                return null;
             }
         }
 
-        public static void DownloadAndInstallUpdate(ClientUpdate update)
+        public static void DownloadAndInstallUpdate(ClientUpdate update, string[] relaunchArgs = null)
         {
             string currentExe = Application.ExecutablePath;
             string downloadPath = Path.Combine(Path.GetTempPath(), "Nullhost-" + update.Version + ".exe.download");
@@ -426,16 +443,25 @@ namespace NullhostClient
             }
 
             string scriptPath = Path.Combine(Path.GetTempPath(), "nullhost-update-" + Guid.NewGuid().ToString("N") + ".cmd");
+            string launchArgsStr = "";
+            if (relaunchArgs != null && relaunchArgs.Length > 0) {
+                List<string> escaped = new List<string>();
+                foreach (string a in relaunchArgs) escaped.Add("\"" + a.Replace("\"", "\\\"") + "\"");
+                launchArgsStr = string.Join(" ", escaped.ToArray());
+            } else {
+                launchArgsStr = "-updated";
+            }
             string script = "@echo off\r\nsetlocal\r\n" +
                 "for /l %%i in (1,1,30) do (\r\n" +
                 "  move /y \"" + downloadPath + "\" \"" + currentExe + "\" >nul 2>&1 && goto launch\r\n" +
                 "  ping 127.0.0.1 -n 2 >nul\r\n" +
                 ")\r\nexit /b 1\r\n:launch\r\n" +
-                "start \"\" \"" + currentExe + "\" -updated\r\n" +
+                "start \"\" \"" + currentExe + "\" " + launchArgsStr + "\r\n" +
                 "del \"%~f0\"\r\n";
             File.WriteAllText(scriptPath, script, Encoding.ASCII);
             Process.Start(new ProcessStartInfo(scriptPath) { UseShellExecute = true, WindowStyle = ProcessWindowStyle.Hidden });
             Application.Exit();
+            Environment.Exit(0);
         }
 
         public static void DeleteUploadedItems(string[] itemIds, string collectionId)
@@ -696,9 +722,17 @@ namespace NullhostClient
                         if (userRequested) MessageBox.Show(this, "Nullhost is up to date.", "nullhost update", MessageBoxButtons.OK, MessageBoxIcon.Information);
                         return;
                     }
-                    if (MessageBox.Show(this, "Nullhost " + update.Version + " is available. Download, verify, and install it now?", "nullhost update", MessageBoxButtons.YesNo, MessageBoxIcon.Information) != DialogResult.Yes) return;
-                    try { Program.DownloadAndInstallUpdate(update); }
-                    catch (Exception ex) { MessageBox.Show(this, "Update failed: " + ex.Message, "nullhost update", MessageBoxButtons.OK, MessageBoxIcon.Error); }
+                    if (MessageBox.Show(this, "A newer version of Nullhost (" + update.Version + ") is available.\n\nWould you like to download and install the update now?", "Nullhost Update", MessageBoxButtons.YesNo, MessageBoxIcon.Information) != DialogResult.Yes) return;
+                    try {
+                        btnUpdate.Enabled = false;
+                        btnUpdate.Text = "Updating...";
+                        Program.DownloadAndInstallUpdate(update);
+                    }
+                    catch (Exception ex) {
+                        btnUpdate.Enabled = true;
+                        btnUpdate.Text = "Check for Updates";
+                        MessageBox.Show(this, "Update failed: " + ex.Message, "Nullhost Update", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    }
                 }));
             });
         }
@@ -881,7 +915,7 @@ namespace NullhostClient
         }
     }
     
-    public class TrayContext : Form
+    public class UploadContext : Form
     {
         private BackgroundWorker worker;
         private UploadOptions opt;
@@ -894,9 +928,8 @@ namespace NullhostClient
         
         private DateTime startTime;
         private NotificationForm progressForm;
-        private NotifyIcon trayIcon;
         
-        public TrayContext(UploadOptions uploadOptions)
+        public UploadContext(UploadOptions uploadOptions)
         {
             this.FormBorderStyle = FormBorderStyle.None;
             this.ShowInTaskbar = false;
@@ -908,51 +941,14 @@ namespace NullhostClient
             };
 
             opt = uploadOptions;
+            startTime = DateTime.Now;
             
-            if (opt == null) {
-                ContextMenu trayMenu = new ContextMenu();
-                trayMenu.MenuItems.Add("Check for Updates", new EventHandler((s, e) => { new SettingsForm().Show(); }));
-                trayMenu.MenuItems.Add("Settings", new EventHandler((s, e) => { new SettingsForm().Show(); }));
-                trayMenu.MenuItems.Add("-");
-                trayMenu.MenuItems.Add("Exit", new EventHandler((s, e) => { Environment.Exit(0); }));
-                
-                Icon appIcon = null;
-                try { appIcon = Icon.ExtractAssociatedIcon(Application.ExecutablePath); } catch { appIcon = SystemIcons.Application; }
-
-                trayIcon = new NotifyIcon() {
-                    Icon = appIcon,
-                    ContextMenu = trayMenu,
-                    Visible = true,
-                    Text = "nullhost background"
-                };
-
-                // Lightweight background update check
-                ThreadPool.QueueUserWorkItem(delegate {
-                    try {
-                        ClientUpdate update = Program.CheckForUpdate();
-                        if (update != null && trayIcon != null && trayIcon.Visible) {
-                            trayIcon.BalloonTipTitle = "nullhost update available";
-                            trayIcon.BalloonTipText = "A newer version of Nullhost (" + update.Version + ") is available. Click here to open settings and update.";
-                            trayIcon.BalloonTipIcon = ToolTipIcon.Info;
-                            trayIcon.BalloonTipClicked += (s, e) => {
-                                new SettingsForm().Show();
-                            };
-                            trayIcon.ShowBalloonTip(6000);
-                        }
-                    } catch { }
-                });
-            }
-            else 
-            {
-                startTime = DateTime.Now;
-                
-                worker = new BackgroundWorker();
-                worker.WorkerReportsProgress = true;
-                worker.DoWork += new DoWorkEventHandler(Worker_DoWork);
-                worker.ProgressChanged += new ProgressChangedEventHandler(Worker_ProgressChanged);
-                worker.RunWorkerCompleted += new RunWorkerCompletedEventHandler(Worker_RunWorkerCompleted);
-                worker.RunWorkerAsync();
-            }
+            worker = new BackgroundWorker();
+            worker.WorkerReportsProgress = true;
+            worker.DoWork += new DoWorkEventHandler(Worker_DoWork);
+            worker.ProgressChanged += new ProgressChangedEventHandler(Worker_ProgressChanged);
+            worker.RunWorkerCompleted += new RunWorkerCompletedEventHandler(Worker_RunWorkerCompleted);
+            worker.RunWorkerAsync();
         }
         
         private void Worker_DoWork(object sender, DoWorkEventArgs e)
