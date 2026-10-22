@@ -466,13 +466,18 @@ def mobile_public():
         ).fetchall()
     items = []
     for r in rows:
-        fname = r['filename'] or 'file'
+        fname = r['filename'] or ('paste.txt' if r['type'] == 'paste' else 'file')
         items.append({
             'id': r['id'],
             'filename': fname,
             'size': r['size'] or 0,
+            'type': r['type'],
+            'created_at': r['created_at'],
+            'expires_at': r['expires_at'],
             'url': url_for('overview', item_id=r['id'], _external=True),
-            'raw_url': url_for('raw', item_id=r['id'], filename=fname, _external=True)
+            'raw_url': url_for('raw', item_id=r['id'], filename=fname, _external=True),
+            'download_url': url_for('download', item_id=r['id'], filename=fname, _external=True),
+            'qr_url': url_for('item_qr', item_id=r['id'], _external=True) + '?size=5'
         })
     return jsonify({'status': 'ok', 'items': items})
 
@@ -502,14 +507,33 @@ def mobile_item_lookup(item_id):
         return jsonify({'status': 'error', 'message': 'Missing item ID'}), 400
     now = int(time.time())
     with get_db() as conn:
-        cur = conn.execute("SELECT * FROM items WHERE id = ?", (item_id,))
+        cur = conn.execute("SELECT * FROM items WHERE id = ? COLLATE NOCASE OR filename = ? COLLATE NOCASE", (item_id, item_id))
         item = cur.fetchone()
         if not item:
+            col = conn.execute("SELECT * FROM collections WHERE id = ? COLLATE NOCASE", (item_id,)).fetchone()
+            if col:
+                return jsonify({
+                    'status': 'ok',
+                    'id': col['id'],
+                    'filename': (col['name'] or col['id']) + '.zip',
+                    'size': 0,
+                    'type': 'collection',
+                    'views': 0,
+                    'expires_at': 9999999999,
+                    'has_password': bool(col['password_hash']),
+                    'burn_after_read': 0,
+                    'content': None,
+                    'url': url_for('collection_view', collection_id=col['id'], _external=True),
+                    'raw_url': url_for('collection_zip', collection_id=col['id'], _external=True),
+                    'download_url': url_for('collection_zip', collection_id=col['id'], _external=True),
+                    'qr_url': url_for('collection_qr', collection_id=col['id'], _external=True) + '?size=5'
+                })
             return jsonify({'status': 'error', 'message': 'Item not found'}), 404
         if item['expires_at'] <= now:
             return jsonify({'status': 'error', 'message': 'Item has expired'}), 410
         
         fname = item['filename'] or ('paste.txt' if item['type'] == 'paste' else 'file')
+        content_val = item['content'] if (item['type'] == 'paste' and not item['password_hash']) else None
         return jsonify({
             'status': 'ok',
             'id': item['id'],
@@ -520,9 +544,11 @@ def mobile_item_lookup(item_id):
             'expires_at': item['expires_at'],
             'has_password': bool(item['password_hash']),
             'burn_after_read': item['burn_after_read'] or 0,
+            'content': content_val,
             'url': url_for('overview', item_id=item['id'], _external=True),
             'raw_url': url_for('raw', item_id=item['id'], filename=fname, _external=True),
-            'qr_url': url_for('item_qr', item_id=item['id'], _external=True)
+            'download_url': url_for('download', item_id=item['id'], filename=fname, _external=True),
+            'qr_url': url_for('item_qr', item_id=item['id'], _external=True) + '?size=5'
         })
 
 @app.route('/api/client/update')
@@ -576,8 +602,8 @@ def public_uploads():
     return render_template(template, items=items)
 
 def calculate_expiry(expiry_raw, custom_days_raw, account_id, now):
-    expiry_str = str(expiry_raw or '86400')
-    if expiry_str == 'infinity':
+    expiry_str = str(expiry_raw or '86400').strip().lower()
+    if expiry_str in ('infinity', 'never'):
         expiry_val = 9999999999
     elif expiry_str == 'custom':
         try:
@@ -585,13 +611,34 @@ def calculate_expiry(expiry_raw, custom_days_raw, account_id, now):
         except (ValueError, TypeError):
             custom_days = 1
         expiry_val = custom_days * 86400
+    elif expiry_str.endswith('h'):
+        try:
+            expiry_val = int(expiry_str[:-1]) * 3600
+        except (ValueError, TypeError):
+            expiry_val = 86400
+    elif expiry_str.endswith('d'):
+        try:
+            expiry_val = int(expiry_str[:-1]) * 86400
+        except (ValueError, TypeError):
+            expiry_val = 86400
     else:
         try:
             expiry_val = int(expiry_str)
         except (ValueError, TypeError):
             expiry_val = 86400
 
-    if not account_id:
+    # Retention over 24 hours (86400s) is strictly restricted to valid registered accounts
+    valid_account = False
+    if account_id:
+        try:
+            with get_db() as conn:
+                acc = conn.execute("SELECT 1 FROM accounts WHERE account_id = ?", (account_id,)).fetchone()
+                if acc:
+                    valid_account = True
+        except Exception:
+            valid_account = False
+
+    if not valid_account:
         if expiry_val > 86400:
             expiry_val = 86400
     else:
@@ -656,8 +703,15 @@ def upload():
             session['verified_upload_batch'] = {'id': batch_id, 'verified_at': int(time.time()), 'uses_left': 999}
             session.modified = True
 
-    # Determine if logged in
-    account_id = session.get('account_id')
+    # Determine if logged in (session, desktop token, or verified mobile header/form)
+    account_id = (session.get('account_id') or request.headers.get('X-Nullhost-Account', '').strip() or request.form.get('account_id', '').strip()) or None
+    if account_id:
+        try:
+            with get_db() as conn:
+                if not conn.execute("SELECT 1 FROM accounts WHERE account_id = ?", (account_id,)).fetchone():
+                    account_id = None
+        except Exception:
+            account_id = None
     now = int(time.time())
     
     item_id, err = get_or_generate_item_id(request.form.get('custom_id'), request.form.get('url_format'), now)
@@ -713,8 +767,8 @@ def upload():
             ''', (item_id, 'file', account_id, filename, p_hash, burn, is_public, expires_at, dynamic_expiry, 0, size, file.mimetype, now))
             conn.commit()
             
-    elif request.form.get('paste_content'):
-        content = request.form.get('paste_content')
+    elif request.form.get('paste_content') or request.form.get('text'):
+        content = request.form.get('paste_content') or request.form.get('text')
         size = len(content.encode('utf-8'))
         
         with get_db() as conn:
@@ -760,7 +814,7 @@ def upload():
             "url": url_for('overview', item_id=item_id, _external=is_external),
             "raw_url": url_for('raw', item_id=item_id, filename=actual_fname, _external=is_external) if 'file' in request.files else url_for('raw', item_id=item_id, _external=is_external),
             "download_url": dl_path if not is_external else url_for('download', item_id=item_id, filename=actual_fname, _external=True),
-            "qr_url": url_for('item_qr', item_id=item_id, _external=True),
+            "qr_url": (url_for('item_qr', item_id=item_id, _external=True) + '?size=5') if is_verified_mobile else url_for('item_qr', item_id=item_id, _external=True),
             "delete_url": url_for('delete_item', item_id=item_id, _external=True),
             "filename": actual_fname,
             "size": size if 'size' in locals() else None,
@@ -809,7 +863,14 @@ def upload_init():
     if total_chunks < 1 or total_chunks > 10000:
         return "error: invalid chunk range", 400
 
-    account_id = session.get('account_id')
+    account_id = (session.get('account_id') or request.headers.get('X-Nullhost-Account', '').strip() or request.form.get('account_id', '').strip()) or None
+    if account_id:
+        try:
+            with get_db() as conn:
+                if not conn.execute("SELECT 1 FROM accounts WHERE account_id = ?", (account_id,)).fetchone():
+                    account_id = None
+        except Exception:
+            account_id = None
     now = int(time.time())
 
     collection_id = request.form.get('collection_id', '').strip()
@@ -1704,7 +1765,23 @@ def download_collection_zip(collection_id):
     return send_file(temp_path, as_attachment=True, download_name=f'{download_name}.zip')
 
 def qr_response(target_url):
-    image = qrcode.make(target_url)
+    box_size = None
+    size_param = request.args.get('size')
+    if size_param:
+        try:
+            box_size = max(1, min(20, int(size_param)))
+        except (ValueError, TypeError):
+            box_size = None
+    if box_size is None and (is_legacy_browser() or 'nullhost-j2me' in request.headers.get('User-Agent', '').lower() or 'nullhost-symbian' in request.headers.get('User-Agent', '').lower()):
+        box_size = 5
+
+    if box_size:
+        qr = qrcode.QRCode(box_size=box_size, border=2)
+        qr.add_data(target_url)
+        qr.make(fit=True)
+        image = qr.make_image(fill_color="black", back_color="white")
+    else:
+        image = qrcode.make(target_url)
     buffer = io.BytesIO()
     image.save(buffer, format='PNG')
     buffer.seek(0)

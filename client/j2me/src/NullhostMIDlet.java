@@ -17,13 +17,13 @@ import javax.microedition.io.file.FileSystemRegistry;
 /**
  * Nullhost Universal Java ME (MIDP 2.0 / CLDC 1.1 / JSR-75) Client.
  * Complete mobile client with native touch buttons, background photo scanner,
- * in-app code search, server file deletion, and live QR code display.
+ * in-app code search, server file deletion, text file/paste viewer, and live QR code display.
  * Pure Java 1.4 (Major version 48) - 100% Dependency-Free.
  * Copyright (c) 2026 Gelaxiz. All rights reserved.
  */
 public class NullhostMIDlet extends MIDlet implements CommandListener, ItemCommandListener {
 
-    private static final String APP_VERSION = "1.5.0";
+    private static final String APP_VERSION = "1.6.0";
     private static final String CLIENT_ID = "j2me-universal";
     private static final String MOBILE_SECRET = "nullhost_secret_mobile_app_key_2026";
     private static final String DEFAULT_SERVER = "http://nullhost.gelaxiz.xyz";
@@ -40,7 +40,7 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
     private String customPassword = "";
     private String customSlug = "";
 
-    private static final String[] EXPIRY_LABELS = {"1 Hour", "24 Hours Default", "7 Days", "30 Days", "Never Expire"};
+    private static final String[] EXPIRY_LABELS = {"1 Hour", "24 Hours (Default)", "7 Days (Account)", "30 Days (Account)", "Never Expire (Account)"};
     private static final String[] EXPIRY_VALS = {"1h", "24h", "7d", "30d", "never"};
 
     private static final String[] BURN_LABELS = {"Disabled", "1 View", "5 Views", "10 Views"};
@@ -111,12 +111,16 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
         public String id = "";
         public String filename = "";
         public long size = 0;
+        public String type = "file";
         public String url = "";
         public String rawUrl = "";
+        public String downloadUrl = "";
         public String qrUrl = "";
         public String deleteUrl = "";
         public String expiry = "24 Hours";
+        public long expiresAt = 0;
         public String burn = "Disabled";
+        public String content = null;
         public Image qrImage = null;
     }
 
@@ -301,7 +305,7 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
     // ------------------------------------------------------------------------
     private void openFindByCodeForm() {
         findForm = new Form("Find File by Code");
-        findCodeField = new TextField("Enter Item Code or Slug:", "", 32, TextField.ANY);
+        findCodeField = new TextField("Enter Item Code or URL:", "", 64, TextField.ANY);
         findForm.append(findCodeField);
         findForm.addCommand(cmdDoSearch);
         findForm.addCommand(cmdBack);
@@ -310,14 +314,41 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
     }
 
     private void executeSearchByCode() {
-        final String code = findCodeField.getString().trim();
-        if (code.length() == 0) {
-            showAlert("Input Required", "Please enter an 8-character item code or custom link.", AlertType.WARNING, findForm);
+        String rawInput = findCodeField.getString().trim();
+        if (rawInput.length() == 0) {
+            showAlert("Input Required", "Please enter an item code or link.", AlertType.WARNING, findForm);
             return;
         }
 
+        // Clean user input: strip any full URL, path prefix, or query params
+        String code = rawInput;
+        int vIdx = code.indexOf("/v/");
+        if (vIdx != -1) {
+            code = code.substring(vIdx + 3);
+        } else {
+            int rawIdx = code.indexOf("/raw/");
+            if (rawIdx != -1) {
+                code = code.substring(rawIdx + 5);
+            }
+        }
+        int slashIdx = code.lastIndexOf('/');
+        if (slashIdx != -1) {
+            code = code.substring(slashIdx + 1);
+        }
+        int qIdx = code.indexOf('?');
+        if (qIdx != -1) {
+            code = code.substring(0, qIdx);
+        }
+        code = code.trim();
+
+        if (code.length() == 0) {
+            showAlert("Invalid Code", "Please enter a valid item code.", AlertType.WARNING, findForm);
+            return;
+        }
+
+        final String cleanCode = code;
         final Form searchingForm = new Form("Searching");
-        searchingForm.append(new StringItem("Status:", "Looking up " + code + " on server..."));
+        searchingForm.append(new StringItem("Status:", "Looking up " + cleanCode + " on server..."));
         searchingForm.append(new Gauge(null, false, Gauge.INDEFINITE, Gauge.CONTINUOUS_RUNNING));
         display.setCurrent(searchingForm);
 
@@ -326,22 +357,42 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
                 try {
                     String base = serverUrl.trim();
                     if (base.endsWith("/")) base = base.substring(0, base.length() - 1);
-                    String lookupUrl = base + "/api/mobile/item/" + code;
+                    String lookupUrl = base + "/api/mobile/item/" + cleanCode;
 
-                    HttpConnection conn = (HttpConnection) Connector.open(lookupUrl, Connector.READ);
-                    conn.setRequestProperty("User-Agent", "Nullhost-J2ME/1.0");
-                    int respCode = conn.getResponseCode();
-
-                    if (respCode == 404 || respCode == 410) {
-                        conn.close();
-                        showAlert("Not Found", "No active file found matching code: " + code, AlertType.INFO, findForm);
-                        return;
-                    }
-
-                    if (respCode != 200) {
-                        conn.close();
-                        showAlert("Search Error", "Server returned HTTP " + respCode, AlertType.ERROR, findForm);
-                        return;
+                    HttpConnection conn = null;
+                    try {
+                        conn = (HttpConnection) Connector.open(lookupUrl, Connector.READ);
+                        conn.setRequestProperty("User-Agent", "Nullhost-J2ME/1.0");
+                        int respCode = conn.getResponseCode();
+                        if (respCode == 404 || respCode == 410) {
+                            conn.close();
+                            showAlert("Not Found", "No active item found matching code: " + cleanCode, AlertType.INFO, findForm);
+                            return;
+                        }
+                        if (respCode != 200) {
+                            conn.close();
+                            showAlert("Search Error", "Server returned HTTP " + respCode, AlertType.ERROR, findForm);
+                            return;
+                        }
+                    } catch (Exception ex) {
+                        if (lookupUrl.startsWith("https://")) {
+                            String httpUrl = "http://" + lookupUrl.substring(8);
+                            conn = (HttpConnection) Connector.open(httpUrl, Connector.READ);
+                            conn.setRequestProperty("User-Agent", "Nullhost-J2ME/1.0");
+                            int respCode = conn.getResponseCode();
+                            if (respCode == 404 || respCode == 410) {
+                                conn.close();
+                                showAlert("Not Found", "No active item found matching code: " + cleanCode, AlertType.INFO, findForm);
+                                return;
+                            }
+                            if (respCode != 200) {
+                                conn.close();
+                                showAlert("Search Error", "Server returned HTTP " + respCode, AlertType.ERROR, findForm);
+                                return;
+                            }
+                        } else {
+                            throw ex;
+                        }
                     }
 
                     InputStream is = conn.openInputStream();
@@ -358,14 +409,22 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
                     UploadRecord rec = new UploadRecord();
                     rec.id = extractJsonField(json, "id");
                     rec.filename = extractJsonField(json, "filename");
+                    rec.type = extractJsonField(json, "type");
                     String sizeStr = extractJsonField(json, "size");
                     if (sizeStr != null) {
                         try { rec.size = Long.parseLong(sizeStr); } catch (Exception ex) {}
                     }
+                    String expStr = extractJsonField(json, "expires_at");
+                    if (expStr != null) {
+                        try { rec.expiresAt = Long.parseLong(expStr); } catch (Exception ex) {}
+                    }
                     rec.url = extractJsonField(json, "url");
                     rec.rawUrl = extractJsonField(json, "raw_url");
+                    rec.downloadUrl = extractJsonField(json, "download_url");
                     rec.qrUrl = extractJsonField(json, "qr_url");
-                    if (rec.qrUrl == null && rec.url != null) rec.qrUrl = rec.url + "/qr.png";
+                    if (rec.qrUrl == null && rec.url != null) rec.qrUrl = rec.url + "/qr.png?size=5";
+                    rec.content = extractJsonField(json, "content");
+                    rec.expiry = formatRetentionDisplay(null, rec.expiresAt);
 
                     showItemDetails(rec, findForm, false);
                 } catch (Exception e) {
@@ -603,14 +662,30 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
                     if (base.endsWith("/")) base = base.substring(0, base.length() - 1);
                     String url = base + "/api/mobile/public";
 
-                    HttpConnection conn = (HttpConnection) Connector.open(url, Connector.READ);
-                    conn.setRequestProperty("User-Agent", "Nullhost-J2ME/1.0");
-                    int code = conn.getResponseCode();
-
-                    if (code != 200) {
-                        conn.close();
-                        showAlert("Public Files", "Server error HTTP " + code, AlertType.ERROR, mainForm);
-                        return;
+                    HttpConnection conn = null;
+                    try {
+                        conn = (HttpConnection) Connector.open(url, Connector.READ);
+                        conn.setRequestProperty("User-Agent", "Nullhost-J2ME/1.0");
+                        int code = conn.getResponseCode();
+                        if (code != 200) {
+                            conn.close();
+                            showAlert("Public Files", "Server error HTTP " + code, AlertType.ERROR, mainForm);
+                            return;
+                        }
+                    } catch (Exception ex) {
+                        if (url.startsWith("https://")) {
+                            String httpUrl = "http://" + url.substring(8);
+                            conn = (HttpConnection) Connector.open(httpUrl, Connector.READ);
+                            conn.setRequestProperty("User-Agent", "Nullhost-J2ME/1.0");
+                            int code = conn.getResponseCode();
+                            if (code != 200) {
+                                conn.close();
+                                showAlert("Public Files", "Server error HTTP " + code, AlertType.ERROR, mainForm);
+                                return;
+                            }
+                        } else {
+                            throw ex;
+                        }
                     }
 
                     InputStream is = conn.openInputStream();
@@ -695,13 +770,14 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
     }
 
     // ------------------------------------------------------------------------
-    // ITEM DETAILS SCREEN (WITH LIVE QR CODE & DELETE BUTTON)
+    // ITEM DETAILS SCREEN (WITH DOWNLOAD BUTTON & TEXT VIEWER, NO CHECKMARK)
     // ------------------------------------------------------------------------
     private void showItemDetails(final UploadRecord rec, final Displayable backTarget, final boolean isMyUpload) {
         final Form f = new Form("File Details");
 
+        // QR Code centered without label offset
         if (rec.qrImage != null) {
-            f.append(new ImageItem("Scan QR Code:", rec.qrImage, Item.LAYOUT_CENTER, "QR Code"));
+            f.append(new ImageItem(null, rec.qrImage, Item.LAYOUT_CENTER | Item.LAYOUT_NEWLINE_BEFORE | Item.LAYOUT_NEWLINE_AFTER, "QR Code"));
         }
 
         f.append(new StringItem("File Name:", rec.filename));
@@ -712,7 +788,7 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
         if (rec.expiry != null && rec.expiry.length() > 0) {
             f.append(new StringItem("Retention:", rec.expiry));
         }
-        if (rec.burn != null && rec.burn.length() > 0) {
+        if (rec.burn != null && rec.burn.length() > 0 && !rec.burn.equals("Disabled")) {
             f.append(new StringItem("Burn Limit:", rec.burn));
         }
         if (rec.url != null && rec.url.length() > 0) {
@@ -722,7 +798,50 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
             f.append(new StringItem("Raw URL:", rec.rawUrl));
         }
 
-        // Add Delete Button if viewing an item from My Uploads
+        f.append(new Spacer(10, 6));
+
+        // 1. Prominent Download Button (triggers native Symbian download manager)
+        StringItem btnDownload = new StringItem(null, "Download File", Item.BUTTON);
+        btnDownload.setLayout(Item.LAYOUT_EXPAND | Item.LAYOUT_NEWLINE_AFTER);
+        btnDownload.setDefaultCommand(cmdItemAction);
+        btnDownload.setItemCommandListener(new ItemCommandListener() {
+            public void commandAction(Command c, Item item) {
+                triggerFileDownload(rec, f);
+            }
+        });
+        f.append(btnDownload);
+
+        // 2. View Text Content Button (for text files & pastes)
+        if (isTextItem(rec)) {
+            StringItem btnViewText = new StringItem(null, "View Text Content", Item.BUTTON);
+            btnViewText.setLayout(Item.LAYOUT_EXPAND | Item.LAYOUT_NEWLINE_AFTER);
+            btnViewText.setDefaultCommand(cmdItemAction);
+            btnViewText.setItemCommandListener(new ItemCommandListener() {
+                public void commandAction(Command c, Item item) {
+                    openTextContent(rec, f);
+                }
+            });
+            f.append(btnViewText);
+        }
+
+        // 3. Open in Browser Button
+        StringItem btnOpenBrowser = new StringItem(null, "Open in Browser", Item.BUTTON);
+        btnOpenBrowser.setLayout(Item.LAYOUT_EXPAND | Item.LAYOUT_NEWLINE_AFTER);
+        btnOpenBrowser.setDefaultCommand(cmdItemAction);
+        btnOpenBrowser.setItemCommandListener(new ItemCommandListener() {
+            public void commandAction(Command c, Item item) {
+                if (rec.url != null && rec.url.length() > 0) {
+                    try {
+                        platformRequest(rec.url);
+                    } catch (Exception ex) {
+                        showAlert("Browser Error", "Could not open browser: " + ex.getMessage(), AlertType.ERROR, f);
+                    }
+                }
+            }
+        });
+        f.append(btnOpenBrowser);
+
+        // 4. Delete Button if viewing an item from My Uploads
         if (isMyUpload) {
             StringItem btnDel = new StringItem(null, "Delete File", Item.BUTTON);
             btnDel.setLayout(Item.LAYOUT_EXPAND | Item.LAYOUT_NEWLINE_AFTER);
@@ -735,17 +854,24 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
             f.append(btnDel);
         }
 
-        final Command cmdOpen = new Command("Open in Browser", Command.OK, 1);
-        final Command cmdDetailsBack = new Command("Back", Command.BACK, 2);
-        final Command cmdDelMenu = isMyUpload ? new Command("Delete File", Command.SCREEN, 3) : null;
+        // Softkeys: Back and Options (NO Command.OK -> NO green checkmark on Belle FP2!)
+        final Command cmdDetailsBack = new Command("Back", Command.BACK, 1);
+        final Command cmdDownloadMenu = new Command("Download File", Command.SCREEN, 2);
+        final Command cmdOpenMenu = new Command("Open in Browser", Command.SCREEN, 3);
+        final Command cmdDelMenu = isMyUpload ? new Command("Delete File", Command.SCREEN, 4) : null;
 
-        f.addCommand(cmdOpen);
         f.addCommand(cmdDetailsBack);
+        f.addCommand(cmdDownloadMenu);
+        f.addCommand(cmdOpenMenu);
         if (cmdDelMenu != null) f.addCommand(cmdDelMenu);
 
         f.setCommandListener(new CommandListener() {
             public void commandAction(Command c, Displayable d) {
-                if (c == cmdOpen) {
+                if (c == cmdDetailsBack) {
+                    display.setCurrent(backTarget);
+                } else if (c == cmdDownloadMenu) {
+                    triggerFileDownload(rec, f);
+                } else if (c == cmdOpenMenu) {
                     if (rec.url != null && rec.url.length() > 0) {
                         try {
                             platformRequest(rec.url);
@@ -753,8 +879,6 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
                             showAlert("Browser Error", "Could not open browser: " + ex.getMessage(), AlertType.ERROR, f);
                         }
                     }
-                } else if (c == cmdDetailsBack) {
-                    display.setCurrent(backTarget);
                 } else if (c == cmdDelMenu) {
                     deleteUploadedItem(rec);
                 }
@@ -766,16 +890,31 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
             Thread qrThread = new Thread(new Runnable() {
                 public void run() {
                     try {
-                        HttpConnection conn = (HttpConnection) Connector.open(rec.qrUrl, Connector.READ);
-                        conn.setRequestProperty("User-Agent", "Nullhost-J2ME/1.0");
-                        if (conn.getResponseCode() == 200) {
-                            InputStream is = conn.openInputStream();
-                            rec.qrImage = Image.createImage(is);
-                            is.close();
+                        HttpConnection conn = null;
+                        try {
+                            conn = (HttpConnection) Connector.open(rec.qrUrl, Connector.READ);
+                            conn.setRequestProperty("User-Agent", "Nullhost-J2ME/1.0");
+                            if (conn.getResponseCode() == 200) {
+                                InputStream is = conn.openInputStream();
+                                rec.qrImage = Image.createImage(is);
+                                is.close();
+                            }
                             conn.close();
+                        } catch (Exception ex) {
+                            if (rec.qrUrl.startsWith("https://")) {
+                                String httpUrl = "http://" + rec.qrUrl.substring(8);
+                                conn = (HttpConnection) Connector.open(httpUrl, Connector.READ);
+                                conn.setRequestProperty("User-Agent", "Nullhost-J2ME/1.0");
+                                if (conn.getResponseCode() == 200) {
+                                    InputStream is = conn.openInputStream();
+                                    rec.qrImage = Image.createImage(is);
+                                    is.close();
+                                }
+                                conn.close();
+                            }
+                        }
+                        if (rec.qrImage != null) {
                             showItemDetails(rec, backTarget, isMyUpload);
-                        } else {
-                            conn.close();
                         }
                     } catch (Exception ex) {}
                 }
@@ -784,6 +923,116 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
         }
 
         display.setCurrent(f);
+    }
+
+    private void triggerFileDownload(UploadRecord rec, Form parentForm) {
+        String target = (rec.downloadUrl != null && rec.downloadUrl.length() > 0) ? rec.downloadUrl :
+                       ((rec.rawUrl != null && rec.rawUrl.length() > 0) ? rec.rawUrl : rec.url);
+        if (target != null && target.length() > 0) {
+            try {
+                platformRequest(target);
+            } catch (Exception ex) {
+                showAlert("Download Error", "Could not start download: " + ex.getMessage(), AlertType.ERROR, parentForm);
+            }
+        }
+    }
+
+    private void openTextContent(final UploadRecord rec, final Form parentForm) {
+        if (rec.content != null && rec.content.length() > 0) {
+            showTextBoxViewer(rec.filename, rec.content, parentForm);
+            return;
+        }
+
+        final Form loadForm = new Form("Loading Text");
+        loadForm.append(new StringItem("Status:", "Fetching text content..."));
+        loadForm.append(new Gauge(null, false, Gauge.INDEFINITE, Gauge.CONTINUOUS_RUNNING));
+        display.setCurrent(loadForm);
+
+        Thread t = new Thread(new Runnable() {
+            public void run() {
+                try {
+                    String fetchUrl = (rec.rawUrl != null && rec.rawUrl.length() > 0) ? rec.rawUrl : rec.downloadUrl;
+                    if (fetchUrl == null || fetchUrl.length() == 0) {
+                        showAlert("Error", "No text URL available.", AlertType.ERROR, parentForm);
+                        return;
+                    }
+
+                    HttpConnection conn = null;
+                    try {
+                        conn = (HttpConnection) Connector.open(fetchUrl, Connector.READ);
+                        conn.setRequestProperty("User-Agent", "Nullhost-J2ME/1.0");
+                        int respCode = conn.getResponseCode();
+                        if (respCode != 200) {
+                            conn.close();
+                            showAlert("Error", "Server returned HTTP " + respCode, AlertType.ERROR, parentForm);
+                            return;
+                        }
+                    } catch (Exception ex) {
+                        if (fetchUrl.startsWith("https://")) {
+                            String httpUrl = "http://" + fetchUrl.substring(8);
+                            conn = (HttpConnection) Connector.open(httpUrl, Connector.READ);
+                            conn.setRequestProperty("User-Agent", "Nullhost-J2ME/1.0");
+                            int respCode = conn.getResponseCode();
+                            if (respCode != 200) {
+                                conn.close();
+                                showAlert("Error", "Server returned HTTP " + respCode, AlertType.ERROR, parentForm);
+                                return;
+                            }
+                        } else {
+                            throw ex;
+                        }
+                    }
+
+                    InputStream is = conn.openInputStream();
+                    ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                    byte[] buf = new byte[512];
+                    int len;
+                    int total = 0;
+                    while ((len = is.read(buf)) != -1) {
+                        baos.write(buf, 0, len);
+                        total += len;
+                        if (total > 65536) break; // 64 KB safety limit for vintage mobile RAM
+                    }
+                    is.close();
+                    conn.close();
+
+                    String text = new String(baos.toByteArray(), "UTF-8");
+                    rec.content = text;
+                    showTextBoxViewer(rec.filename, text, parentForm);
+                } catch (Exception e) {
+                    showAlert("Error", "Could not load text: " + e.getMessage(), AlertType.ERROR, parentForm);
+                }
+            }
+        });
+        t.start();
+    }
+
+    private void showTextBoxViewer(String title, String text, final Displayable backTarget) {
+        int maxChars = text.length() > 2048 ? text.length() + 1024 : 2048;
+        TextBox tb = new TextBox(title != null ? title : "Text Viewer", text, maxChars, TextField.ANY);
+        final Command cmdTbBack = new Command("Back", Command.BACK, 1);
+        tb.addCommand(cmdTbBack);
+        tb.setCommandListener(new CommandListener() {
+            public void commandAction(Command c, Displayable d) {
+                if (c == cmdTbBack) {
+                    display.setCurrent(backTarget);
+                }
+            }
+        });
+        display.setCurrent(tb);
+    }
+
+    private static boolean isTextItem(UploadRecord rec) {
+        if (rec == null) return false;
+        if (rec.type != null && rec.type.equalsIgnoreCase("paste")) return true;
+        String fn = rec.filename != null ? rec.filename.toLowerCase() : "";
+        if (fn.equals("paste.txt")) return true;
+        return fn.endsWith(".txt") || fn.endsWith(".log") || fn.endsWith(".py") ||
+               fn.endsWith(".java") || fn.endsWith(".c") || fn.endsWith(".cpp") ||
+               fn.endsWith(".h") || fn.endsWith(".html") || fn.endsWith(".htm") ||
+               fn.endsWith(".css") || fn.endsWith(".js") || fn.endsWith(".json") ||
+               fn.endsWith(".xml") || fn.endsWith(".md") || fn.endsWith(".ini") ||
+               fn.endsWith(".conf") || fn.endsWith(".sh");
     }
 
     // ------------------------------------------------------------------------
@@ -802,23 +1051,41 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
                     if (base.endsWith("/")) base = base.substring(0, base.length() - 1);
                     String delTarget = base + "/api/mobile/delete";
 
-                    HttpConnection conn = (HttpConnection) Connector.open(delTarget, Connector.READ_WRITE);
-                    conn.setRequestMethod(HttpConnection.POST);
-                    conn.setRequestProperty("User-Agent", "Nullhost-J2ME/1.0");
-                    conn.setRequestProperty("Content-Type", "application/x-www-form-urlencoded");
-                    if (accountId.length() > 0) {
-                        conn.setRequestProperty("X-Nullhost-Account", accountId);
-                    }
-
+                    HttpConnection conn = null;
                     String postData = "id=" + rec.id;
                     if (accountId.length() > 0) {
                         postData += "&account_id=" + accountId;
                     }
 
-                    OutputStream os = conn.openOutputStream();
-                    os.write(postData.getBytes("UTF-8"));
-                    os.flush();
-                    os.close();
+                    try {
+                        conn = (HttpConnection) Connector.open(delTarget, Connector.READ_WRITE);
+                        conn.setRequestMethod(HttpConnection.POST);
+                        conn.setRequestProperty("User-Agent", "Nullhost-J2ME/1.0");
+                        conn.setRequestProperty("Content-Type", "application/x-www-form-urlencoded");
+                        if (accountId.length() > 0) {
+                            conn.setRequestProperty("X-Nullhost-Account", accountId);
+                        }
+                        OutputStream os = conn.openOutputStream();
+                        os.write(postData.getBytes("UTF-8"));
+                        os.flush();
+                        os.close();
+                    } catch (Exception ex) {
+                        if (delTarget.startsWith("https://")) {
+                            conn = (HttpConnection) Connector.open("http://" + delTarget.substring(8), Connector.READ_WRITE);
+                            conn.setRequestMethod(HttpConnection.POST);
+                            conn.setRequestProperty("User-Agent", "Nullhost-J2ME/1.0");
+                            conn.setRequestProperty("Content-Type", "application/x-www-form-urlencoded");
+                            if (accountId.length() > 0) {
+                                conn.setRequestProperty("X-Nullhost-Account", accountId);
+                            }
+                            OutputStream os = conn.openOutputStream();
+                            os.write(postData.getBytes("UTF-8"));
+                            os.flush();
+                            os.close();
+                        } else {
+                            throw ex;
+                        }
+                    }
 
                     int code = conn.getResponseCode();
                     conn.close();
@@ -845,6 +1112,11 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
         if (selectedFilePath == null) {
             showAlert("No File Selected", "Please choose a photo or file first.", AlertType.WARNING, mainForm);
             return;
+        }
+
+        // Enforce 24-hour limit for non-account users
+        if (expiryIndex >= 2 && accountId.length() == 0) {
+            expiryIndex = 1; // Fallback to 24h
         }
 
         final Form progressForm = new Form("Uploading File");
@@ -895,14 +1167,29 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
         if (record != null && record.qrUrl != null && record.qrUrl.length() > 0) {
             statusText.setText("Generating QR code image...");
             try {
-                HttpConnection qrConn = (HttpConnection) Connector.open(record.qrUrl, Connector.READ);
-                qrConn.setRequestProperty("User-Agent", "Nullhost-J2ME/1.0");
-                if (qrConn.getResponseCode() == 200) {
-                    InputStream qris = qrConn.openInputStream();
-                    record.qrImage = Image.createImage(qris);
-                    qris.close();
+                HttpConnection qrConn = null;
+                try {
+                    qrConn = (HttpConnection) Connector.open(record.qrUrl, Connector.READ);
+                    qrConn.setRequestProperty("User-Agent", "Nullhost-J2ME/1.0");
+                    if (qrConn.getResponseCode() == 200) {
+                        InputStream qris = qrConn.openInputStream();
+                        record.qrImage = Image.createImage(qris);
+                        qris.close();
+                    }
+                    qrConn.close();
+                } catch (Exception ex) {
+                    if (record.qrUrl.startsWith("https://")) {
+                        String httpUrl = "http://" + record.qrUrl.substring(8);
+                        qrConn = (HttpConnection) Connector.open(httpUrl, Connector.READ);
+                        qrConn.setRequestProperty("User-Agent", "Nullhost-J2ME/1.0");
+                        if (qrConn.getResponseCode() == 200) {
+                            InputStream qris = qrConn.openInputStream();
+                            record.qrImage = Image.createImage(qris);
+                            qris.close();
+                        }
+                        qrConn.close();
+                    }
                 }
-                qrConn.close();
             } catch (Exception ex) {}
         }
 
@@ -999,16 +1286,23 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
                 record.size = selectedFileSize;
             }
 
+            String expStr = extractJsonField(respStr, "expires_at");
+            if (expStr != null) {
+                try { record.expiresAt = Long.parseLong(expStr); } catch (Exception e) {}
+            }
+
             record.url = extractJsonField(respStr, "url");
             record.rawUrl = extractJsonField(respStr, "raw_url");
+            record.downloadUrl = extractJsonField(respStr, "download_url");
             record.qrUrl = extractJsonField(respStr, "qr_url");
             record.deleteUrl = extractJsonField(respStr, "delete_url");
-            record.expiry = EXPIRY_LABELS[expiryIndex];
+            record.expiry = formatRetentionDisplay(EXPIRY_LABELS[expiryIndex], record.expiresAt);
             record.burn = BURN_LABELS[burnIndex];
 
             if (record.url == null) record.url = targetUrl;
             if (record.rawUrl == null) record.rawUrl = record.url;
-            if (record.qrUrl == null && record.url != null) record.qrUrl = record.url + "/qr.png";
+            if (record.downloadUrl == null) record.downloadUrl = record.rawUrl;
+            if (record.qrUrl == null && record.url != null) record.qrUrl = record.url + "/qr.png?size=5";
 
             myUploads.insertElementAt(record, 0);
             return record;
@@ -1024,13 +1318,13 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
     }
 
     // ------------------------------------------------------------------------
-    // UPLOAD SUCCESS SCREEN (DETAILED INFO & PROMINENT QR CODE)
+    // UPLOAD SUCCESS SCREEN (PROMINENT QR CODE & DOWNLOAD BUTTON, NO CHECKMARK)
     // ------------------------------------------------------------------------
     private void showSuccessScreen(final UploadRecord record) {
         final Form successForm = new Form("Upload Successful");
 
         if (record.qrImage != null) {
-            successForm.append(new ImageItem("Scan QR Code:", record.qrImage, Item.LAYOUT_CENTER, "Scan to Download"));
+            successForm.append(new ImageItem(null, record.qrImage, Item.LAYOUT_CENTER | Item.LAYOUT_NEWLINE_BEFORE | Item.LAYOUT_NEWLINE_AFTER, "Scan to Download"));
         }
 
         successForm.append(new StringItem("Item Code:", record.id));
@@ -1041,32 +1335,86 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
         successForm.append(new StringItem("Short URL:", record.url));
         successForm.append(new StringItem("Direct Raw Link:", record.rawUrl));
 
-        final Command cmdOpen = new Command("Open in Browser", Command.OK, 1);
-        final Command cmdNew = new Command("Upload Another", Command.SCREEN, 2);
-        final Command cmdHome = new Command("Back to Home", Command.SCREEN, 3);
-        final Command cmdExitApp = new Command("Exit", Command.EXIT, 4);
+        successForm.append(new Spacer(10, 6));
 
-        successForm.addCommand(cmdOpen);
-        successForm.addCommand(cmdNew);
-        successForm.addCommand(cmdHome);
-        successForm.addCommand(cmdExitApp);
+        // In-form action buttons (NO Command.OK -> NO checkmark button on Belle toolbar!)
+        StringItem btnDownload = new StringItem(null, "Download File", Item.BUTTON);
+        btnDownload.setLayout(Item.LAYOUT_EXPAND | Item.LAYOUT_NEWLINE_AFTER);
+        btnDownload.setDefaultCommand(cmdItemAction);
+        btnDownload.setItemCommandListener(new ItemCommandListener() {
+            public void commandAction(Command c, Item item) {
+                triggerFileDownload(record, successForm);
+            }
+        });
+        successForm.append(btnDownload);
 
-        successForm.setCommandListener(new CommandListener() {
-            public void commandAction(Command c, Displayable d) {
-                if (c == cmdOpen) {
+        if (isTextItem(record)) {
+            StringItem btnViewText = new StringItem(null, "View Text Content", Item.BUTTON);
+            btnViewText.setLayout(Item.LAYOUT_EXPAND | Item.LAYOUT_NEWLINE_AFTER);
+            btnViewText.setDefaultCommand(cmdItemAction);
+            btnViewText.setItemCommandListener(new ItemCommandListener() {
+                public void commandAction(Command c, Item item) {
+                    openTextContent(record, successForm);
+                }
+            });
+            successForm.append(btnViewText);
+        }
+
+        StringItem btnOpenBrowser = new StringItem(null, "Open in Browser", Item.BUTTON);
+        btnOpenBrowser.setLayout(Item.LAYOUT_EXPAND | Item.LAYOUT_NEWLINE_AFTER);
+        btnOpenBrowser.setDefaultCommand(cmdItemAction);
+        btnOpenBrowser.setItemCommandListener(new ItemCommandListener() {
+            public void commandAction(Command c, Item item) {
+                if (record.url != null && record.url.length() > 0) {
                     try {
                         platformRequest(record.url);
                     } catch (Exception ex) {
                         showAlert("Browser Error", "Could not open browser: " + ex.getMessage(), AlertType.ERROR, successForm);
                     }
+                }
+            }
+        });
+        successForm.append(btnOpenBrowser);
+
+        StringItem btnUploadMore = new StringItem(null, "Upload Another File", Item.BUTTON);
+        btnUploadMore.setLayout(Item.LAYOUT_EXPAND | Item.LAYOUT_NEWLINE_AFTER);
+        btnUploadMore.setDefaultCommand(cmdItemAction);
+        btnUploadMore.setItemCommandListener(new ItemCommandListener() {
+            public void commandAction(Command c, Item item) {
+                selectedFilePath = null;
+                selectedFileSize = 0;
+                updateMainFormStatus();
+                display.setCurrent(mainForm);
+            }
+        });
+        successForm.append(btnUploadMore);
+
+        final Command cmdDone = new Command("Home", Command.BACK, 1);
+        final Command cmdNew = new Command("Upload Another", Command.SCREEN, 2);
+        final Command cmdOpen = new Command("Open in Browser", Command.SCREEN, 3);
+        final Command cmdExitApp = new Command("Exit", Command.EXIT, 4);
+
+        successForm.addCommand(cmdDone);
+        successForm.addCommand(cmdNew);
+        successForm.addCommand(cmdOpen);
+        successForm.addCommand(cmdExitApp);
+
+        successForm.setCommandListener(new CommandListener() {
+            public void commandAction(Command c, Displayable d) {
+                if (c == cmdDone) {
+                    updateMainFormStatus();
+                    display.setCurrent(mainForm);
                 } else if (c == cmdNew) {
                     selectedFilePath = null;
                     selectedFileSize = 0;
                     updateMainFormStatus();
                     display.setCurrent(mainForm);
-                } else if (c == cmdHome) {
-                    updateMainFormStatus();
-                    display.setCurrent(mainForm);
+                } else if (c == cmdOpen) {
+                    try {
+                        platformRequest(record.url);
+                    } catch (Exception ex) {
+                        showAlert("Browser Error", "Could not open browser: " + ex.getMessage(), AlertType.ERROR, successForm);
+                    }
                 } else if (c == cmdExitApp) {
                     destroyApp(true);
                     notifyDestroyed();
@@ -1100,7 +1448,7 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
         optSlug = new TextField("Custom Link or Slug:", customSlug, 32, TextField.ANY);
         settingsForm.append(optSlug);
 
-        optAccount = new TextField("Account ID 24 digits:", accountId, 24, TextField.NUMERIC);
+        optAccount = new TextField("Account ID (Optional):", accountId, 32, TextField.ANY);
         settingsForm.append(optAccount);
 
         settingsForm.addCommand(cmdSaveSettings);
@@ -1119,11 +1467,21 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
             serverUrl = entered;
         }
 
+        int selExp = optExpiry.getSelectedIndex();
+        String enteredAcc = optAccount.getString().trim();
+
+        // Enforce 24-hour retention rule: indices 2 (7d), 3 (30d), 4 (never) require account ID
+        if (selExp >= 2 && enteredAcc.length() == 0) {
+            optExpiry.setSelectedIndex(1, true); // Reset to 24 Hours
+            showAlert("Account Required", "Retention over 24 hours is only available for registered accounts. Please enter your Account ID in settings.", AlertType.WARNING, settingsForm);
+            return;
+        }
+
         expiryIndex = optExpiry.getSelectedIndex();
         burnIndex = optBurn.getSelectedIndex();
         customPassword = optPassword.getString().trim();
         customSlug = optSlug.getString().trim();
-        accountId = optAccount.getString().trim();
+        accountId = enteredAcc;
 
         updateMainFormStatus();
         display.setCurrent(mainForm);
@@ -1138,7 +1496,9 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
             "Fast, anonymous file and photo hosting for Symbian and vintage phones.\n\n" +
             "Features:\n" +
             "- Instant camera photo picker\n" +
-            "- Find files by code or slug\n" +
+            "- Find files by code or URL\n" +
+            "- Native text viewer & paste display\n" +
+            "- Direct Symbian file download manager\n" +
             "- Delete files from upload history\n" +
             "- JSR-75 filesystem navigation\n" +
             "- Live QR code generation\n" +
@@ -1180,17 +1540,28 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
             UploadRecord rec = new UploadRecord();
             rec.id = extractJsonField(objStr, "id");
             rec.filename = extractJsonField(objStr, "filename");
+            rec.type = extractJsonField(objStr, "type");
             String sizeStr = extractJsonField(objStr, "size");
             if (sizeStr != null) {
                 try {
                     rec.size = Long.parseLong(sizeStr);
                 } catch (Exception ex) {}
             }
+            String expStr = extractJsonField(objStr, "expires_at");
+            if (expStr != null) {
+                try {
+                    rec.expiresAt = Long.parseLong(expStr);
+                } catch (Exception ex) {}
+            }
             rec.url = extractJsonField(objStr, "url");
             rec.rawUrl = extractJsonField(objStr, "raw_url");
-            if (rec.url != null && rec.url.length() > 0) {
-                rec.qrUrl = rec.url + "/qr.png";
+            rec.downloadUrl = extractJsonField(objStr, "download_url");
+            rec.qrUrl = extractJsonField(objStr, "qr_url");
+            if (rec.qrUrl == null && rec.url != null) {
+                rec.qrUrl = rec.url + "/qr.png?size=5";
             }
+            rec.expiry = formatRetentionDisplay(null, rec.expiresAt);
+
             if (rec.filename != null && rec.filename.length() > 0) {
                 list.addElement(rec);
             }
@@ -1225,8 +1596,42 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
         return null;
     }
 
+    private static String formatTimeLeft(long expiresAtSec) {
+        if (expiresAtSec <= 0) return "";
+        if (expiresAtSec >= 2000000000L) return "Never Expire";
+        long nowSec = System.currentTimeMillis() / 1000L;
+        long diff = expiresAtSec - nowSec;
+        if (diff <= 0) return "Expired";
+        long days = diff / 86400L;
+        long hours = (diff % 86400L) / 3600L;
+        long mins = (diff % 3600L) / 60L;
+        if (days > 0) {
+            return days + "d " + hours + "h left";
+        } else if (hours > 0) {
+            return hours + "h " + mins + "m left";
+        } else {
+            long m = mins > 1L ? mins : 1L;
+            return m + "m left";
+        }
+    }
+
+    private static String formatRetentionDisplay(String label, long expiresAtSec) {
+        if (expiresAtSec >= 2000000000L) return "Never Expire";
+        String left = formatTimeLeft(expiresAtSec);
+        if (left.length() == 0) {
+            return (label != null && label.length() > 0) ? label : "24 Hours";
+        }
+        if (label != null && label.length() > 0 && !label.equals(left)) {
+            return label + " (" + left + ")";
+        }
+        return left;
+    }
+
     private static String formatSize(long bytes) {
-        if (bytes <= 0) return "0 KB";
+        if (bytes <= 0) return "0 B";
+        if (bytes < 1024) {
+            return bytes + " B";
+        }
         if (bytes < 1024 * 1024) {
             return (bytes / 1024) + " KB";
         }
