@@ -550,10 +550,12 @@ def mobile_item_lookup(item_id):
 
         raw_url = url_for('raw', item_id=item['id'], filename=fname, _external=True)
         dl_url = url_for('download', item_id=item['id'], filename=fname, _external=True)
+        preview_url = url_for('mobile_image_preview', item_id=item['id'], _external=True)
         if has_pwd and pwd_ok and pwd:
             import urllib.parse
             raw_url += '?password=' + urllib.parse.quote_plus(pwd)
             dl_url += '?password=' + urllib.parse.quote_plus(pwd)
+            preview_url += '?password=' + urllib.parse.quote_plus(pwd)
 
         return jsonify({
             'status': 'ok',
@@ -570,8 +572,45 @@ def mobile_item_lookup(item_id):
             'url': url_for('overview', item_id=item['id'], _external=True),
             'raw_url': raw_url,
             'download_url': dl_url,
+            'preview_url': preview_url,
             'qr_url': url_for('item_qr', item_id=item['id'], _external=True) + '?size=5'
         })
+
+@app.route('/api/mobile/preview/<item_id>')
+def mobile_image_preview(item_id):
+    item_id = (item_id or '').strip()
+    with get_db() as conn:
+        cur = conn.execute("SELECT * FROM items WHERE id = ?", (item_id,))
+        item = cur.fetchone()
+    if not item or item['expires_at'] <= int(time.time()):
+        return "Not found or expired", 404
+    if item['password_hash']:
+        param_pwd = (request.args.get('password') or request.headers.get('X-Nullhost-Password') or '').strip()
+        if not (param_pwd and check_password_hash(item['password_hash'], param_pwd)):
+            return "Password required", 401
+    
+    filename = item['filename'] or ''
+    filepath = os.path.join(app.config['UPLOAD_FOLDER'], item['id'] + '_' + filename)
+    if not os.path.exists(filepath):
+        return "File not found on disk", 404
+        
+    lower = filename.lower()
+    if lower.endswith(('.jpg', '.jpeg', '.png', '.webp', '.bmp', '.gif')):
+        try:
+            import io
+            img = Image.open(filepath)
+            max_dim = 640
+            if img.width > max_dim or img.height > max_dim:
+                img.thumbnail((max_dim, max_dim), Image.Resampling.LANCZOS)
+            if img.mode not in ('RGB', 'L'):
+                img = img.convert('RGB')
+            out_io = io.BytesIO()
+            img.save(out_io, format='JPEG', quality=85)
+            out_io.seek(0)
+            return send_file(out_io, mimetype='image/jpeg')
+        except Exception as e:
+            app.logger.warning(f"Mobile preview resize error: {e}")
+    return send_file(filepath, mimetype=item['mime_type'] or 'application/octet-stream')
 
 @app.route('/api/client/update')
 def client_update_manifest():
@@ -775,6 +814,20 @@ def upload():
         filepath = os.path.join(app.config['UPLOAD_FOLDER'], item_id + '_' + filename)
         file.save(filepath)
         size = os.path.getsize(filepath)
+
+        fast_resize = request.form.get('fast_resize') == '1' or request.headers.get('X-Nullhost-Fast-Resize') == '1'
+        if fast_resize and filename.lower().endswith(('.jpg', '.jpeg', '.png', '.webp')):
+            try:
+                from PIL import Image
+                img = Image.open(filepath)
+                if img.width > 1920 or img.height > 1080:
+                    img.thumbnail((1920, 1080), Image.Resampling.LANCZOS)
+                    if img.mode not in ('RGB', 'L'):
+                        img = img.convert('RGB')
+                    img.save(filepath, format='JPEG', quality=85, optimize=True)
+                    size = os.path.getsize(filepath)
+            except Exception as e:
+                app.logger.warning(f"Fast resize optimization failed: {e}")
         
         scrub = request.form.get('scrub_exif') == 'on'
         
