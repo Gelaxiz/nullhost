@@ -56,7 +56,7 @@ TURNSTILE_SECRET = os.environ.get('TURNSTILE_SECRET', '')
 ENABLE_TURNSTILE = os.environ.get('ENABLE_TURNSTILE', '').lower() not in ('0', 'false', 'no') and bool(TURNSTILE_SECRET and TURNSTILE_SITE_KEY)
 TURNSTILE_ACTION = os.environ.get('TURNSTILE_ACTION', 'turnstile-spin-v2')
 TURNSTILE_VERIFY_URL = 'https://challenges.cloudflare.com/turnstile/v0/siteverify'
-NULLHOST_CLIENT_VERSION = '1.1.3'
+NULLHOST_CLIENT_VERSION = '1.1.4'
 NULLHOST_MOBILE_APP_KEY = os.environ.get('NULLHOST_MOBILE_APP_KEY', 'nullhost_secret_mobile_app_key_2026')
 
 app.jinja_env.globals['turnstile_enabled'] = ENABLE_TURNSTILE

@@ -14,8 +14,8 @@ using System.Web.Script.Serialization;
 using System.Collections.Generic;
 using System.Reflection;
 
-[assembly: AssemblyVersion("1.1.3.0")]
-[assembly: AssemblyFileVersion("1.1.3.0")]
+[assembly: AssemblyVersion("1.1.4.0")]
+[assembly: AssemblyFileVersion("1.1.4.0")]
 
 namespace NullhostClient
 {
@@ -54,7 +54,7 @@ namespace NullhostClient
         public static bool MenuCustom = true;
         public static bool MenuGrouped = false;
         public static bool TosAccepted = false;
-        public static readonly Version ClientVersion = new Version(1, 1, 3);
+        public static readonly Version ClientVersion = new Version(1, 1, 4);
 
         public static CookieContainer Cookies = new CookieContainer();
 
