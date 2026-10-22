@@ -31,7 +31,7 @@ import javax.microedition.media.control.VideoControl;
  */
 public class NullhostMIDlet extends MIDlet implements CommandListener, ItemCommandListener {
 
-    private static final String APP_VERSION = "1.8.0";
+    private static final String APP_VERSION = "1.8.1";
     private static final String CLIENT_ID = "j2me-universal";
     private static final String MOBILE_SECRET = "nullhost_secret_mobile_app_key_2026";
     private static final String DEFAULT_SERVER = "http://nullhost.gelaxiz.xyz";
@@ -619,7 +619,6 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
         try {
             cameraPlayer = Manager.createPlayer("capture://video");
             cameraPlayer.realize();
-            applyCameraFocus(cameraPlayer);
             cameraControl = (VideoControl) cameraPlayer.getControl("VideoControl");
             if (cameraControl != null) {
                 Object guiComponent = cameraControl.initDisplayMode(VideoControl.USE_GUI_PRIMITIVE, null);
@@ -632,7 +631,6 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
                     cameraControl.setVisible(true);
                 } catch (Throwable ignored) {}
                 cameraPlayer.start();
-                applyCameraFocus(cameraPlayer);
                 cameraReady = true;
             }
         } catch (Throwable t) {
@@ -656,50 +654,13 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
         display.setCurrent(scannerForm);
     }
 
-    private void applyCameraFocus(Player player) {
-        if (player == null) return;
-        try {
-            Object fc = player.getControl("javax.microedition.amms.control.camera.FocusControl");
-            if (fc == null) {
-                fc = player.getControl("FocusControl");
-            }
-            if (fc != null) {
-                Class clazz = fc.getClass();
-                // 1. Try setMacro(true) for close-up scanning (10-30cm)
-                try {
-                    java.lang.reflect.Method mMacro = clazz.getMethod("setMacro", new Class[] { boolean.class });
-                    mMacro.invoke(fc, new Object[] { Boolean.TRUE });
-                } catch (Throwable ignored) {}
-
-                // 2. Try setFocus(AUTO)
-                try {
-                    int autoVal = -1000;
-                    try {
-                        java.lang.reflect.Field fAuto = clazz.getField("AUTO");
-                        autoVal = fAuto.getInt(null);
-                    } catch (Throwable ignored) {}
-                    java.lang.reflect.Method mFocus = clazz.getMethod("setFocus", new Class[] { int.class });
-                    mFocus.invoke(fc, new Object[] { new Integer(autoVal) });
-                } catch (Throwable ignored) {}
-
-                // 3. Try autofocus()
-                try {
-                    java.lang.reflect.Method mAf = clazz.getMethod("autofocus", new Class[] {});
-                    mAf.invoke(fc, new Object[] {});
-                } catch (Throwable ignored) {}
-            }
-        } catch (Throwable ignored) {}
-    }
-
     private void triggerSingleScan() {
         if (isCapturing || cameraControl == null) return;
         isCapturing = true;
-        scannerStatusItem.setText("Focusing & scanning QR code...");
+        scannerStatusItem.setText("Scanning QR code...");
         Thread t = new Thread(new Runnable() {
             public void run() {
                 try {
-                    applyCameraFocus(cameraPlayer);
-                    try { Thread.sleep(220); } catch (Exception ignored) {}
 
                     byte[] snapshot = null;
                     try {
