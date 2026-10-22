@@ -4,8 +4,8 @@ Fast, anonymous, ephemeral and permanent file & text sharing server with standal
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-brightgreen.svg)](https://www.python.org/)
-[![Symbian Native](https://img.shields.io/badge/Symbian-Native%20(No%20Qt)-teal.svg)](#symbian--3-belle-fp2)
-[![Java ME](https://img.shields.io/badge/Java%20ME-MIDP%202.0%20%2F%20JSR--75-orange.svg)](#universal-java-me-midlet)
+[![Java ME](https://img.shields.io/badge/Java%20ME-MIDP%202.0%20%2F%20JSR--75-orange.svg)](#universal-mobile-client-nokia-symbian-belle-fp2--s60--java-me)
+[![Windows](https://img.shields.io/badge/Windows-.NET%204.5%2B-blue.svg)](#windows-desktop-client)
 
 ---
 
@@ -152,25 +152,20 @@ The repository includes dedicated standalone client applications built specifica
 | :--- | :--- | :--- | :--- |
 | **Nokia & Symbian Mobile** | Nokia 808 Belle FP2, Symbian^3, S60, S40 (Java ME) | `client/Nullhost.jar` & `Nullhost.jad` | `client/j2me/src/` |
 | **Windows Desktop** | Windows XP / 7 / 8 / 10 / 11 (.NET 4.5+) | `client/Nullhost.exe` | `client/windows/` |
-| **Symbian Belle C++** | Pure Native Symbian C++ Source (Avkon, CActive, RFs) | `client/Nullhost_Symbian_Belle_Source.zip` | `client/symbian_belle/` |
-| **S60 Keypad C++** | Pure Native Symbian C++ Source (CBA softkeys, D-Pad) | `client/Nullhost_S60_Keypad_Source.zip` | `client/s60_keypad/` |
 
 ### Universal Mobile Client (Nokia Symbian Belle FP2 / S60 / Java ME)
 - **Universal Zero-Dependency Standalone Application**: Fully compatible out-of-the-box with Nokia Symbian Belle FP2 (Nokia 808 PureView, 701, 700, 603), Symbian^3 / Anna (N8, E7, C7), S60 keypad devices, and Series 40 via the hardware-accelerated Nokia JVM in ROM.
 - **Strictly Zero Python**: Zero Python runtime, zero PyS60 scripts, zero external dependencies. Never encounters launcher crashes.
 - **Authentic Branding**: Official Nullhost logo embedded directly (`icon.png` / `MIDlet-Icon`) in high-resolution RGBA.
 - **JSR-75 Native Filesystem Explorer**: Complete file browsing across phone memory (`C:`), mass storage (`E:`), and memory card (`F:`).
+- **In-App Text Viewer**: Read pastes and text files directly inside the application with instant back navigation.
+- **Automatic Lightweight Update Checker**: Verifies latest version with < 0.2 KB cellular data overhead.
 - **HMAC Handshake & Multipart Upload**: Secure HMAC-SHA256 authentication and direct upload engine.
-
-### Symbian Native C++ Source Trees
-- **100% Native Symbian C++**: Pure C++ implementations (`inc/`, `src/`, `group/`, `data/`) using standard Symbian OS ROM libraries. **Zero Qt, Zero Web Runtime (WRT)**.
-- **Belle FP2 Interface**: High-performance double-buffered canvas, frosted glass status bar, sliding action sheets, and capacitive bottom pill toolbar (`Options`, `Gallery`, `Browse`, `Upload`).
-- **S60 Keypad Ergonomics**: Hardware CBA softkeys (`Options` / `Back`) and 5-way D-Pad tab navigation.
-- **Ready for Carbide.c++ & Nokia SDK**: Packaged as clean source zips with `bld.inf`, `.mmp`, `.pkg`, and resource definition files.
 
 ### Windows Desktop Client
 - **System Tray & Explorer Integration**: Right-click any file in Windows Explorer and choose "Upload to Nullhost".
 - **Authentic Logo**: Official multi-resolution `logo.ico` embedded directly into the PE executable.
+- **Automatic Background Updates**: Lightweight background check alerts when new desktop releases are available.
 - **Chunked Upload Engine**: Streams files larger than 95 MB in chunks to bypass proxy upload limits.
 
 ---

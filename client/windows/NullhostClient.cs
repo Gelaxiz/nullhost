@@ -14,8 +14,8 @@ using System.Web.Script.Serialization;
 using System.Collections.Generic;
 using System.Reflection;
 
-[assembly: AssemblyVersion("1.1.1.0")]
-[assembly: AssemblyFileVersion("1.1.1.0")]
+[assembly: AssemblyVersion("1.1.3.0")]
+[assembly: AssemblyFileVersion("1.1.3.0")]
 
 namespace NullhostClient
 {
@@ -911,15 +911,36 @@ namespace NullhostClient
             
             if (opt == null) {
                 ContextMenu trayMenu = new ContextMenu();
-                trayMenu.MenuItems.Add("Settings", new EventHandler((s,e) => { new SettingsForm().Show(); }));
-                trayMenu.MenuItems.Add("Exit", new EventHandler((s,e) => { Environment.Exit(0); }));
+                trayMenu.MenuItems.Add("Check for Updates", new EventHandler((s, e) => { new SettingsForm().Show(); }));
+                trayMenu.MenuItems.Add("Settings", new EventHandler((s, e) => { new SettingsForm().Show(); }));
+                trayMenu.MenuItems.Add("-");
+                trayMenu.MenuItems.Add("Exit", new EventHandler((s, e) => { Environment.Exit(0); }));
                 
+                Icon appIcon = null;
+                try { appIcon = Icon.ExtractAssociatedIcon(Application.ExecutablePath); } catch { appIcon = SystemIcons.Application; }
+
                 trayIcon = new NotifyIcon() {
-                    Icon = SystemIcons.Application,
+                    Icon = appIcon,
                     ContextMenu = trayMenu,
                     Visible = true,
                     Text = "nullhost background"
                 };
+
+                // Lightweight background update check
+                ThreadPool.QueueUserWorkItem(delegate {
+                    try {
+                        ClientUpdate update = Program.CheckForUpdate();
+                        if (update != null && trayIcon != null && trayIcon.Visible) {
+                            trayIcon.BalloonTipTitle = "nullhost update available";
+                            trayIcon.BalloonTipText = "A newer version of Nullhost (" + update.Version + ") is available. Click here to open settings and update.";
+                            trayIcon.BalloonTipIcon = ToolTipIcon.Info;
+                            trayIcon.BalloonTipClicked += (s, e) => {
+                                new SettingsForm().Show();
+                            };
+                            trayIcon.ShowBalloonTip(6000);
+                        }
+                    } catch { }
+                });
             }
             else 
             {

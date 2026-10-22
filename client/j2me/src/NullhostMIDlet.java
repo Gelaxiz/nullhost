@@ -28,7 +28,7 @@ import javax.microedition.rms.RecordStore;
  */
 public class NullhostMIDlet extends MIDlet implements CommandListener, ItemCommandListener {
 
-    private static final String APP_VERSION = "1.9.4";
+    private static final String APP_VERSION = "1.9.5";
     private static final String CLIENT_ID = "j2me-universal";
     private static final String MOBILE_SECRET = "nullhost_secret_mobile_app_key_2026";
     private static final String DEFAULT_SERVER = "http://nullhost.gelaxiz.xyz";
@@ -171,6 +171,7 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
             loadPersistentSettings();
             initCommands();
             initMainForm();
+            checkVersionQuietly(false);
         }
         display.setCurrent(mainForm);
     }
@@ -1723,27 +1724,15 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
 
         // 2. Text Actions (if text file or paste)
         if (isTextItem(rec)) {
-            // Button to open our clean in-app text viewer ("sun oma")
-            StringItem btnViewText = new StringItem(null, "View Text Content", Item.BUTTON);
+            StringItem btnViewText = new StringItem(null, "Read Text File", Item.BUTTON);
             btnViewText.setLayout(Item.LAYOUT_EXPAND | Item.LAYOUT_NEWLINE_AFTER);
             btnViewText.setDefaultCommand(cmdItemAction);
             btnViewText.setItemCommandListener(new ItemCommandListener() {
                 public void commandAction(Command c, Item item) {
-                    openTextContent(rec, f, false);
+                    openTextContent(rec, f);
                 }
             });
             f.append(btnViewText);
-
-            // Button to open in the phone's native text editor ("oikeassa puhelimen tekstieditorissa")
-            StringItem btnNativeEditor = new StringItem(null, "Open in Phone Editor", Item.BUTTON);
-            btnNativeEditor.setLayout(Item.LAYOUT_EXPAND | Item.LAYOUT_NEWLINE_AFTER);
-            btnNativeEditor.setDefaultCommand(cmdItemAction);
-            btnNativeEditor.setItemCommandListener(new ItemCommandListener() {
-                public void commandAction(Command c, Item item) {
-                    openTextContent(rec, f, true);
-                }
-            });
-            f.append(btnNativeEditor);
         }
 
         // 3. Prominent Download Button (triggers native Symbian download manager)
@@ -1790,16 +1779,16 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
         // Softkeys: Back and Options (NO Command.OK -> NO green checkmark on Belle FP2!)
         final Command cmdDetailsBack = new Command("Back", Command.BACK, 1);
         final Command cmdViewImgMenu = isImageItem(rec) ? new Command("View Image", Command.SCREEN, 2) : null;
-        final Command cmdDownloadMenu = new Command("Download File", Command.SCREEN, 3);
-        final Command cmdOpenMenu = new Command("Open in Browser", Command.SCREEN, 4);
-        final Command cmdNativeMenu = isTextItem(rec) ? new Command("Open in Phone Editor", Command.SCREEN, 5) : null;
+        final Command cmdViewTextMenu = isTextItem(rec) ? new Command("Read Text", Command.SCREEN, 3) : null;
+        final Command cmdDownloadMenu = new Command("Download File", Command.SCREEN, 4);
+        final Command cmdOpenMenu = new Command("Open in Browser", Command.SCREEN, 5);
         final Command cmdDelMenu = isMyUpload ? new Command("Delete File", Command.SCREEN, 6) : null;
 
         f.addCommand(cmdDetailsBack);
         if (cmdViewImgMenu != null) f.addCommand(cmdViewImgMenu);
+        if (cmdViewTextMenu != null) f.addCommand(cmdViewTextMenu);
         f.addCommand(cmdDownloadMenu);
         f.addCommand(cmdOpenMenu);
-        if (cmdNativeMenu != null) f.addCommand(cmdNativeMenu);
         if (cmdDelMenu != null) f.addCommand(cmdDelMenu);
 
         f.setCommandListener(new CommandListener() {
@@ -1808,6 +1797,8 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
                     display.setCurrent(backTarget);
                 } else if (c == cmdViewImgMenu) {
                     openImageContent(rec, f);
+                } else if (c == cmdViewTextMenu) {
+                    openTextContent(rec, f);
                 } else if (c == cmdDownloadMenu) {
                     triggerFileDownload(rec, f);
                 } else if (c == cmdOpenMenu) {
@@ -1818,8 +1809,6 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
                             showAlert("Browser Error", "Could not open browser: " + ex.getMessage(), AlertType.ERROR, f);
                         }
                     }
-                } else if (c == cmdNativeMenu) {
-                    openTextContent(rec, f, true);
                 } else if (c == cmdDelMenu) {
                     deleteUploadedItem(rec);
                 }
@@ -1881,19 +1870,29 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
         }
     }
 
-    private void openTextContent(final UploadRecord rec, final Form parentForm, final boolean launchNative) {
+    // ------------------------------------------------------------------------
+    // IN-APP TEXT VIEWER (CLEAN READ-ONLY, NO BROWSER REDIRECTS, RELIABLE BACK)
+    // ------------------------------------------------------------------------
+    private void openTextContent(final UploadRecord rec, final Displayable backTarget) {
+        if (rec == null) return;
         if (rec.content != null && rec.content.length() > 0) {
-            if (launchNative) {
-                openInNativePhoneEditor(rec, rec.content, parentForm);
-            } else {
-                showCustomTextViewer(rec, rec.content, parentForm);
-            }
+            showCustomTextViewer(rec, rec.content, backTarget);
             return;
         }
 
         final Form loadForm = new Form("Loading Text");
         loadForm.append(new StringItem("Status:", "Fetching text content..."));
         loadForm.append(new Gauge(null, false, Gauge.INDEFINITE, Gauge.CONTINUOUS_RUNNING));
+
+        final Command cmdCancel = new Command("Back", Command.BACK, 1);
+        loadForm.addCommand(cmdCancel);
+        loadForm.setCommandListener(new CommandListener() {
+            public void commandAction(Command c, Displayable d) {
+                if (c == cmdCancel) {
+                    display.setCurrent(backTarget != null ? backTarget : mainForm);
+                }
+            }
+        });
         display.setCurrent(loadForm);
 
         Thread t = new Thread(new Runnable() {
@@ -1901,29 +1900,43 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
                 try {
                     String fetchUrl = (rec.rawUrl != null && rec.rawUrl.length() > 0) ? rec.rawUrl : rec.downloadUrl;
                     if (fetchUrl == null || fetchUrl.length() == 0) {
-                        showAlert("Error", "No text URL available.", AlertType.ERROR, parentForm);
+                        display.callSerially(new Runnable() {
+                            public void run() {
+                                showAlert("Error", "No text URL available.", AlertType.ERROR, backTarget != null ? backTarget : mainForm);
+                            }
+                        });
                         return;
                     }
 
                     HttpConnection conn = null;
                     try {
                         conn = (HttpConnection) Connector.open(fetchUrl, Connector.READ);
-                        conn.setRequestProperty("User-Agent", "Nullhost-J2ME/1.0");
+                        conn.setRequestProperty("User-Agent", "Nullhost-J2ME/" + APP_VERSION);
                         int respCode = conn.getResponseCode();
                         if (respCode != 200) {
                             conn.close();
-                            showAlert("Error", "Server returned HTTP " + respCode, AlertType.ERROR, parentForm);
+                            final int code = respCode;
+                            display.callSerially(new Runnable() {
+                                public void run() {
+                                    showAlert("Error", "Server returned HTTP " + code, AlertType.ERROR, backTarget != null ? backTarget : mainForm);
+                                }
+                            });
                             return;
                         }
                     } catch (Exception ex) {
                         if (fetchUrl.startsWith("https://")) {
                             String httpUrl = "http://" + fetchUrl.substring(8);
                             conn = (HttpConnection) Connector.open(httpUrl, Connector.READ);
-                            conn.setRequestProperty("User-Agent", "Nullhost-J2ME/1.0");
+                            conn.setRequestProperty("User-Agent", "Nullhost-J2ME/" + APP_VERSION);
                             int respCode = conn.getResponseCode();
                             if (respCode != 200) {
                                 conn.close();
-                                showAlert("Error", "Server returned HTTP " + respCode, AlertType.ERROR, parentForm);
+                                final int code = respCode;
+                                display.callSerially(new Runnable() {
+                                    public void run() {
+                                        showAlert("Error", "Server returned HTTP " + code, AlertType.ERROR, backTarget != null ? backTarget : mainForm);
+                                    }
+                                });
                                 return;
                             }
                         } else {
@@ -1939,46 +1952,61 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
                     while ((len = is.read(buf)) != -1) {
                         baos.write(buf, 0, len);
                         total += len;
-                        if (total > 65536) break; // 64 KB safety limit for vintage mobile RAM
+                        if (total > 65536) break; // 64 KB safety limit
                     }
                     is.close();
                     conn.close();
 
-                    String text = new String(baos.toByteArray(), "UTF-8");
+                    final String text = new String(baos.toByteArray(), "UTF-8");
                     rec.content = text;
-                    if (launchNative) {
-                        openInNativePhoneEditor(rec, text, parentForm);
-                    } else {
-                        showCustomTextViewer(rec, text, parentForm);
-                    }
-                } catch (Exception e) {
-                    showAlert("Error", "Could not load text: " + e.getMessage(), AlertType.ERROR, parentForm);
+                    display.callSerially(new Runnable() {
+                        public void run() {
+                            showCustomTextViewer(rec, text, backTarget);
+                        }
+                    });
+                } catch (final Throwable e) {
+                    display.callSerially(new Runnable() {
+                        public void run() {
+                            showAlert("Error", "Could not load text: " + (e.getMessage() != null ? e.getMessage() : e.toString()), AlertType.ERROR, backTarget != null ? backTarget : mainForm);
+                        }
+                    });
                 }
             }
         });
         t.start();
     }
 
-    private void showCustomTextViewer(final String title, final String text, final Displayable backTarget) {
-        final Form viewForm = new Form(title != null ? title : "Text Viewer");
-        StringItem textItem = new StringItem(null, text);
+    private void showCustomTextViewer(final UploadRecord rec, final String text, final Displayable backTarget) {
+        final Form viewForm = new Form(rec.filename != null ? rec.filename : "Text Viewer");
+
+        StringItem textItem = new StringItem(null, text != null ? text : "");
         textItem.setLayout(Item.LAYOUT_EXPAND | Item.LAYOUT_NEWLINE_AFTER);
         viewForm.append(textItem);
 
-        viewForm.append(new Spacer(10, 8));
+        final Command cmdViewerBack = new Command("Back", Command.BACK, 1);
+        viewForm.addCommand(cmdViewerBack);
 
-        StringItem btnEdit = new StringItem(null, "Edit / Copy in App", Item.BUTTON);
-        btnEdit.setLayout(Item.LAYOUT_EXPAND | Item.LAYOUT_NEWLINE_AFTER);
-        btnEdit.setDefaultCommand(cmdItemAction);
-        btnEdit.setItemCommandListener(new ItemCommandListener() {
-            public void commandAction(Command c, Item item) {
-                showEditableTextBox(title, text, viewForm);
+        viewForm.setCommandListener(new CommandListener() {
+            public void commandAction(Command c, Displayable d) {
+                if (c == cmdViewerBack) {
+                    display.setCurrent(backTarget != null ? backTarget : mainForm);
+                }
             }
         });
-        viewForm.append(btnEdit);
+
+        display.setCurrent(viewForm);
+    }
+
+    private void showCustomTextViewer(final String title, final String text, final Displayable backTarget) {
+        final Form viewForm = new Form(title != null ? title : "Text Viewer");
+
+        StringItem textItem = new StringItem(null, text != null ? text : "");
+        textItem.setLayout(Item.LAYOUT_EXPAND | Item.LAYOUT_NEWLINE_AFTER);
+        viewForm.append(textItem);
 
         final Command cmdDone = new Command("Back", Command.BACK, 1);
         viewForm.addCommand(cmdDone);
+
         viewForm.setCommandListener(new CommandListener() {
             public void commandAction(Command c, Displayable d) {
                 if (c == cmdDone) {
@@ -1988,124 +2016,6 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
         });
 
         display.setCurrent(viewForm);
-    }
-
-    private void showCustomTextViewer(final UploadRecord rec, final String text, final Displayable backTarget) {
-        final Form viewForm = new Form(rec.filename != null ? rec.filename : "Text Viewer");
-
-        // Clean readable text view (native LCDUI word-wrapping & kinetic scroll)
-        StringItem textItem = new StringItem(null, text);
-        textItem.setLayout(Item.LAYOUT_EXPAND | Item.LAYOUT_NEWLINE_AFTER);
-        viewForm.append(textItem);
-
-        viewForm.append(new Spacer(10, 8));
-
-        // Action button to launch native phone editor
-        StringItem btnPhone = new StringItem(null, "Open in Phone Editor", Item.BUTTON);
-        btnPhone.setLayout(Item.LAYOUT_EXPAND | Item.LAYOUT_NEWLINE_AFTER);
-        btnPhone.setDefaultCommand(cmdItemAction);
-        btnPhone.setItemCommandListener(new ItemCommandListener() {
-            public void commandAction(Command c, Item item) {
-                openInNativePhoneEditor(rec, text, viewForm);
-            }
-        });
-        viewForm.append(btnPhone);
-
-        // Action button to edit in editable TextBox (if desired)
-        StringItem btnEdit = new StringItem(null, "Edit in App", Item.BUTTON);
-        btnEdit.setLayout(Item.LAYOUT_EXPAND | Item.LAYOUT_NEWLINE_AFTER);
-        btnEdit.setDefaultCommand(cmdItemAction);
-        btnEdit.setItemCommandListener(new ItemCommandListener() {
-            public void commandAction(Command c, Item item) {
-                showEditableTextBox(rec.filename, text, viewForm);
-            }
-        });
-        viewForm.append(btnEdit);
-
-        final Command cmdViewerBack = new Command("Back", Command.BACK, 1);
-        final Command cmdNative = new Command("Open in Phone Editor", Command.SCREEN, 2);
-        final Command cmdEdit = new Command("Edit in App", Command.SCREEN, 3);
-
-        viewForm.addCommand(cmdViewerBack);
-        viewForm.addCommand(cmdNative);
-        viewForm.addCommand(cmdEdit);
-
-        viewForm.setCommandListener(new CommandListener() {
-            public void commandAction(Command c, Displayable d) {
-                if (c == cmdViewerBack) {
-                    display.setCurrent(backTarget);
-                } else if (c == cmdNative) {
-                    openInNativePhoneEditor(rec, text, viewForm);
-                } else if (c == cmdEdit) {
-                    showEditableTextBox(rec.filename, text, viewForm);
-                }
-            }
-        });
-
-        display.setCurrent(viewForm);
-    }
-
-    private void showEditableTextBox(String title, String text, final Displayable backTarget) {
-        int maxChars = text.length() > 2048 ? text.length() + 1024 : 2048;
-        TextBox tb = new TextBox(title != null ? title : "Edit Text", text, maxChars, TextField.ANY);
-        final Command cmdTbBack = new Command("Done", Command.BACK, 1);
-        tb.addCommand(cmdTbBack);
-        tb.setCommandListener(new CommandListener() {
-            public void commandAction(Command c, Displayable d) {
-                if (c == cmdTbBack) {
-                    display.setCurrent(backTarget);
-                }
-            }
-        });
-        display.setCurrent(tb);
-    }
-
-    private void openInNativePhoneEditor(UploadRecord rec, String text, Form parentForm) {
-        String fname = (rec.filename != null && rec.filename.length() > 0) ? rec.filename : "paste.txt";
-        if (!fname.toLowerCase().endsWith(".txt")) {
-            fname += ".txt";
-        }
-
-        // Try writing to device storage and platformRequest() it
-        String[] candidateDirs = {"file:///E:/Data/", "file:///E:/", "file:///C:/Data/", "file:///C:/"};
-        String savedFileUrl = null;
-
-        for (int i = 0; i < candidateDirs.length; i++) {
-            try {
-                String targetUrl = candidateDirs[i] + fname;
-                FileConnection fc = (FileConnection) Connector.open(targetUrl, Connector.READ_WRITE);
-                if (fc.exists()) {
-                    fc.delete();
-                }
-                fc.create();
-                OutputStream os = fc.openOutputStream();
-                os.write(text.getBytes("UTF-8"));
-                os.flush();
-                os.close();
-                fc.close();
-                savedFileUrl = targetUrl;
-                break;
-            } catch (Exception ex) {}
-        }
-
-        if (savedFileUrl != null) {
-            try {
-                boolean launched = platformRequest(savedFileUrl);
-                if (launched) {
-                    return;
-                }
-            } catch (Throwable ex) {}
-        }
-
-        // Fallback: use downloadUrl/rawUrl which Symbian browser/download manager prompts to Open with Text Editor
-        String fallback = (rec.downloadUrl != null && rec.downloadUrl.length() > 0) ? rec.downloadUrl : rec.rawUrl;
-        if (fallback != null && fallback.length() > 0) {
-            try {
-                platformRequest(fallback);
-            } catch (Throwable e) {
-                showAlert("Editor Error", "Could not open in external editor.", AlertType.ERROR, parentForm);
-            }
-        }
     }
 
     private static boolean isTextItem(UploadRecord rec) {
@@ -2615,25 +2525,15 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
             }
 
             if (isTextItem(record)) {
-                StringItem btnViewText = new StringItem(null, "View Text Content", Item.BUTTON);
+                StringItem btnViewText = new StringItem(null, "Read Text File", Item.BUTTON);
                 btnViewText.setLayout(Item.LAYOUT_EXPAND | Item.LAYOUT_NEWLINE_AFTER);
                 btnViewText.setDefaultCommand(cmdItemAction);
                 btnViewText.setItemCommandListener(new ItemCommandListener() {
                     public void commandAction(Command c, Item item) {
-                        openTextContent(record, successForm, false);
+                        openTextContent(record, successForm);
                     }
                 });
                 successForm.append(btnViewText);
-
-                StringItem btnNative = new StringItem(null, "Open in Phone Editor", Item.BUTTON);
-                btnNative.setLayout(Item.LAYOUT_EXPAND | Item.LAYOUT_NEWLINE_AFTER);
-                btnNative.setDefaultCommand(cmdItemAction);
-                btnNative.setItemCommandListener(new ItemCommandListener() {
-                    public void commandAction(Command c, Item item) {
-                        openTextContent(record, successForm, true);
-                    }
-                });
-                successForm.append(btnNative);
             }
 
             StringItem btnDownload = new StringItem(null, "Download File", Item.BUTTON);
@@ -2687,6 +2587,7 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
 
             final Command cmdDone = new Command("Home", Command.BACK, 1);
             final Command cmdViewImgMenu = isImageItem(record) ? new Command("View Image", Command.SCREEN, 2) : null;
+            final Command cmdViewTextMenu = isTextItem(record) ? new Command("Read Text", Command.SCREEN, 2) : null;
             final Command cmdNew = new Command("Upload Another", Command.SCREEN, 3);
             final Command cmdOpen = new Command("Open in Browser", Command.SCREEN, 4);
             final Command cmdDel = new Command("Delete File", Command.SCREEN, 5);
@@ -2694,6 +2595,7 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
 
             successForm.addCommand(cmdDone);
             if (cmdViewImgMenu != null) successForm.addCommand(cmdViewImgMenu);
+            if (cmdViewTextMenu != null) successForm.addCommand(cmdViewTextMenu);
             successForm.addCommand(cmdNew);
             successForm.addCommand(cmdOpen);
             successForm.addCommand(cmdDel);
@@ -2707,6 +2609,8 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
                             display.setCurrent(mainForm);
                         } else if (c == cmdViewImgMenu) {
                             openImageContent(record, successForm);
+                        } else if (c == cmdViewTextMenu) {
+                            openTextContent(record, successForm);
                         } else if (c == cmdNew) {
                             selectedFilePath = null;
                             selectedFileSize = 0;
@@ -2809,27 +2713,49 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
         long totalMem = Runtime.getRuntime().totalMemory() / 1024;
         long freeMem = Runtime.getRuntime().freeMemory() / 1024;
 
-        Form f = new Form("About Nullhost");
+        final Form f = new Form("About Nullhost");
         f.append(new StringItem("Nullhost Universal J2ME", "Version " + APP_VERSION + "\n\n" +
             "Fast, anonymous file and photo hosting for Symbian and vintage phones.\n\n" +
             "Features:\n" +
             "- Byte-accurate progress with speed & ETA\n" +
             "- In-app direct text paste creator\n" +
+            "- Clean in-app text viewer\n" +
             "- In-app image viewer for hosted photos\n" +
             "- Instant photo dimensions & preview\n" +
+            "- Automatic lightweight update checker (<0.2 KB)\n" +
             "- Export upload history to local text & notes\n" +
             "- T9 quick filter for public files & history\n" +
             "- Auto-retry resilience on network drops\n" +
-            "- In-app text viewer & phone editor launcher\n" +
             "- Direct Symbian download manager\n" +
             "- Persistent RMS settings & Account ID\n" +
             "- Live centered QR code generation\n\n" +
             "Server: " + serverUrl + "\n" +
             "Free Memory: " + freeMem + " KB / " + totalMem + " KB\n" +
             "Platform: " + System.getProperty("microedition.platform") + "\n\n" +
-            "Gelaxiz (c) 2026"));
+            "Gelaxiz (c) 2026\n"));
+
+        StringItem btnCheckUpdate = new StringItem(null, "Check for Updates", Item.BUTTON);
+        btnCheckUpdate.setLayout(Item.LAYOUT_EXPAND | Item.LAYOUT_NEWLINE_AFTER);
+        btnCheckUpdate.setDefaultCommand(cmdItemAction);
+        btnCheckUpdate.setItemCommandListener(new ItemCommandListener() {
+            public void commandAction(Command c, Item item) {
+                checkVersionQuietly(true);
+            }
+        });
+        f.append(btnCheckUpdate);
+
+        final Command cmdCheckUpdateMenu = new Command("Check for Updates", Command.SCREEN, 2);
         f.addCommand(cmdBack);
-        f.setCommandListener(this);
+        f.addCommand(cmdCheckUpdateMenu);
+        f.setCommandListener(new CommandListener() {
+            public void commandAction(Command c, Displayable d) {
+                if (c == cmdBack) {
+                    display.setCurrent(mainForm);
+                } else if (c == cmdCheckUpdateMenu) {
+                    checkVersionQuietly(true);
+                }
+            }
+        });
         display.setCurrent(f);
     }
 
@@ -2967,6 +2893,148 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
             }
         });
         display.setCurrent(pwdForm);
+    }
+
+    // ------------------------------------------------------------------------
+    // LIGHTWEIGHT AUTO-UPDATE CHECK (< 0.2 KB DATA)
+    // ------------------------------------------------------------------------
+    private void checkVersionQuietly(final boolean userRequested) {
+        Thread t = new Thread(new Runnable() {
+            public void run() {
+                HttpConnection hc = null;
+                InputStream is = null;
+                try {
+                    String base = serverUrl.trim();
+                    if (base.endsWith("/")) base = base.substring(0, base.length() - 1);
+                    String url = base + "/api/version";
+                    hc = (HttpConnection) Connector.open(url);
+                    hc.setRequestMethod(HttpConnection.GET);
+                    hc.setRequestProperty("User-Agent", "Nullhost-J2ME/" + APP_VERSION);
+                    hc.setRequestProperty("Connection", "close");
+
+                    int code = hc.getResponseCode();
+                    if (code == HttpConnection.HTTP_OK) {
+                        is = hc.openInputStream();
+                        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                        byte[] buf = new byte[256];
+                        int read;
+                        while ((read = is.read(buf)) != -1) {
+                            baos.write(buf, 0, read);
+                        }
+                        String json = new String(baos.toByteArray(), "UTF-8");
+                        final String latestJ2me = extractJsonField(json, "j2me");
+                        final String j2meUrl = extractJsonField(json, "j2me_url");
+
+                        if (latestJ2me != null && isNewerVersion(latestJ2me, APP_VERSION)) {
+                            display.callSerially(new Runnable() {
+                                public void run() {
+                                    promptUpdateAvailable(latestJ2me, j2meUrl);
+                                }
+                            });
+                            return;
+                        }
+                    }
+
+                    if (userRequested) {
+                        display.callSerially(new Runnable() {
+                            public void run() {
+                                showAlert("Up to Date", "You are using the latest version of Nullhost (v" + APP_VERSION + ").", AlertType.INFO, mainForm);
+                            }
+                        });
+                    }
+                } catch (final Exception e) {
+                    if (userRequested) {
+                        display.callSerially(new Runnable() {
+                            public void run() {
+                                showAlert("Update Check", "Could not check for updates: " + e.getMessage(), AlertType.WARNING, mainForm);
+                            }
+                        });
+                    }
+                } finally {
+                    try { if (is != null) is.close(); } catch (Exception ex) {}
+                    try { if (hc != null) hc.close(); } catch (Exception ex) {}
+                }
+            }
+        });
+        t.start();
+    }
+
+    private void promptUpdateAvailable(final String newVer, final String downloadUrl) {
+        final Form uf = new Form("Update Available");
+        uf.append(new StringItem("New Version Available!",
+            "A newer version of Nullhost (v" + newVer + ") is available.\n\n" +
+            "Your current version: v" + APP_VERSION + "\n\n" +
+            "Would you like to download and install the update now?"));
+
+        StringItem btnDownload = new StringItem(null, "Download Update (v" + newVer + ")", Item.BUTTON);
+        btnDownload.setLayout(Item.LAYOUT_EXPAND | Item.LAYOUT_NEWLINE_AFTER);
+        btnDownload.setDefaultCommand(cmdItemAction);
+        btnDownload.setItemCommandListener(new ItemCommandListener() {
+            public void commandAction(Command c, Item item) {
+                try {
+                    String base = serverUrl.trim();
+                    if (base.endsWith("/")) base = base.substring(0, base.length() - 1);
+                    String target = (downloadUrl != null && downloadUrl.length() > 0) ? downloadUrl : base + "/download-app?platform=j2me";
+                    platformRequest(target);
+                } catch (Throwable ex) {
+                    showAlert("Download Error", "Could not launch update: " + ex.getMessage(), AlertType.ERROR, uf);
+                }
+            }
+        });
+        uf.append(btnDownload);
+
+        final Command cmdUpdateNow = new Command("Update", Command.SCREEN, 1);
+        final Command cmdDismiss = new Command("Later", Command.BACK, 2);
+        uf.addCommand(cmdUpdateNow);
+        uf.addCommand(cmdDismiss);
+        uf.setCommandListener(new CommandListener() {
+            public void commandAction(Command c, Displayable d) {
+                if (c == cmdUpdateNow) {
+                    try {
+                        String base = serverUrl.trim();
+                        if (base.endsWith("/")) base = base.substring(0, base.length() - 1);
+                        String target = (downloadUrl != null && downloadUrl.length() > 0) ? downloadUrl : base + "/download-app?platform=j2me";
+                        platformRequest(target);
+                    } catch (Throwable ex) {
+                        showAlert("Download Error", "Could not launch update: " + ex.getMessage(), AlertType.ERROR, uf);
+                    }
+                } else if (c == cmdDismiss) {
+                    display.setCurrent(mainForm);
+                }
+            }
+        });
+        display.setCurrent(uf);
+    }
+
+    private static int[] parseVersionParts(String v) {
+        int[] parts = new int[]{0, 0, 0};
+        if (v == null) return parts;
+        int pIdx = 0;
+        int start = 0;
+        int len = v.length();
+        for (int i = 0; i <= len && pIdx < 3; i++) {
+            if (i == len || v.charAt(i) == '.') {
+                if (i > start) {
+                    try {
+                        parts[pIdx++] = Integer.parseInt(v.substring(start, i).trim());
+                    } catch (Exception ex) {
+                        if (pIdx > 0) parts[pIdx - 1] = 0;
+                    }
+                }
+                start = i + 1;
+            }
+        }
+        return parts;
+    }
+
+    private static boolean isNewerVersion(String remote, String current) {
+        int[] r = parseVersionParts(remote);
+        int[] c = parseVersionParts(current);
+        for (int i = 0; i < 3; i++) {
+            if (r[i] > c[i]) return true;
+            if (r[i] < c[i]) return false;
+        }
+        return false;
     }
 
     // ------------------------------------------------------------------------

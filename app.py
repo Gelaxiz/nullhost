@@ -612,19 +612,44 @@ def mobile_image_preview(item_id):
             app.logger.warning(f"Mobile preview resize error: {e}")
     return send_file(filepath, mimetype=item['mime_type'] or 'application/octet-stream')
 
+_client_hash_cache = {'mtime': 0, 'size': 0, 'hash': ''}
+
 @app.route('/api/client/update')
 def client_update_manifest():
     client_path = os.path.join(os.path.dirname(__file__), 'client', 'Nullhost.exe')
-    digest = hashlib.sha256()
-    with open(client_path, 'rb') as client_file:
-        for chunk in iter(lambda: client_file.read(1024 * 1024), b''):
-            digest.update(chunk)
+    try:
+        st = os.stat(client_path)
+        if _client_hash_cache['mtime'] != st.st_mtime or _client_hash_cache['size'] != st.st_size:
+            digest = hashlib.sha256()
+            with open(client_path, 'rb') as client_file:
+                for chunk in iter(lambda: client_file.read(1024 * 1024), b''):
+                    digest.update(chunk)
+            _client_hash_cache['mtime'] = st.st_mtime
+            _client_hash_cache['size'] = st.st_size
+            _client_hash_cache['hash'] = digest.hexdigest()
+        sha256_hex = _client_hash_cache['hash']
+    except Exception:
+        sha256_hex = ''
     response = jsonify({
         'version': NULLHOST_CLIENT_VERSION,
-        'download_url': url_for('download_app', _external=True, _scheme='https'),
-        'sha256': digest.hexdigest(),
+        'download_url': url_for('download_app', platform='windows', _external=True, _scheme='https'),
+        'sha256': sha256_hex,
     })
     response.headers['Cache-Control'] = 'no-store'
+    return response
+
+@app.route('/api/version')
+@app.route('/api/mobile/version')
+def app_versions():
+    response = jsonify({
+        'status': 'ok',
+        'j2me': '1.9.5',
+        'windows': NULLHOST_CLIENT_VERSION,
+        'j2me_url': url_for('download_app', platform='j2me', _external=True),
+        'jad_url': url_for('download_app', platform='jad', _external=True),
+        'windows_url': url_for('download_app', platform='windows', _external=True)
+    })
+    response.headers['Cache-Control'] = 'public, max-age=180'
     return response
 
 @app.route('/tos')
