@@ -28,7 +28,7 @@ import javax.microedition.rms.RecordStore;
  */
 public class NullhostMIDlet extends MIDlet implements CommandListener, ItemCommandListener {
 
-    private static final String APP_VERSION = "1.7.0";
+    private static final String APP_VERSION = "1.7.1";
     private static final String CLIENT_ID = "j2me-universal";
     private static final String MOBILE_SECRET = "nullhost_secret_mobile_app_key_2026";
     private static final String DEFAULT_SERVER = "http://nullhost.gelaxiz.xyz";
@@ -97,6 +97,7 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
     private Command cmdPrivacy;
     private Command cmdAbout;
     private Command cmdExit;
+    private Command cmdExitSoftkey;
     private Command cmdBack;
     private Command cmdSelect;
     private Command cmdSaveSettings;
@@ -172,7 +173,8 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
         cmdTerms = new Command("Terms of Service", Command.SCREEN, 8);
         cmdPrivacy = new Command("Privacy Policy", Command.SCREEN, 9);
         cmdAbout = new Command("About", Command.SCREEN, 10);
-        cmdExit = new Command("Exit", Command.EXIT, 11);
+        cmdExit = new Command("Exit", Command.SCREEN, 11);
+        cmdExitSoftkey = new Command("Exit", Command.EXIT, 12);
 
         cmdBack = new Command("Back", Command.BACK, 1);
         cmdSelect = new Command("Select", Command.OK, 1);
@@ -246,6 +248,7 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
         mainForm.addCommand(cmdPrivacy);
         mainForm.addCommand(cmdAbout);
         mainForm.addCommand(cmdExit);
+        mainForm.addCommand(cmdExitSoftkey);
         mainForm.setCommandListener(this);
     }
 
@@ -283,7 +286,7 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
     }
 
     public void commandAction(Command c, Displayable d) {
-        if (c == cmdExit) {
+        if (c == cmdExit || c == cmdExitSoftkey) {
             destroyApp(true);
             notifyDestroyed();
         } else if (c == cmdUpload) {
