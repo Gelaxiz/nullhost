@@ -28,7 +28,7 @@ import javax.microedition.rms.RecordStore;
  */
 public class NullhostMIDlet extends MIDlet implements CommandListener, ItemCommandListener {
 
-    private static final String APP_VERSION = "1.9.3";
+    private static final String APP_VERSION = "1.9.4";
     private static final String CLIENT_ID = "j2me-universal";
     private static final String MOBILE_SECRET = "nullhost_secret_mobile_app_key_2026";
     private static final String DEFAULT_SERVER = "http://nullhost.gelaxiz.xyz";
@@ -1083,18 +1083,38 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
     // IN-APP DIRECT TEXT PASTE CREATOR (PASTE ONLY)
     // ------------------------------------------------------------------------
     private void openCreatePasteForm() {
-        final TextBox pasteBox = new TextBox("New Text Paste", "", 4096, TextField.ANY);
-        final Command cmdUploadPaste = new Command("Upload Paste", Command.OK, 1);
-        final Command cmdCancel = new Command("Cancel", Command.BACK, 2);
-        pasteBox.addCommand(cmdUploadPaste);
-        pasteBox.addCommand(cmdCancel);
+        final Form pasteForm = new Form("Create Text Paste");
+        final TextField pasteField = new TextField("Enter / Paste Text:", "", 4000, TextField.ANY);
+        pasteForm.append(pasteField);
 
-        pasteBox.setCommandListener(new CommandListener() {
+        pasteForm.append(new Spacer(10, 8));
+
+        StringItem btnUpload = new StringItem(null, "Upload Paste Now", Item.BUTTON);
+        btnUpload.setLayout(Item.LAYOUT_EXPAND | Item.LAYOUT_NEWLINE_AFTER);
+        btnUpload.setDefaultCommand(cmdItemAction);
+        btnUpload.setItemCommandListener(new ItemCommandListener() {
+            public void commandAction(Command c, Item item) {
+                String text = pasteField.getString();
+                if (text == null || text.trim().length() == 0) {
+                    showAlert("Empty Paste", "Please enter or paste some text first.", AlertType.WARNING, pasteForm);
+                    return;
+                }
+                startPasteUploadThread(text.trim());
+            }
+        });
+        pasteForm.append(btnUpload);
+
+        final Command cmdUploadSoftkey = new Command("Upload Paste", Command.OK, 1);
+        final Command cmdCancel = new Command("Cancel", Command.BACK, 2);
+        pasteForm.addCommand(cmdUploadSoftkey);
+        pasteForm.addCommand(cmdCancel);
+
+        pasteForm.setCommandListener(new CommandListener() {
             public void commandAction(Command c, Displayable d) {
-                if (c == cmdUploadPaste) {
-                    String text = pasteBox.getString();
+                if (c == cmdUploadSoftkey) {
+                    String text = pasteField.getString();
                     if (text == null || text.trim().length() == 0) {
-                        showAlert("Empty Paste", "Please enter or paste some text first.", AlertType.WARNING, pasteBox);
+                        showAlert("Empty Paste", "Please enter or paste some text first.", AlertType.WARNING, pasteForm);
                         return;
                     }
                     startPasteUploadThread(text.trim());
@@ -1104,7 +1124,7 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
             }
         });
 
-        display.setCurrent(pasteBox);
+        display.setCurrent(pasteForm);
     }
 
     private void startPasteUploadThread(final String text) {
@@ -1127,7 +1147,10 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
                     for (int attempt = 1; attempt <= maxAttempts; attempt++) {
                         try {
                             if (attempt > 1) {
-                                statusText.setText("Connection drop. Retry " + attempt + " of " + maxAttempts + "...");
+                                final String msg = "Connection drop. Retry " + attempt + " of " + maxAttempts + "...";
+                                display.callSerially(new Runnable() {
+                                    public void run() { statusText.setText(msg); }
+                                });
                                 try { Thread.sleep(1200); } catch (Exception ignored) {}
                             }
                             record = performPasteRequest(uploadTarget, statusText, text);
@@ -1135,7 +1158,9 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
                         } catch (Exception ex) {
                             if (attempt == maxAttempts) {
                                 if (uploadTarget.startsWith("https://")) {
-                                    statusText.setText("Retrying over HTTP fallback...");
+                                    display.callSerially(new Runnable() {
+                                        public void run() { statusText.setText("Retrying over HTTP fallback..."); }
+                                    });
                                     String fallbackTarget = "http://" + uploadTarget.substring(8);
                                     record = performPasteRequest(fallbackTarget, statusText, text);
                                 } else {
@@ -1147,7 +1172,9 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
 
                     if (record != null) {
                         if (record.qrUrl != null && record.qrUrl.length() > 0) {
-                            statusText.setText("Generating QR code image...");
+                            display.callSerially(new Runnable() {
+                                public void run() { statusText.setText("Generating QR code image..."); }
+                            });
                             try {
                                 HttpConnection qrConn = (HttpConnection) Connector.open(record.qrUrl, Connector.READ);
                                 qrConn.setRequestProperty("User-Agent", "Nullhost-J2ME/1.0");
@@ -1159,12 +1186,17 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
                                 qrConn.close();
                             } catch (Exception ignored) {}
                         }
-                        showSuccessScreen(record);
+                        final UploadRecord finalRecord = record;
+                        display.callSerially(new Runnable() {
+                            public void run() {
+                                showSuccessScreen(finalRecord);
+                            }
+                        });
                     } else {
                         showAlert("Upload Failed", "Server did not return a valid response.", AlertType.ERROR, mainForm);
                     }
-                } catch (Exception ex) {
-                    showAlert("Upload Error", "Failed to upload paste: " + ex.getMessage(), AlertType.ERROR, mainForm);
+                } catch (final Throwable ex) {
+                    showAlert("Upload Error", "Failed to upload paste: " + (ex.getMessage() != null ? ex.getMessage() : ex.toString()), AlertType.ERROR, mainForm);
                 }
             }
         });
@@ -1255,6 +1287,7 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
             if (record.qrUrl == null && record.url != null) record.qrUrl = record.url + "/qr.png?size=5";
 
             myUploads.insertElementAt(record, 0);
+            savePersistentSettings();
             return record;
         }
 
@@ -2061,7 +2094,7 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
                 if (launched) {
                     return;
                 }
-            } catch (Exception ex) {}
+            } catch (Throwable ex) {}
         }
 
         // Fallback: use downloadUrl/rawUrl which Symbian browser/download manager prompts to Open with Text Editor
@@ -2069,8 +2102,8 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
         if (fallback != null && fallback.length() > 0) {
             try {
                 platformRequest(fallback);
-            } catch (Exception e) {
-                showAlert("Editor Error", "Could not open in phone editor: " + e.getMessage(), AlertType.ERROR, parentForm);
+            } catch (Throwable e) {
+                showAlert("Editor Error", "Could not open in external editor.", AlertType.ERROR, parentForm);
             }
         }
     }
@@ -2200,8 +2233,9 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
     // SERVER FILE DELETION
     // ------------------------------------------------------------------------
     private void deleteUploadedItem(final UploadRecord rec) {
+        if (rec == null) return;
         final Form delForm = new Form("Deleting File");
-        delForm.append(new StringItem("Status:", "Deleting " + rec.filename + " from server..."));
+        delForm.append(new StringItem("Status:", "Deleting " + (rec.filename != null ? rec.filename : "item") + " from server..."));
         delForm.append(new Gauge(null, false, Gauge.INDEFINITE, Gauge.CONTINUOUS_RUNNING));
         display.setCurrent(delForm);
 
@@ -2248,18 +2282,30 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
                         }
                     }
 
-                    int code = conn.getResponseCode();
+                    final int code = conn.getResponseCode();
                     conn.close();
 
-                    if (code == 200) {
-                        myUploads.removeElement(rec);
-                        updateMainFormStatus();
-                        showAlert("File Deleted", rec.filename + " was deleted from server.", AlertType.CONFIRMATION, mainForm);
-                    } else {
-                        showAlert("Delete Failed", "Server returned HTTP " + code, AlertType.ERROR, mainForm);
-                    }
-                } catch (Exception ex) {
-                    showAlert("Delete Error", "Could not delete: " + ex.getMessage(), AlertType.ERROR, mainForm);
+                    display.callSerially(new Runnable() {
+                        public void run() {
+                            try {
+                                if (code == 200) {
+                                    myUploads.removeElement(rec);
+                                    updateMainFormStatus();
+                                    showAlert("File Deleted", (rec.filename != null ? rec.filename : "Item") + " was deleted from server.", AlertType.CONFIRMATION, mainForm);
+                                } else {
+                                    showAlert("Delete Failed", "Server returned HTTP " + code, AlertType.ERROR, mainForm);
+                                }
+                            } catch (Throwable t) {
+                                display.setCurrent(mainForm);
+                            }
+                        }
+                    });
+                } catch (final Throwable ex) {
+                    display.callSerially(new Runnable() {
+                        public void run() {
+                            showAlert("Delete Error", "Could not delete: " + (ex.getMessage() != null ? ex.getMessage() : ex.toString()), AlertType.ERROR, mainForm);
+                        }
+                    });
                 }
             }
         });
@@ -2292,11 +2338,16 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
                 try {
                     UploadRecord record = executeUpload(statusText, gauge, selectedFilePath);
                     if (record != null) {
-                        showSuccessScreen(record);
+                        final UploadRecord finalRec = record;
+                        display.callSerially(new Runnable() {
+                            public void run() {
+                                showSuccessScreen(finalRec);
+                            }
+                        });
                     } else {
                         showAlert("Upload Failed", "Server did not return a valid download link.", AlertType.ERROR, mainForm);
                     }
-                } catch (Exception e) {
+                } catch (final Throwable e) {
                     showAlert("Upload Error", (e.getMessage() != null) ? e.getMessage() : e.toString(), AlertType.ERROR, mainForm);
                 }
             }
@@ -2516,148 +2567,173 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
     // UPLOAD SUCCESS SCREEN (PROMINENT QR CODE & DOWNLOAD BUTTON, NO CHECKMARK)
     // ------------------------------------------------------------------------
     private void showSuccessScreen(final UploadRecord record) {
-        final Form successForm = new Form("Upload Successful");
-
-        if (record.qrImage != null) {
-            successForm.append(new ImageItem(null, record.qrImage, Item.LAYOUT_CENTER | Item.LAYOUT_NEWLINE_BEFORE | Item.LAYOUT_NEWLINE_AFTER, "Scan to Download"));
+        if (record == null) {
+            display.setCurrent(mainForm);
+            return;
         }
 
-        successForm.append(new StringItem("Item Code:", record.id));
-        successForm.append(new StringItem("File Name:", record.filename));
-        successForm.append(new StringItem("File Size:", formatSize(record.size)));
-        successForm.append(new StringItem("Retention:", record.expiry));
-        successForm.append(new StringItem("Burn Limit:", record.burn));
-        successForm.append(new StringItem("Short URL:", record.url));
-        successForm.append(new StringItem("Direct Raw Link:", record.rawUrl));
+        try {
+            final Form successForm = new Form("Upload Successful");
 
-        successForm.append(new Spacer(10, 6));
-
-        // In-form action buttons (NO Command.OK -> NO checkmark button on Belle toolbar!)
-        if (isImageItem(record)) {
-            StringItem btnViewImg = new StringItem(null, "View Image", Item.BUTTON);
-            btnViewImg.setLayout(Item.LAYOUT_EXPAND | Item.LAYOUT_NEWLINE_AFTER);
-            btnViewImg.setDefaultCommand(cmdItemAction);
-            btnViewImg.setItemCommandListener(new ItemCommandListener() {
-                public void commandAction(Command c, Item item) {
-                    openImageContent(record, successForm);
-                }
-            });
-            successForm.append(btnViewImg);
-        }
-
-        if (isTextItem(record)) {
-            StringItem btnViewText = new StringItem(null, "View Text Content", Item.BUTTON);
-            btnViewText.setLayout(Item.LAYOUT_EXPAND | Item.LAYOUT_NEWLINE_AFTER);
-            btnViewText.setDefaultCommand(cmdItemAction);
-            btnViewText.setItemCommandListener(new ItemCommandListener() {
-                public void commandAction(Command c, Item item) {
-                    openTextContent(record, successForm, false);
-                }
-            });
-            successForm.append(btnViewText);
-
-            StringItem btnNative = new StringItem(null, "Open in Phone Editor", Item.BUTTON);
-            btnNative.setLayout(Item.LAYOUT_EXPAND | Item.LAYOUT_NEWLINE_AFTER);
-            btnNative.setDefaultCommand(cmdItemAction);
-            btnNative.setItemCommandListener(new ItemCommandListener() {
-                public void commandAction(Command c, Item item) {
-                    openTextContent(record, successForm, true);
-                }
-            });
-            successForm.append(btnNative);
-        }
-
-        StringItem btnDownload = new StringItem(null, "Download File", Item.BUTTON);
-        btnDownload.setLayout(Item.LAYOUT_EXPAND | Item.LAYOUT_NEWLINE_AFTER);
-        btnDownload.setDefaultCommand(cmdItemAction);
-        btnDownload.setItemCommandListener(new ItemCommandListener() {
-            public void commandAction(Command c, Item item) {
-                triggerFileDownload(record, successForm);
+            if (record.qrImage != null) {
+                try {
+                    successForm.append(new ImageItem(null, record.qrImage, Item.LAYOUT_CENTER | Item.LAYOUT_NEWLINE_BEFORE | Item.LAYOUT_NEWLINE_AFTER, "Scan to Download"));
+                } catch (Throwable ignored) {}
             }
-        });
-        successForm.append(btnDownload);
 
-        StringItem btnDel = new StringItem(null, "Delete File", Item.BUTTON);
-        btnDel.setLayout(Item.LAYOUT_EXPAND | Item.LAYOUT_NEWLINE_AFTER);
-        btnDel.setDefaultCommand(cmdItemAction);
-        btnDel.setItemCommandListener(new ItemCommandListener() {
-            public void commandAction(Command c, Item item) {
-                deleteUploadedItem(record);
+            if (record.id != null) {
+                successForm.append(new StringItem("Item Code:", record.id));
             }
-        });
-        successForm.append(btnDel);
+            successForm.append(new StringItem("File Name:", record.filename != null ? record.filename : "paste.txt"));
+            successForm.append(new StringItem("File Size:", formatSize(record.size)));
+            if (record.expiry != null) {
+                successForm.append(new StringItem("Retention:", record.expiry));
+            }
+            if (record.burn != null) {
+                successForm.append(new StringItem("Burn Limit:", record.burn));
+            }
+            if (record.url != null) {
+                successForm.append(new StringItem("Short URL:", record.url));
+            }
+            if (record.rawUrl != null) {
+                successForm.append(new StringItem("Direct Raw Link:", record.rawUrl));
+            }
 
-        StringItem btnOpenBrowser = new StringItem(null, "Open in Browser", Item.BUTTON);
-        btnOpenBrowser.setLayout(Item.LAYOUT_EXPAND | Item.LAYOUT_NEWLINE_AFTER);
-        btnOpenBrowser.setDefaultCommand(cmdItemAction);
-        btnOpenBrowser.setItemCommandListener(new ItemCommandListener() {
-            public void commandAction(Command c, Item item) {
-                if (record.url != null && record.url.length() > 0) {
-                    try {
-                        platformRequest(record.url);
-                    } catch (Exception ex) {
-                        showAlert("Browser Error", "Could not open browser: " + ex.getMessage(), AlertType.ERROR, successForm);
+            successForm.append(new Spacer(10, 6));
+
+            // In-form action buttons (NO Command.OK -> NO checkmark button on Belle toolbar!)
+            if (isImageItem(record)) {
+                StringItem btnViewImg = new StringItem(null, "View Image", Item.BUTTON);
+                btnViewImg.setLayout(Item.LAYOUT_EXPAND | Item.LAYOUT_NEWLINE_AFTER);
+                btnViewImg.setDefaultCommand(cmdItemAction);
+                btnViewImg.setItemCommandListener(new ItemCommandListener() {
+                    public void commandAction(Command c, Item item) {
+                        openImageContent(record, successForm);
+                    }
+                });
+                successForm.append(btnViewImg);
+            }
+
+            if (isTextItem(record)) {
+                StringItem btnViewText = new StringItem(null, "View Text Content", Item.BUTTON);
+                btnViewText.setLayout(Item.LAYOUT_EXPAND | Item.LAYOUT_NEWLINE_AFTER);
+                btnViewText.setDefaultCommand(cmdItemAction);
+                btnViewText.setItemCommandListener(new ItemCommandListener() {
+                    public void commandAction(Command c, Item item) {
+                        openTextContent(record, successForm, false);
+                    }
+                });
+                successForm.append(btnViewText);
+
+                StringItem btnNative = new StringItem(null, "Open in Phone Editor", Item.BUTTON);
+                btnNative.setLayout(Item.LAYOUT_EXPAND | Item.LAYOUT_NEWLINE_AFTER);
+                btnNative.setDefaultCommand(cmdItemAction);
+                btnNative.setItemCommandListener(new ItemCommandListener() {
+                    public void commandAction(Command c, Item item) {
+                        openTextContent(record, successForm, true);
+                    }
+                });
+                successForm.append(btnNative);
+            }
+
+            StringItem btnDownload = new StringItem(null, "Download File", Item.BUTTON);
+            btnDownload.setLayout(Item.LAYOUT_EXPAND | Item.LAYOUT_NEWLINE_AFTER);
+            btnDownload.setDefaultCommand(cmdItemAction);
+            btnDownload.setItemCommandListener(new ItemCommandListener() {
+                public void commandAction(Command c, Item item) {
+                    triggerFileDownload(record, successForm);
+                }
+            });
+            successForm.append(btnDownload);
+
+            StringItem btnDel = new StringItem(null, "Delete File", Item.BUTTON);
+            btnDel.setLayout(Item.LAYOUT_EXPAND | Item.LAYOUT_NEWLINE_AFTER);
+            btnDel.setDefaultCommand(cmdItemAction);
+            btnDel.setItemCommandListener(new ItemCommandListener() {
+                public void commandAction(Command c, Item item) {
+                    deleteUploadedItem(record);
+                }
+            });
+            successForm.append(btnDel);
+
+            StringItem btnOpenBrowser = new StringItem(null, "Open in Browser", Item.BUTTON);
+            btnOpenBrowser.setLayout(Item.LAYOUT_EXPAND | Item.LAYOUT_NEWLINE_AFTER);
+            btnOpenBrowser.setDefaultCommand(cmdItemAction);
+            btnOpenBrowser.setItemCommandListener(new ItemCommandListener() {
+                public void commandAction(Command c, Item item) {
+                    if (record.url != null && record.url.length() > 0) {
+                        try {
+                            platformRequest(record.url);
+                        } catch (Throwable ex) {
+                            showAlert("Browser Error", "Could not open browser: " + ex.getMessage(), AlertType.ERROR, successForm);
+                        }
                     }
                 }
-            }
-        });
-        successForm.append(btnOpenBrowser);
+            });
+            successForm.append(btnOpenBrowser);
 
-        StringItem btnUploadMore = new StringItem(null, "Upload Another File", Item.BUTTON);
-        btnUploadMore.setLayout(Item.LAYOUT_EXPAND | Item.LAYOUT_NEWLINE_AFTER);
-        btnUploadMore.setDefaultCommand(cmdItemAction);
-        btnUploadMore.setItemCommandListener(new ItemCommandListener() {
-            public void commandAction(Command c, Item item) {
-                selectedFilePath = null;
-                selectedFileSize = 0;
-                updateMainFormStatus();
-                display.setCurrent(mainForm);
-            }
-        });
-        successForm.append(btnUploadMore);
-
-        final Command cmdDone = new Command("Home", Command.BACK, 1);
-        final Command cmdViewImgMenu = isImageItem(record) ? new Command("View Image", Command.SCREEN, 2) : null;
-        final Command cmdNew = new Command("Upload Another", Command.SCREEN, 3);
-        final Command cmdOpen = new Command("Open in Browser", Command.SCREEN, 4);
-        final Command cmdDel = new Command("Delete File", Command.SCREEN, 5);
-        final Command cmdExitApp = new Command("Exit", Command.EXIT, 6);
-
-        successForm.addCommand(cmdDone);
-        if (cmdViewImgMenu != null) successForm.addCommand(cmdViewImgMenu);
-        successForm.addCommand(cmdNew);
-        successForm.addCommand(cmdOpen);
-        successForm.addCommand(cmdDel);
-        successForm.addCommand(cmdExitApp);
-
-        successForm.setCommandListener(new CommandListener() {
-            public void commandAction(Command c, Displayable d) {
-                if (c == cmdDone) {
-                    updateMainFormStatus();
-                    display.setCurrent(mainForm);
-                } else if (c == cmdViewImgMenu) {
-                    openImageContent(record, successForm);
-                } else if (c == cmdNew) {
+            StringItem btnUploadMore = new StringItem(null, "Upload Another File", Item.BUTTON);
+            btnUploadMore.setLayout(Item.LAYOUT_EXPAND | Item.LAYOUT_NEWLINE_AFTER);
+            btnUploadMore.setDefaultCommand(cmdItemAction);
+            btnUploadMore.setItemCommandListener(new ItemCommandListener() {
+                public void commandAction(Command c, Item item) {
                     selectedFilePath = null;
                     selectedFileSize = 0;
                     updateMainFormStatus();
                     display.setCurrent(mainForm);
-                } else if (c == cmdOpen) {
-                    try {
-                        platformRequest(record.url);
-                    } catch (Exception ex) {
-                        showAlert("Browser Error", "Could not open browser: " + ex.getMessage(), AlertType.ERROR, successForm);
-                    }
-                } else if (c == cmdDel) {
-                    deleteUploadedItem(record);
-                } else if (c == cmdExitApp) {
-                    destroyApp(true);
-                    notifyDestroyed();
                 }
-            }
-        });
+            });
+            successForm.append(btnUploadMore);
 
-        display.setCurrent(successForm);
+            final Command cmdDone = new Command("Home", Command.BACK, 1);
+            final Command cmdViewImgMenu = isImageItem(record) ? new Command("View Image", Command.SCREEN, 2) : null;
+            final Command cmdNew = new Command("Upload Another", Command.SCREEN, 3);
+            final Command cmdOpen = new Command("Open in Browser", Command.SCREEN, 4);
+            final Command cmdDel = new Command("Delete File", Command.SCREEN, 5);
+            final Command cmdExitApp = new Command("Exit", Command.EXIT, 6);
+
+            successForm.addCommand(cmdDone);
+            if (cmdViewImgMenu != null) successForm.addCommand(cmdViewImgMenu);
+            successForm.addCommand(cmdNew);
+            successForm.addCommand(cmdOpen);
+            successForm.addCommand(cmdDel);
+            successForm.addCommand(cmdExitApp);
+
+            successForm.setCommandListener(new CommandListener() {
+                public void commandAction(Command c, Displayable d) {
+                    try {
+                        if (c == cmdDone) {
+                            updateMainFormStatus();
+                            display.setCurrent(mainForm);
+                        } else if (c == cmdViewImgMenu) {
+                            openImageContent(record, successForm);
+                        } else if (c == cmdNew) {
+                            selectedFilePath = null;
+                            selectedFileSize = 0;
+                            updateMainFormStatus();
+                            display.setCurrent(mainForm);
+                        } else if (c == cmdOpen) {
+                            try {
+                                platformRequest(record.url);
+                            } catch (Throwable ex) {
+                                showAlert("Browser Error", "Could not open browser: " + ex.getMessage(), AlertType.ERROR, successForm);
+                            }
+                        } else if (c == cmdDel) {
+                            deleteUploadedItem(record);
+                        } else if (c == cmdExitApp) {
+                            destroyApp(true);
+                            notifyDestroyed();
+                        }
+                    } catch (Throwable t) {
+                        display.setCurrent(mainForm);
+                    }
+                }
+            });
+
+            display.setCurrent(successForm);
+        } catch (Throwable t) {
+            showAlert("Success", "Upload successful: " + (record.url != null ? record.url : ""), AlertType.INFO, mainForm);
+        }
     }
 
     // ------------------------------------------------------------------------
@@ -3033,10 +3109,20 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
         return mb + "." + rem + " MB";
     }
 
-    private void showAlert(String title, String msg, AlertType type, Displayable next) {
-        Alert alert = new Alert(title, msg, null, type);
-        alert.setTimeout(Alert.FOREVER);
-        display.setCurrent(alert, next);
+    private void showAlert(final String title, final String msg, final AlertType type, final Displayable next) {
+        display.callSerially(new Runnable() {
+            public void run() {
+                try {
+                    Alert alert = new Alert(title != null ? title : "Notice", msg != null ? msg : "", null, type);
+                    alert.setTimeout(Alert.FOREVER);
+                    display.setCurrent(alert, next != null ? next : mainForm);
+                } catch (Throwable t) {
+                    if (next != null) {
+                        try { display.setCurrent(next); } catch (Throwable ignored) {}
+                    }
+                }
+            }
+        });
     }
 
     private static final String HEX_DIGITS = "0123456789ABCDEF";
