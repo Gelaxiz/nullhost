@@ -178,6 +178,10 @@
                         <input type="text" id="early-link-url" readonly spellcheck="false" class="early-link-input" aria-label="Share link ready immediately">
                         <button type="button" id="early-link-copy-btn" class="early-link-copy-btn">copy link</button>
                     </div>
+                    <div id="early-link-qr-wrap" style="display:none; margin: 12px 0 6px; text-align: center;">
+                        <img id="early-link-qr-img" src="" alt="Live QR code" width="130" height="130" style="background:#fff; padding:6px; border-radius:6px; border:1px solid var(--border); display:inline-block;">
+                        <div style="font-size:0.75rem; color:var(--text-3); margin-top:4px;">Scan with phone camera or Nullhost app</div>
+                    </div>
                     <div class="early-link-links-row">
                         <a id="early-link-view-anchor" href="#" target="_blank" rel="noopener" class="early-link-sublink">open overview ↗</a>
                         <a id="early-link-raw-anchor" href="#" target="_blank" rel="noopener" class="early-link-sublink">raw ↗</a>
@@ -642,6 +646,8 @@
         var earlyLinkRawAnchor = document.getElementById('early-link-raw-anchor');
         var earlyLinkDlAnchor = document.getElementById('early-link-dl-anchor');
         var earlyLinkStopBtn = document.getElementById('early-link-stop-btn');
+        var earlyLinkQrWrap = document.getElementById('early-link-qr-wrap');
+        var earlyLinkQrImg = document.getElementById('early-link-qr-img');
         var CHUNK = 95 * 1024 * 1024;
 
         progressContainer.classList.add('is-open');
@@ -653,6 +659,8 @@
             earlyLinkDetails.style.display = 'none';
             earlyLinkDetails.open = false;
         }
+        if (earlyLinkQrWrap) earlyLinkQrWrap.style.display = 'none';
+        if (earlyLinkQrImg) earlyLinkQrImg.src = '';
         if (earlyLinkUrl) earlyLinkUrl.value = '';
 
         var currentXhr = null;
@@ -724,6 +732,10 @@
                 earlyLinkDlAnchor.textContent = 'download zip ↗';
                 earlyLinkDlAnchor.href = '/c/' + activeCollectionId + '/download.zip';
                 earlyLinkDlAnchor.style.display = 'inline';
+            }
+            if (earlyLinkQrImg && earlyLinkQrWrap) {
+                earlyLinkQrImg.src = '/c/' + activeCollectionId + '/qr.png';
+                earlyLinkQrWrap.style.display = 'block';
             }
             if (earlyLinkDetails) earlyLinkDetails.style.display = 'block';
         }
@@ -880,6 +892,10 @@
                                 earlyLinkDlAnchor.href = earlyData.download_url;
                                 earlyLinkDlAnchor.style.display = 'inline';
                             }
+                            if (earlyLinkQrImg && earlyLinkQrWrap) {
+                                earlyLinkQrImg.src = '/v/' + earlyData.id + '/qr.png?target=info';
+                                earlyLinkQrWrap.style.display = 'block';
+                            }
                             if (earlyLinkDetails) earlyLinkDetails.style.display = 'block';
                         }
                     } else {
@@ -996,6 +1012,8 @@
                 earlyLinkDetails.style.display = 'none';
                 earlyLinkDetails.open = false;
             }
+            if (earlyLinkQrWrap) earlyLinkQrWrap.style.display = 'none';
+            if (earlyLinkQrImg) earlyLinkQrImg.src = '';
 
             if (!uploaded.length) {
                 uploadBtn.disabled = false;

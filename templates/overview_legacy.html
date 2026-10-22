@@ -4,6 +4,10 @@
     <div style="font-size: 0.8rem; text-transform: uppercase; color: #888; letter-spacing: 0.12em; font-weight: bold; margin-bottom: 6px;">ITEM CODE</div>
     <div style="font-size: 2.5rem; font-family: monospace; letter-spacing: 0.16em; font-weight: bold; color: #fff;">{{ item['id'] }}</div>
     <div style="font-size: 0.8rem; color: #aaa; margin-top: 6px;">Use this 8-character code to retrieve this item.</div>
+    <div style="margin-top: 14px;">
+        <img src="/v/{{ item['id'] }}/qr.png?target=info" alt="QR Code" width="140" height="140" style="background:#fff; padding:6px; border-radius:4px; display:inline-block;">
+        <div style="font-size: 0.75rem; color: #888; margin-top: 6px;">Scan with camera or mobile app</div>
+    </div>
 </div>
 {% if item['is_partial'] %}
 <p style="color:red; font-weight:bold;">[WARNING: PARTIAL / INCOMPLETE FILE — upload stopped before completion, file may be broken]</p>
