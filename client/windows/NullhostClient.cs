@@ -491,7 +491,8 @@ namespace NullhostClient
                     if (c is Button || c is TextBox || c is ComboBox || c is CheckBox || c is NumericUpDown || c is GroupBox) {
                         c.BackColor = Color.FromArgb(50, 50, 50);
                         c.ForeColor = Color.White;
-                        if (c is GroupBox gb) {
+                        GroupBox gb = c as GroupBox;
+                        if (gb != null) {
                             foreach (Control sub in gb.Controls) {
                                 sub.BackColor = Color.FromArgb(50, 50, 50);
                                 sub.ForeColor = Color.White;

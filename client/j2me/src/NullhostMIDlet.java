@@ -1204,6 +1204,19 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
         t.start();
     }
 
+    private void setStatusSafe(final StringItem item, final String text) {
+        if (item == null) return;
+        if (display != null) {
+            display.callSerially(new Runnable() {
+                public void run() {
+                    try {
+                        item.setText(text);
+                    } catch (Exception ignored) {}
+                }
+            });
+        }
+    }
+
     private UploadRecord performPasteRequest(String targetUrl, StringItem statusText, String text) throws Exception {
         String expiry = EXPIRY_VALS[expiryIndex];
         String burn = BURN_VALS[burnIndex];
@@ -1224,7 +1237,7 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
             conn.setRequestProperty("X-Nullhost-Account", accountId);
         }
 
-        statusText.setText("Sending paste data...");
+        setStatusSafe(statusText, "Sending paste data...");
         OutputStream os = conn.openOutputStream();
 
         writeField(os, boundary, "format", "json");
@@ -1247,7 +1260,7 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
         os.flush();
         os.close();
 
-        statusText.setText("Waiting for server response...");
+        setStatusSafe(statusText, "Waiting for server response...");
         int respCode = conn.getResponseCode();
 
         InputStream is = conn.openInputStream();
@@ -1875,7 +1888,7 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
     // ------------------------------------------------------------------------
     private void openTextContent(final UploadRecord rec, final Displayable backTarget) {
         if (rec == null) return;
-        if (rec.content != null && rec.content.length() > 0 && !"null".equals(rec.content)) {
+        if (rec.content != null && rec.content.trim().length() > 0 && !"null".equalsIgnoreCase(rec.content.trim()) && !"file".equals(rec.type)) {
             showCustomTextViewer(rec, rec.content, backTarget);
             return;
         }
@@ -2279,7 +2292,7 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
         for (int attempt = 1; attempt <= maxAttempts; attempt++) {
             try {
                 if (attempt > 1) {
-                    statusText.setText("Connection drop. Retry " + attempt + " of " + maxAttempts + "...");
+                    setStatusSafe(statusText, "Connection drop. Retry " + attempt + " of " + maxAttempts + "...");
                     try { Thread.sleep(1200); } catch (Exception ignored) {}
                 }
                 record = performUploadRequest(uploadTarget, statusText, gauge, uploadFilePath);
@@ -2288,7 +2301,7 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
                 lastEx = ex;
                 if (attempt == maxAttempts) {
                     if (uploadTarget.startsWith("https://")) {
-                        statusText.setText("Retrying over HTTP fallback...");
+                        setStatusSafe(statusText, "Retrying over HTTP fallback...");
                         String fallbackTarget = "http://" + uploadTarget.substring(8);
                         record = performUploadRequest(fallbackTarget, statusText, gauge, uploadFilePath);
                     } else {
@@ -2300,7 +2313,7 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
 
         // Fetch Live QR Code image
         if (record != null && record.qrUrl != null && record.qrUrl.length() > 0) {
-            statusText.setText("Generating QR code image...");
+            setStatusSafe(statusText, "Generating QR code image...");
             try {
                 HttpConnection qrConn = null;
                 try {
@@ -2357,7 +2370,7 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
             gauge.setMaxValue(100);
             gauge.setValue(0);
         }
-        statusText.setText("Preparing upload data...");
+        setStatusSafe(statusText, "Preparing upload data...");
         OutputStream os = conn.openOutputStream();
 
         writeField(os, boundary, "format", "json");
@@ -2404,7 +2417,7 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
                 long kbps = elapsed > 200 ? ((sent * 1000L / elapsed) / 1024L) : 0;
                 long remBytes = totalBytes - sent;
                 long etaSec = (kbps > 0 && remBytes > 0) ? (remBytes / (kbps * 1024L)) : 0;
-                statusText.setText(pct + "% (" + formatSize(sent) + " / " + formatSize(totalBytes) + ") - " + kbps + " KB/s - " + etaSec + "s left");
+                setStatusSafe(statusText, pct + "% (" + formatSize(sent) + " / " + formatSize(totalBytes) + ") - " + kbps + " KB/s - " + etaSec + "s left");
             }
         }
         fis.close();
@@ -2414,7 +2427,7 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
         os.flush();
         os.close();
 
-        statusText.setText("Waiting for server response...");
+        setStatusSafe(statusText, "Waiting for server response...");
         int respCode = conn.getResponseCode();
 
         InputStream is = conn.openInputStream();
@@ -3128,7 +3141,11 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
                                 end++;
                             }
                             if (end <= len) {
-                                return unescapeJson(json.substring(start, end));
+                                String unescaped = unescapeJson(json.substring(start, end));
+                                if ("null".equalsIgnoreCase(unescaped)) {
+                                    return null;
+                                }
+                                return unescaped;
                             }
                         } else {
                             int end = start;
@@ -3136,7 +3153,7 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
                                 end++;
                             }
                             String val = json.substring(start, end).trim();
-                            if ("null".equals(val)) {
+                            if ("null".equalsIgnoreCase(val)) {
                                 return null;
                             }
                             return val;

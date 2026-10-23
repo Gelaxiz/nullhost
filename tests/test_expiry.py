@@ -85,8 +85,9 @@ class ExpiryTests(unittest.TestCase):
         self.assertIn('form.requestSubmit(submitButton)', page)
         self.assertIn('data-action="turnstile-spin-v2"', page)
 
-        denied = self.client.post('/a', data={'action': 'create'})
-        self.assertEqual(denied.status_code, 403)
+        with patch('app.verify_turnstile', return_value=False):
+            denied = self.client.post('/a', data={'action': 'create'})
+            self.assertEqual(denied.status_code, 403)
         with database.get_db() as conn:
             self.assertEqual(conn.execute('SELECT COUNT(*) FROM accounts').fetchone()[0], 0)
 
@@ -138,7 +139,7 @@ class ExpiryTests(unittest.TestCase):
         html = response.get_data(as_text=True)
         self.assertIn('href="/v/binaryitem/archive.zip"', html)
         self.assertIn('view raw', html)
-        self.assertLess(html.index('view raw'), html.index('share &amp; open on another device'))
+        self.assertLess(html.index('view raw'), html.index('send to another device'))
         self.assertIn('class="item-action-row"', html)
         self.assertNotIn('class="quick-download-link"', html)
         self.assertIn('id="download-url-input"', html)

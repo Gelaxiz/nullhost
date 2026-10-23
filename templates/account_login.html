@@ -22,8 +22,8 @@
     <h3>log in</h3>
     <form action="/a" method="post" data-deferred-turnstile>
         <input type="hidden" name="action" value="login">
-        <label>16-digit account number</label>
-        <input type="text" name="account_id" placeholder="0000000000000000" required pattern="\d{16}" title="16-digit number" inputmode="numeric">
+        <label>account number (16 or 24 digits)</label>
+        <input type="text" name="account_id" placeholder="16 or 24-digit number" required pattern="\d{16}|\d{24}" title="16 or 24-digit number" inputmode="numeric">
         <div class="turnstile-wrap upload-verification" data-account-turnstile-gate hidden>
             <strong>confirm you are human to log in</strong>
             <div class="cf-turnstile" data-account-turnstile-target data-action="turnstile-spin-v2"></div>

@@ -1,13 +1,19 @@
 import sqlite3
 import os
+from contextlib import contextmanager
 
 DB_PATH = os.path.join(os.path.dirname(__file__), 'nullhost.db')
 
+@contextmanager
 def get_db():
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(DB_PATH, timeout=30.0)
     conn.row_factory = sqlite3.Row
     conn.execute('PRAGMA foreign_keys = ON')
-    return conn
+    try:
+        with conn:
+            yield conn
+    finally:
+        conn.close()
 
 def init_db():
     with get_db() as conn:
@@ -39,6 +45,7 @@ def init_db():
                 mimetype TEXT,
                 created_at INTEGER NOT NULL,
                 is_partial INTEGER NOT NULL DEFAULT 0,
+                delete_token_hash TEXT,
                 FOREIGN KEY (account_id) REFERENCES accounts(account_id)
             )
         ''')
@@ -50,6 +57,14 @@ def init_db():
                 reason TEXT,
                 deleted_at INTEGER,
                 expires_at INTEGER
+            )
+        ''')
+
+        # Auth nonces table (for multi-worker replay prevention)
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS auth_nonces (
+                nonce TEXT PRIMARY KEY,
+                expires_at INTEGER NOT NULL
             )
         ''')
 
@@ -93,6 +108,8 @@ def init_db():
             cursor.execute('ALTER TABLE items ADD COLUMN dynamic_expiry INTEGER NOT NULL DEFAULT 0')
         if 'is_partial' not in item_columns:
             cursor.execute('ALTER TABLE items ADD COLUMN is_partial INTEGER NOT NULL DEFAULT 0')
+        if 'delete_token_hash' not in item_columns:
+            cursor.execute('ALTER TABLE items ADD COLUMN delete_token_hash TEXT')
         
         conn.commit()
 

@@ -25,7 +25,7 @@
                 <td>{{ item['display_type'] }}</td>
                 <td>{% if item['type'] == 'file' %}{{ item['filename'] }}{% else %}paste{% endif %} · {{ (item['size'] / 1048576) | round(2) }} mb{% if item['is_partial'] %} <span class="badge-partial">partial</span>{% endif %}</td>
                 <td>{{ item['views'] }}</td>
-                <td><script>document.write(new Date({{ item['expires_at'] }} * 1000).toLocaleDateString())</script></td>
+                <td>{% if item['expires_at'] >= 2000000000 %}never{% else %}<script>document.write(new Date({{ item['expires_at'] }} * 1000).toLocaleDateString())</script><noscript>{{ item['expires_at'] }}</noscript>{% endif %}</td>
             </tr>
             {% endfor %}
         </tbody>

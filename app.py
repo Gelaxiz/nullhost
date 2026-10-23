@@ -21,6 +21,8 @@ from werkzeug.utils import secure_filename
 from flask import Flask, request, render_template, redirect, url_for, send_from_directory, make_response, session, abort, send_file, after_this_request, jsonify
 from PIL import Image
 
+Image.MAX_IMAGE_PIXELS = 25000000
+
 from database import get_db, init_db
 
 LOCAL_ENV_FILE = os.path.join(os.path.dirname(__file__), '.env')
@@ -90,9 +92,20 @@ def browser_mode_context():
     return {'legacy_mode': is_legacy_browser()}
 
 @app.before_request
-def make_session_permanent():
+def security_and_session_checks():
     session.permanent = True
-    if request.method in ('POST', 'PUT', 'PATCH', 'DELETE'):
+    
+    # Host header verification to prevent host header injection
+    if not app.config.get('TESTING'):
+        allowed_hosts = {'nullhost.gelaxiz.xyz', '127.0.0.1', 'localhost'}
+        custom_hosts = os.environ.get('ALLOWED_HOSTS', '').strip()
+        if custom_hosts:
+            allowed_hosts.update(h.strip() for h in custom_hosts.split(',') if h.strip())
+        host = request.host.split(':')[0]
+        if host not in allowed_hosts:
+            abort(400, description='Invalid Host header')
+
+    if not app.config.get('TESTING') and request.method in ('POST', 'PUT', 'PATCH', 'DELETE'):
         source = request.headers.get('Origin') or request.headers.get('Referer')
         if source:
             parsed = urllib.parse.urlparse(source)
@@ -109,7 +122,20 @@ def prevent_uploaded_content_indexing(response):
     response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
     response.headers['Permissions-Policy'] = 'camera=(), microphone=(), geolocation=()'
     response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
-    response.headers['Content-Security-Policy'] = "frame-ancestors 'none'; base-uri 'self'; object-src 'none'"
+    
+    if 'Content-Security-Policy' not in response.headers:
+        response.headers['Content-Security-Policy'] = (
+            "default-src 'self'; "
+            "script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com; "
+            "style-src 'self' 'unsafe-inline'; "
+            "img-src 'self' data:; "
+            "connect-src 'self' https://challenges.cloudflare.com; "
+            "frame-src https://challenges.cloudflare.com; "
+            "frame-ancestors 'none'; "
+            "base-uri 'self'; "
+            "form-action 'self'; "
+            "object-src 'none'"
+        )
     return response
 
 # Ensure upload directory and db exist
@@ -136,6 +162,67 @@ def verify_admin_totp(code):
 admin_login_attempts = {}
 desktop_upload_attempts = {}
 
+def check_and_record_auth_nonce(nonce, now):
+    try:
+        with get_db() as conn:
+            conn.execute("DELETE FROM auth_nonces WHERE expires_at < ?", (now,))
+            conn.execute("INSERT INTO auth_nonces (nonce, expires_at) VALUES (?, ?)", (nonce, now + 300))
+            conn.commit()
+            return True
+    except Exception:
+        return False
+
+def is_admin_authenticated():
+    if not session.get('is_admin'):
+        return False
+    auth_time = session.get('admin_auth_time')
+    if not auth_time or (time.time() - float(auth_time)) > 1800:
+        session.pop('is_admin', None)
+        session.pop('admin_auth_time', None)
+        return False
+    session['admin_auth_time'] = time.time()
+    return True
+
+def set_admin_authenticated():
+    session['is_admin'] = True
+    session['admin_auth_time'] = time.time()
+
+def is_item_unlocked(item_id):
+    auth_time = session.get(f'auth_{item_id}')
+    if not auth_time:
+        return False
+    if auth_time is True:
+        session[f'auth_{item_id}'] = time.time()
+        return True
+    try:
+        if (time.time() - float(auth_time)) > 3600:
+            session.pop(f'auth_{item_id}', None)
+            return False
+        return True
+    except (ValueError, TypeError):
+        return False
+
+def unlock_item(item_id):
+    session[f'auth_{item_id}'] = time.time()
+
+def is_collection_unlocked(collection_id):
+    auth_time = session.get(f'collection_auth_{collection_id}')
+    if not auth_time:
+        return False
+    if auth_time is True:
+        session[f'collection_auth_{collection_id}'] = time.time()
+        return True
+    try:
+        if (time.time() - float(auth_time)) > 3600:
+            session.pop(f'collection_auth_{collection_id}', None)
+            return False
+        return True
+    except (ValueError, TypeError):
+        return False
+
+def unlock_collection(collection_id):
+    session[f'collection_auth_{collection_id}'] = time.time()
+
 def authenticate_desktop_client():
     account_id = request.headers.get('X-Nullhost-Account', '').strip() or request.form.get('account_id', '').strip()
     if not account_id or not account_id.isdigit() or len(account_id) not in (16, 24):
@@ -156,7 +243,9 @@ def verify_mobile_app_token(token_str):
         return False
     try:
         client, created_at, nonce = payload.split(':')
-        if abs(int(time.time()) - int(created_at)) > 7200:
+        now = int(time.time())
+        token_time = int(created_at)
+        if (now - token_time) > 7200 or (token_time - now) > 300:
             return False
         return True
     except Exception:
@@ -164,14 +253,7 @@ def verify_mobile_app_token(token_str):
 
 def authenticate_mobile_client():
     token = request.headers.get('X-Nullhost-App-Token', '').strip() or request.form.get('app_token', '').strip()
-    if verify_mobile_app_token(token):
-        return True
-    user_agent = request.headers.get('User-Agent', '').lower()
-    if 'nullhost-j2me' in user_agent or 'nullhost-symbian' in user_agent:
-        return True
-    if is_legacy_browser():
-        return True
-    return False
+    return verify_mobile_app_token(token)
 
 def desktop_upload_allowed(account_id):
     if not account_id:
@@ -286,34 +368,51 @@ def get_display_type(item):
 def scrub_exif_data(filepath):
     try:
         with Image.open(filepath) as img:
-            # simply saving without passing exif strips it in pillow
-            # handle modes properly to avoid errors with transparency
+            fmt = (img.format or '').upper()
+            if fmt not in ('JPEG', 'JPG', 'PNG', 'WEBP'):
+                return
+            if img.width * img.height > 25000000:
+                return
             if img.mode in ('RGBA', 'LA'):
                 background = Image.new(img.mode[:-1], img.size, (255, 255, 255))
                 background.paste(img, img.split()[-1])
                 img = background
-            img.save(filepath, format=img.format or 'JPEG')
+            img.save(filepath, format=fmt if fmt != 'JPG' else 'JPEG')
     except Exception:
         pass
 
 def cleanup_worker():
+    try:
+        import fcntl
+        lock_file_path = os.path.join(os.path.dirname(__file__), '.cleanup.lock')
+        lock_file = open(lock_file_path, 'a+')
+        fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except ImportError:
+        pass
+    except (IOError, OSError):
+        # Another worker already holds the lock
+        return
+
     while True:
-        with get_db() as conn:
-            cursor = conn.cursor()
-            now = int(time.time())
-            cursor.execute("SELECT id, type, filename FROM items WHERE expires_at <= ?", (now,))
-            expired_items = cursor.fetchall()
-            for item in expired_items:
-                if item['type'] == 'file' and item['filename']:
-                    filepath = os.path.join(app.config['UPLOAD_FOLDER'], item['id'] + '_' + item['filename'])
-                    if os.path.exists(filepath):
-                        try:
-                            os.remove(filepath)
-                        except Exception:
-                            pass
-                cursor.execute("DELETE FROM items WHERE id = ?", (item['id'],))
-            cursor.execute("DELETE FROM tombstones WHERE expires_at <= ?", (now,))
-            conn.commit()
+        try:
+            with get_db() as conn:
+                cursor = conn.cursor()
+                now = int(time.time())
+                cursor.execute("SELECT id, type, filename FROM items WHERE expires_at <= ?", (now,))
+                expired_items = cursor.fetchall()
+                for item in expired_items:
+                    if item['type'] == 'file' and item['filename']:
+                        filepath = os.path.join(app.config['UPLOAD_FOLDER'], item['id'] + '_' + item['filename'])
+                        if os.path.exists(filepath):
+                            try:
+                                os.remove(filepath)
+                            except Exception:
+                                pass
+                    cursor.execute("DELETE FROM items WHERE id = ?", (item['id'],))
+                cursor.execute("DELETE FROM tombstones WHERE expires_at <= ?", (now,))
+                conn.commit()
+        except Exception as e:
+            app.logger.warning(f"Cleanup error: {e}")
         time.sleep(600) # Check every 10 minutes
 
 if os.environ.get('NULLHOST_DISABLE_CLEANUP_WORKER') != '1':
@@ -403,17 +502,30 @@ def mobile_auth():
     if client not in valid_clients:
         return jsonify({'status': 'error', 'message': 'Unknown client platform'}), 400
     
+    try:
+        ts_int = int(timestamp)
+    except (TypeError, ValueError):
+        return jsonify({'status': 'error', 'message': 'Invalid timestamp'}), 400
+
+    now = int(time.time())
+    if abs(now - ts_int) > 300:
+        return jsonify({'status': 'error', 'message': 'Timestamp out of range'}), 401
+
+    if not nonce or len(nonce) < 4:
+        return jsonify({'status': 'error', 'message': 'Invalid nonce'}), 400
+
+    if not check_and_record_auth_nonce(nonce, now):
+        return jsonify({'status': 'error', 'message': 'Replay detected'}), 401
+
     expected_sig = hmac.new(
         NULLHOST_MOBILE_APP_KEY.encode('utf-8'),
         f"{client}:{timestamp}:{nonce}".encode('utf-8'),
         hashlib.sha256
     ).hexdigest()
     
-    is_valid = hmac.compare_digest(signature, expected_sig) or (signature == NULLHOST_MOBILE_APP_KEY)
-    if not is_valid:
+    if not hmac.compare_digest(signature, expected_sig):
         return jsonify({'status': 'error', 'message': 'Invalid app credentials'}), 401
     
-    now = int(time.time())
     token_payload = f"{client}:{now}:{secrets.token_hex(8)}"
     token_sig = hmac.new(NULLHOST_MOBILE_APP_KEY.encode('utf-8'), token_payload.encode('utf-8'), hashlib.sha256).hexdigest()
     upload_token = f"{token_payload}:{token_sig}"
@@ -489,6 +601,7 @@ def mobile_delete():
     data = request.get_json(silent=True) or request.form
     item_id = (data.get('id') or '').strip()
     account_id = request.headers.get('X-Nullhost-Account', '').strip() or (data.get('account_id') or '').strip()
+    delete_token = (data.get('delete_token') or request.headers.get('X-Nullhost-Delete-Token') or '').strip()
     if not item_id:
         return jsonify({'status': 'error', 'message': 'Missing item ID'}), 400
     with get_db() as conn:
@@ -496,8 +609,22 @@ def mobile_delete():
         item = cur.fetchone()
         if not item:
             return jsonify({'status': 'error', 'message': 'Item not found'}), 404
-        if item['account_id'] and item['account_id'] != account_id:
+        
+        is_authorized = False
+        if item['account_id']:
+            if account_id and item['account_id'] == account_id:
+                is_authorized = True
+        else:
+            if delete_token and item['delete_token_hash']:
+                t_hash = hashlib.sha256(delete_token.encode('utf-8')).hexdigest()
+                if hmac.compare_digest(t_hash, item['delete_token_hash']):
+                    is_authorized = True
+            elif item_id in session.get('anon_uploads', []):
+                is_authorized = True
+        
+        if not is_authorized:
             return jsonify({'status': 'error', 'message': 'Unauthorized'}), 403
+
         remove_physical_item_file(item)
         conn.execute("DELETE FROM items WHERE id = ?", (item_id,))
         conn.commit()
@@ -510,7 +637,7 @@ def mobile_item_lookup(item_id):
         return jsonify({'status': 'error', 'message': 'Missing item ID'}), 400
     now = int(time.time())
     with get_db() as conn:
-        cur = conn.execute("SELECT * FROM items WHERE id = ? COLLATE NOCASE OR filename = ? COLLATE NOCASE", (item_id, item_id))
+        cur = conn.execute("SELECT * FROM items WHERE id = ? COLLATE NOCASE", (item_id,))
         item = cur.fetchone()
         if not item:
             col = conn.execute("SELECT * FROM collections WHERE id = ? COLLATE NOCASE", (item_id,)).fetchone()
@@ -527,8 +654,8 @@ def mobile_item_lookup(item_id):
                     'burn_after_read': 0,
                     'content': None,
                     'url': url_for('collection_view', collection_id=col['id'], _external=True),
-                    'raw_url': url_for('collection_zip', collection_id=col['id'], _external=True),
-                    'download_url': url_for('collection_zip', collection_id=col['id'], _external=True),
+                    'raw_url': url_for('download_collection_zip', collection_id=col['id'], _external=True),
+                    'download_url': url_for('download_collection_zip', collection_id=col['id'], _external=True),
                     'qr_url': url_for('collection_qr', collection_id=col['id'], _external=True) + '?size=5'
                 })
             return jsonify({'status': 'error', 'message': 'Item not found'}), 404
@@ -541,7 +668,9 @@ def mobile_item_lookup(item_id):
         if has_pwd:
             if pwd and check_password_hash(item['password_hash'], pwd):
                 pwd_ok = True
-                session[f'auth_{item["id"]}'] = True
+                unlock_item(item['id'])
+            elif is_item_unlocked(item['id']):
+                pwd_ok = True
         else:
             pwd_ok = True
 
@@ -551,11 +680,6 @@ def mobile_item_lookup(item_id):
         raw_url = url_for('raw', item_id=item['id'], filename=fname, _external=True)
         dl_url = url_for('download', item_id=item['id'], filename=fname, _external=True)
         preview_url = url_for('mobile_image_preview', item_id=item['id'], _external=True)
-        if has_pwd and pwd_ok and pwd:
-            import urllib.parse
-            raw_url += '?password=' + urllib.parse.quote_plus(pwd)
-            dl_url += '?password=' + urllib.parse.quote_plus(pwd)
-            preview_url += '?password=' + urllib.parse.quote_plus(pwd)
 
         return jsonify({
             'status': 'ok',
@@ -586,8 +710,11 @@ def mobile_image_preview(item_id):
         return "Not found or expired", 404
     if item['password_hash']:
         param_pwd = (request.args.get('password') or request.headers.get('X-Nullhost-Password') or '').strip()
-        if not (param_pwd and check_password_hash(item['password_hash'], param_pwd)):
+        if not (param_pwd and check_password_hash(item['password_hash'], param_pwd)) and not is_item_unlocked(item['id']):
             return "Password required", 401
+    
+    if item['type'] != 'file':
+        abort(415, description="Preview unsupported for non-image items")
     
     filename = item['filename'] or ''
     filepath = os.path.join(app.config['UPLOAD_FOLDER'], item['id'] + '_' + filename)
@@ -598,19 +725,23 @@ def mobile_image_preview(item_id):
     if lower.endswith(('.jpg', '.jpeg', '.png', '.webp', '.bmp', '.gif')):
         try:
             import io
-            img = Image.open(filepath)
-            max_dim = 640
-            if img.width > max_dim or img.height > max_dim:
-                img.thumbnail((max_dim, max_dim), Image.Resampling.LANCZOS)
-            if img.mode not in ('RGB', 'L'):
-                img = img.convert('RGB')
-            out_io = io.BytesIO()
-            img.save(out_io, format='JPEG', quality=85)
-            out_io.seek(0)
-            return send_file(out_io, mimetype='image/jpeg')
+            with Image.open(filepath) as img:
+                fmt = (img.format or '').upper()
+                if fmt not in ('JPEG', 'JPG', 'PNG', 'WEBP', 'BMP', 'GIF'):
+                    abort(415, description="Unsupported image format")
+                max_dim = 640
+                if img.width > max_dim or img.height > max_dim:
+                    img.thumbnail((max_dim, max_dim), Image.Resampling.LANCZOS)
+                if img.mode not in ('RGB', 'L'):
+                    img = img.convert('RGB')
+                out_io = io.BytesIO()
+                img.save(out_io, format='JPEG', quality=85)
+                out_io.seek(0)
+                return send_file(out_io, mimetype='image/jpeg')
         except Exception as e:
             app.logger.warning(f"Mobile preview resize error: {e}")
-    return send_file(filepath, mimetype=item['mime_type'] or 'application/octet-stream')
+            abort(415, description="Failed to generate image preview")
+    abort(415, description="Preview unsupported for non-image files")
 
 _client_hash_cache = {'mtime': 0, 'size': 0, 'hash': ''}
 
@@ -799,6 +930,8 @@ def upload():
         except Exception:
             account_id = None
     now = int(time.time())
+    delete_token = secrets.token_urlsafe(24)
+    delete_token_hash = hashlib.sha256(delete_token.encode('utf-8')).hexdigest()
     
     item_id, err = get_or_generate_item_id(request.form.get('custom_id'), request.form.get('url_format'), now)
     if err:
@@ -843,14 +976,15 @@ def upload():
         fast_resize = request.form.get('fast_resize') == '1' or request.headers.get('X-Nullhost-Fast-Resize') == '1'
         if fast_resize and filename.lower().endswith(('.jpg', '.jpeg', '.png', '.webp')):
             try:
-                from PIL import Image
-                img = Image.open(filepath)
-                if img.width > 1920 or img.height > 1080:
-                    img.thumbnail((1920, 1080), Image.Resampling.LANCZOS)
-                    if img.mode not in ('RGB', 'L'):
-                        img = img.convert('RGB')
-                    img.save(filepath, format='JPEG', quality=85, optimize=True)
-                    size = os.path.getsize(filepath)
+                with Image.open(filepath) as img:
+                    fmt = (img.format or '').upper()
+                    if fmt in ('JPEG', 'JPG', 'PNG', 'WEBP') and img.width * img.height <= 25000000:
+                        if img.width > 1920 or img.height > 1080:
+                            img.thumbnail((1920, 1080), Image.Resampling.LANCZOS)
+                            if img.mode not in ('RGB', 'L'):
+                                img = img.convert('RGB')
+                            img.save(filepath, format='JPEG', quality=85, optimize=True)
+                            size = os.path.getsize(filepath)
             except Exception as e:
                 app.logger.warning(f"Fast resize optimization failed: {e}")
         
@@ -862,9 +996,9 @@ def upload():
         
         with get_db() as conn:
             conn.execute('''
-                INSERT INTO items (id, type, account_id, filename, password_hash, burn_after_read, is_public, expires_at, dynamic_expiry, views, size, mimetype, created_at, is_partial)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
-            ''', (item_id, 'file', account_id, filename, p_hash, burn, is_public, expires_at, dynamic_expiry, 0, size, file.mimetype, now))
+                INSERT INTO items (id, type, account_id, filename, password_hash, burn_after_read, is_public, expires_at, dynamic_expiry, views, size, mimetype, created_at, is_partial, delete_token_hash)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)
+            ''', (item_id, 'file', account_id, filename, p_hash, burn, is_public, expires_at, dynamic_expiry, 0, size, file.mimetype, now, delete_token_hash))
             conn.commit()
             
     elif request.form.get('paste_content') or request.form.get('text'):
@@ -873,9 +1007,9 @@ def upload():
         
         with get_db() as conn:
             conn.execute('''
-                INSERT INTO items (id, type, account_id, content, password_hash, burn_after_read, is_public, expires_at, dynamic_expiry, views, size, mimetype, created_at, is_partial)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
-            ''', (item_id, 'paste', account_id, content, p_hash, burn, is_public, expires_at, dynamic_expiry, 0, size, 'text/plain', now))
+                INSERT INTO items (id, type, account_id, content, password_hash, burn_after_read, is_public, expires_at, dynamic_expiry, views, size, mimetype, created_at, is_partial, delete_token_hash)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)
+            ''', (item_id, 'paste', account_id, content, p_hash, burn, is_public, expires_at, dynamic_expiry, 0, size, 'text/plain', now, delete_token_hash))
             conn.commit()
     else:
         return "error: no file or content provided", 400
@@ -897,6 +1031,7 @@ def upload():
         anon_uploads = session.get('anon_uploads', [])
         anon_uploads.append(item_id)
         session['anon_uploads'] = anon_uploads
+        session[f'delete_token_{item_id}'] = delete_token
 
     if request.form.get('ajax') == '1' or request.form.get('format') == 'json' or request.headers.get('Accept') == 'application/json' or is_verified_mobile:
         is_external = bool(is_verified_mobile or request.form.get('format') == 'json')
@@ -915,7 +1050,8 @@ def upload():
             "raw_url": url_for('raw', item_id=item_id, filename=actual_fname, _external=is_external) if 'file' in request.files else url_for('raw', item_id=item_id, _external=is_external),
             "download_url": dl_path if not is_external else url_for('download', item_id=item_id, filename=actual_fname, _external=True),
             "qr_url": (url_for('item_qr', item_id=item_id, _external=True) + '?size=5') if is_verified_mobile else url_for('item_qr', item_id=item_id, _external=True),
-            "delete_url": url_for('delete_item', item_id=item_id, _external=True),
+            "delete_token": delete_token,
+            "delete_url": url_for('delete_item', item_id=item_id, token=delete_token, _external=True),
             "filename": actual_fname,
             "size": size if 'size' in locals() else None,
             "expires_at": expires_at
@@ -1010,11 +1146,14 @@ def upload_init():
 
     mimetype = request.form.get('mimetype', '') or 'application/octet-stream'
 
+    delete_token = secrets.token_urlsafe(24)
+    delete_token_hash = hashlib.sha256(delete_token.encode('utf-8')).hexdigest()
+
     with get_db() as conn:
         conn.execute('''
-            INSERT INTO items (id, type, account_id, filename, password_hash, burn_after_read, is_public, expires_at, dynamic_expiry, views, size, mimetype, created_at, is_partial)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
-        ''', (item_id, 'file', account_id, filename, p_hash, burn, is_public, expires_at, dynamic_expiry, 0, 0, mimetype, now))
+            INSERT INTO items (id, type, account_id, filename, password_hash, burn_after_read, is_public, expires_at, dynamic_expiry, views, size, mimetype, created_at, is_partial, delete_token_hash)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
+        ''', (item_id, 'file', account_id, filename, p_hash, burn, is_public, expires_at, dynamic_expiry, 0, 0, mimetype, now, delete_token_hash))
         conn.commit()
 
     if not account_id:
@@ -1022,6 +1161,7 @@ def upload_init():
         anon_uploads = session.get('anon_uploads', [])
         anon_uploads.append(item_id)
         session['anon_uploads'] = anon_uploads
+        session[f'delete_token_{item_id}'] = delete_token
 
     collection_id = request.form.get('collection_id', '').strip()
     if collection_id and account_id:
@@ -1154,11 +1294,14 @@ def upload_chunk():
         mimetype = request.form.get('mimetype', '') or chunk_file.mimetype or 'application/octet-stream'
 
         is_partial = 0 if total_chunks == 1 else 1
+        delete_token = secrets.token_urlsafe(24)
+        delete_token_hash = hashlib.sha256(delete_token.encode('utf-8')).hexdigest()
+
         with get_db() as conn:
             conn.execute('''
-                INSERT INTO items (id, type, account_id, filename, password_hash, burn_after_read, is_public, expires_at, dynamic_expiry, views, size, mimetype, created_at, is_partial)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ''', (item_id, 'file', account_id, filename, p_hash, burn, is_public, expires_at, dynamic_expiry, 0, initial_size, mimetype, now, is_partial))
+                INSERT INTO items (id, type, account_id, filename, password_hash, burn_after_read, is_public, expires_at, dynamic_expiry, views, size, mimetype, created_at, is_partial, delete_token_hash)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (item_id, 'file', account_id, filename, p_hash, burn, is_public, expires_at, dynamic_expiry, 0, initial_size, mimetype, now, is_partial, delete_token_hash))
             conn.commit()
 
         if not account_id:
@@ -1166,6 +1309,7 @@ def upload_chunk():
             anon_uploads = session.get('anon_uploads', [])
             anon_uploads.append(item_id)
             session['anon_uploads'] = anon_uploads
+            session[f'delete_token_{item_id}'] = delete_token
 
         collection_id = request.form.get('collection_id', '').strip()
 
@@ -1825,7 +1969,7 @@ def download_collection_zip(collection_id):
     collection, items = get_collection_payload(collection_id)
     if not collection:
         abort(404)
-    if collection['password_hash'] and not session.get(f'collection_auth_{collection_id}'):
+    if collection['password_hash'] and not is_collection_unlocked(collection_id):
         return redirect(url_for('collection_view', collection_id=collection_id))
 
     selected = set(request.form.getlist('item_ids'))
@@ -1862,7 +2006,7 @@ def download_collection_zip(collection_id):
         return response
 
     download_name = secure_filename(collection['name']) or collection['id']
-    return send_file(temp_path, as_attachment=True, download_name=f'{download_name}.zip')
+    return send_file(temp_path, as_attachment=True, download_name=f'{download_name}.zip', mimetype='application/zip')
 
 def qr_response(target_url):
     box_size = None
@@ -1948,9 +2092,9 @@ def rename_item(item_id):
         
     return redirect(url_for('account'))
 
-@app.route('/delete/<item_id>', methods=['POST'])
+@app.route('/delete/<item_id>', methods=['GET', 'POST'])
 def delete_item(item_id):
-    
+    delete_token = (request.args.get('token') or request.form.get('token') or request.headers.get('X-Nullhost-Delete-Token') or '').strip()
     with get_db() as conn:
         cur = conn.execute("SELECT * FROM items WHERE id = ?", (item_id,))
         item = cur.fetchone()
@@ -1965,15 +2109,20 @@ def delete_item(item_id):
             else:
                 if item_id in anon_uploads:
                     is_authorized = True
+                elif delete_token and item['delete_token_hash']:
+                    t_hash = hashlib.sha256(delete_token.encode('utf-8')).hexdigest()
+                    if hmac.compare_digest(t_hash, item['delete_token_hash']):
+                        is_authorized = True
                     
         if not is_authorized:
             return "error: unauthorized or not found", 401
         
         remove_physical_item_file(item)
-                
         conn.execute("DELETE FROM items WHERE id = ?", (item_id,))
         conn.commit()
         
+    if request.headers.get('Accept') == 'application/json' or request.is_json:
+        return jsonify({'status': 'ok', 'message': 'Item deleted'})
     return redirect(url_for('account'))
 
 @app.route('/items/delete-selected', methods=['POST'])
@@ -2111,8 +2260,8 @@ def overview(item_id):
             if not check_password_hash(item['password_hash'], pwd):
                 return "error: incorrect password", 401
             # Set a temporary session flag to allow viewing/downloading
-            session[f'auth_{item_id}'] = True
-        elif not session.get(f'auth_{item_id}'):
+            unlock_item(item_id)
+        elif not is_item_unlocked(item_id):
             return render_template('password.html', item_id=item_id, target='overview')
 
     # We do not trigger burn_after_read on the overview page, only on the raw download
@@ -2145,15 +2294,15 @@ def raw(item_id, filename=None, force_download=False):
     if item['password_hash']:
         param_pwd = (request.args.get('password') or request.headers.get('X-Nullhost-Password') or '').strip()
         if param_pwd and check_password_hash(item['password_hash'], param_pwd):
-            session[f'auth_{item_id}'] = True
+            unlock_item(item_id)
         elif request.method == 'POST':
             if not verify_turnstile():
                 return render_template('password.html', item_id=item_id, target='raw', action_url=request.path, error='verification failed. try again.'), 403
             pwd = request.form.get('password')
             if not check_password_hash(item['password_hash'], pwd):
                 return "error: incorrect password", 401
-            session[f'auth_{item_id}'] = True
-        elif not session.get(f'auth_{item_id}'):
+            unlock_item(item_id)
+        elif not is_item_unlocked(item_id):
             return render_template('password.html', item_id=item_id, target='raw', action_url=request.path)
 
     new_expires = item['expires_at']
@@ -2179,13 +2328,21 @@ def raw(item_id, filename=None, force_download=False):
         resp.headers['X-Nullhost-Partial'] = '1'
 
     burn_triggered = False
-    if item['burn_after_read'] > 0 and (item['views'] + 1) >= item['burn_after_read']:
-        burn_triggered = True
-
     with get_db() as conn:
-        conn.execute("UPDATE items SET views = views + 1, expires_at = ? WHERE id = ?", (new_expires, item_id))
-        if burn_triggered:
-            conn.execute("DELETE FROM items WHERE id = ?", (item_id,))
+        if item['burn_after_read'] > 0:
+            cur = conn.execute(
+                "UPDATE items SET views = views + 1, expires_at = ? WHERE id = ? AND views < burn_after_read",
+                (new_expires, item_id)
+            )
+            if cur.rowcount == 0:
+                return "error: not found or expired", 404
+            check_cur = conn.execute("SELECT views, burn_after_read FROM items WHERE id = ?", (item_id,))
+            updated_row = check_cur.fetchone()
+            if updated_row and updated_row['views'] >= updated_row['burn_after_read']:
+                burn_triggered = True
+                conn.execute("DELETE FROM items WHERE id = ?", (item_id,))
+        else:
+            conn.execute("UPDATE items SET views = views + 1, expires_at = ? WHERE id = ?", (new_expires, item_id))
         conn.commit()
 
     if burn_triggered and item['type'] == 'file':
@@ -2213,6 +2370,7 @@ def admin_gate():
         action = request.form.get('action')
         if action == 'logout':
             session.pop('is_admin', None)
+            session.pop('admin_auth_time', None)
             return redirect(url_for('index'))
             
         if cooldown_remaining > 0:
@@ -2220,7 +2378,7 @@ def admin_gate():
             
         totp_code = request.form.get('totp_code', '')
         if verify_admin_totp(totp_code):
-            session['is_admin'] = True
+            set_admin_authenticated()
             if ip in admin_login_attempts:
                 del admin_login_attempts[ip]
             return redirect(url_for('admin_dashboard'))
@@ -2228,7 +2386,7 @@ def admin_gate():
             admin_login_attempts[ip] = time.time()
             return render_template('admin_login.html', error="incorrect 6-digit authenticator code.", cooldown=10), 429
             
-    if session.get('is_admin'):
+    if is_admin_authenticated():
         return redirect(url_for('admin_dashboard'))
     return render_template('admin_login.html', cooldown=cooldown_remaining)
 
@@ -2238,7 +2396,7 @@ def gelaxiz_admin_gate_redirect():
 
 @app.route('/admin_dashboard')
 def admin_dashboard():
-    if not session.get('is_admin'):
+    if not is_admin_authenticated():
         return redirect(url_for('admin_gate'))
     q = request.args.get('q', '').strip()
     with get_db() as conn:
@@ -2268,7 +2426,7 @@ def admin_dashboard():
 
 @app.route('/admin/update_tombstone_reason/<tomb_id>', methods=['POST'])
 def admin_update_tombstone_reason(tomb_id):
-    if not session.get('is_admin'): return abort(403)
+    if not is_admin_authenticated(): return abort(403)
     new_reason = request.form.get('reason', '').strip()
     if new_reason:
         with get_db() as conn:
@@ -2278,7 +2436,7 @@ def admin_update_tombstone_reason(tomb_id):
 
 @app.route('/admin/delete_item/<item_id>', methods=['POST'])
 def admin_delete_item(item_id):
-    if not session.get('is_admin'): return abort(403)
+    if not is_admin_authenticated(): return abort(403)
     with get_db() as conn:
         item = conn.execute("SELECT * FROM items WHERE id = ?", (item_id,)).fetchone()
         if item and item['type'] == 'file':
@@ -2292,7 +2450,7 @@ def admin_delete_item(item_id):
 
 @app.route('/admin/takedown_item/<item_id>', methods=['POST'])
 def admin_takedown_item(item_id):
-    if not session.get('is_admin'): return abort(403)
+    if not is_admin_authenticated(): return abort(403)
     reason = request.form.get('reason', 'Third-party takedown request / Legal Notice')
     now = int(time.time())
     expires_at = now + 7 * 86400
@@ -2310,7 +2468,7 @@ def admin_takedown_item(item_id):
 
 @app.route('/admin/delete_account/<account_id>', methods=['POST'])
 def admin_delete_account(account_id):
-    if not session.get('is_admin'): return abort(403)
+    if not is_admin_authenticated(): return abort(403)
     with get_db() as conn:
         items = conn.execute("SELECT * FROM items WHERE account_id = ?", (account_id,)).fetchall()
         for item in items:
@@ -2326,7 +2484,7 @@ def admin_delete_account(account_id):
 
 @app.route('/admin/revoke_tombstone/<tomb_id>', methods=['POST'])
 def admin_revoke_tombstone(tomb_id):
-    if not session.get('is_admin'): return abort(403)
+    if not is_admin_authenticated(): return abort(403)
     with get_db() as conn:
         conn.execute("DELETE FROM tombstones WHERE id = ?", (tomb_id,))
         conn.commit()
@@ -2334,7 +2492,7 @@ def admin_revoke_tombstone(tomb_id):
 
 @app.route('/admin/run_cleanup', methods=['POST'])
 def admin_run_cleanup():
-    if not session.get('is_admin'): return abort(403)
+    if not is_admin_authenticated(): return abort(403)
     with get_db() as conn:
         now = int(time.time())
         expired_items = conn.execute("SELECT id, type, filename FROM items WHERE expires_at <= ?", (now,)).fetchall()

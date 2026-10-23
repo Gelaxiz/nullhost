@@ -3,6 +3,8 @@
 .env.local
 .secret_key
 .admin_totp_secret
+.cleanup.lock
+*.lock
 cookies.txt
 
 # Databases & User Uploads
