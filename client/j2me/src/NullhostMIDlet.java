@@ -28,7 +28,7 @@ import javax.microedition.rms.RecordStore;
  */
 public class NullhostMIDlet extends MIDlet implements CommandListener, ItemCommandListener {
 
-    private static final String APP_VERSION = "1.9.5";
+    private static final String APP_VERSION = "1.9.6";
     private static final String CLIENT_ID = "j2me-universal";
     private static final String MOBILE_SECRET = "nullhost_secret_mobile_app_key_2026";
     private static final String DEFAULT_SERVER = "http://nullhost.gelaxiz.xyz";
@@ -1875,7 +1875,7 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
     // ------------------------------------------------------------------------
     private void openTextContent(final UploadRecord rec, final Displayable backTarget) {
         if (rec == null) return;
-        if (rec.content != null && rec.content.length() > 0) {
+        if (rec.content != null && rec.content.length() > 0 && !"null".equals(rec.content)) {
             showCustomTextViewer(rec, rec.content, backTarget);
             return;
         }
@@ -3099,26 +3099,86 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
         if (json == null || field == null) return null;
         String key = "\"" + field + "\"";
         int idx = 0;
+        int len = json.length();
         while ((idx = json.indexOf(key, idx)) != -1) {
-            if (idx == 0 || json.charAt(idx - 1) == '{' || json.charAt(idx - 1) == ',' || json.charAt(idx - 1) == ' ' || json.charAt(idx - 1) == '\n') {
+            if (idx == 0 || json.charAt(idx - 1) == '{' || json.charAt(idx - 1) == ',' || json.charAt(idx - 1) == ' ' || json.charAt(idx - 1) == '\n' || json.charAt(idx - 1) == '\r' || json.charAt(idx - 1) == '\t') {
                 int colon = json.indexOf(':', idx + key.length());
                 if (colon != -1) {
                     int start = colon + 1;
-                    while (start < json.length() && (json.charAt(start) == ' ' || json.charAt(start) == '\"' || json.charAt(start) == '\r' || json.charAt(start) == '\n')) {
+                    while (start < len && (json.charAt(start) == ' ' || json.charAt(start) == '\t' || json.charAt(start) == '\r' || json.charAt(start) == '\n')) {
                         start++;
                     }
-                    int end = start;
-                    while (end < json.length() && json.charAt(end) != '\"' && json.charAt(end) != ',' && json.charAt(end) != '}' && json.charAt(end) != '\r' && json.charAt(end) != '\n') {
-                        end++;
-                    }
-                    if (start <= end) {
-                        return json.substring(start, end).trim();
+                    if (start < len) {
+                        if (json.charAt(start) == '\"') {
+                            start++;
+                            int end = start;
+                            while (end < len) {
+                                char c = json.charAt(end);
+                                if (c == '\"') {
+                                    int slashes = 0;
+                                    int k = end - 1;
+                                    while (k >= start && json.charAt(k) == '\\') {
+                                        slashes++;
+                                        k--;
+                                    }
+                                    if (slashes % 2 == 0) {
+                                        break;
+                                    }
+                                }
+                                end++;
+                            }
+                            if (end <= len) {
+                                return unescapeJson(json.substring(start, end));
+                            }
+                        } else {
+                            int end = start;
+                            while (end < len && json.charAt(end) != ',' && json.charAt(end) != '}' && json.charAt(end) != ']' && json.charAt(end) != '\r' && json.charAt(end) != '\n') {
+                                end++;
+                            }
+                            String val = json.substring(start, end).trim();
+                            if ("null".equals(val)) {
+                                return null;
+                            }
+                            return val;
+                        }
                     }
                 }
             }
             idx += key.length();
         }
         return null;
+    }
+
+    private static String unescapeJson(String s) {
+        if (s == null || s.indexOf('\\') == -1) return s;
+        StringBuffer sb = new StringBuffer();
+        int len = s.length();
+        for (int i = 0; i < len; i++) {
+            char c = s.charAt(i);
+            if (c == '\\' && i + 1 < len) {
+                char next = s.charAt(i + 1);
+                if (next == '\"') { sb.append('\"'); i++; }
+                else if (next == '\\') { sb.append('\\'); i++; }
+                else if (next == '/') { sb.append('/'); i++; }
+                else if (next == 'n') { sb.append('\n'); i++; }
+                else if (next == 'r') { sb.append('\r'); i++; }
+                else if (next == 't') { sb.append('\t'); i++; }
+                else if (next == 'u' && i + 5 < len) {
+                    try {
+                        String hex = s.substring(i + 2, i + 6);
+                        sb.append((char) Integer.parseInt(hex, 16));
+                        i += 5;
+                    } catch (Exception ex) {
+                        sb.append(c);
+                    }
+                } else {
+                    sb.append(c);
+                }
+            } else {
+                sb.append(c);
+            }
+        }
+        return sb.toString();
     }
 
     private static String formatTimeLeft(long expiresAtSec) {

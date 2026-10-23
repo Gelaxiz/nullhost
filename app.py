@@ -643,7 +643,7 @@ def client_update_manifest():
 def app_versions():
     response = jsonify({
         'status': 'ok',
-        'j2me': '1.9.5',
+        'j2me': '1.9.6',
         'windows': NULLHOST_CLIENT_VERSION,
         'j2me_url': url_for('download_app', platform='j2me', _external=True),
         'jad_url': url_for('download_app', platform='jad', _external=True),
