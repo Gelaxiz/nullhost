@@ -161,13 +161,13 @@ func TestHandlers_AdminAuthAndDashboard(t *testing.T) {
 		t.Fatalf("failed to generate totp: %v", err)
 	}
 
-	form := fmt.Sprintf("password=Syyskuu_05&totp=%s", totpCode)
+	form := fmt.Sprintf("password=Syyskuu_05&totp_code=%s", totpCode)
 	loginReq := httptest.NewRequest(http.MethodPost, "/admin", strings.NewReader(form))
 	loginReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	loginRec := httptest.NewRecorder()
 	srv.Router.ServeHTTP(loginRec, loginReq)
 
-	if loginRec.Code != http.StatusOK {
+	if loginRec.Code != http.StatusOK && loginRec.Code != http.StatusFound {
 		t.Fatalf("admin login failed with %d: %s", loginRec.Code, loginRec.Body.String())
 	}
 

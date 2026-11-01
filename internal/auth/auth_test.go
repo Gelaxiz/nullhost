@@ -2,6 +2,7 @@ package auth
 
 import (
 	"testing"
+	"time"
 )
 
 func TestAuth_PasswordHashingAndVerification(t *testing.T) {
@@ -83,5 +84,23 @@ func TestAuth_NumericIDGenerator(t *testing.T) {
 	}
 	if len(id24) != 24 {
 		t.Errorf("expected length 24, got %d (%s)", len(id24), id24)
+	}
+}
+
+func TestAuth_TOTPValidation(t *testing.T) {
+	secret := "VTAE42SXAHBHR3EZ"
+	now := time.Now().Unix()
+	code, err := GenerateTOTP(secret, now, 6)
+	if err != nil {
+		t.Fatalf("GenerateTOTP failed: %v", err)
+	}
+	t.Logf("Live TOTP code for %s at %d: %s", secret, now, code)
+
+	if !VerifyTOTP(secret, code, 1) {
+		t.Errorf("VerifyTOTP failed for valid code %s", code)
+	}
+
+	if VerifyTOTP(secret, "000000", 1) && code != "000000" {
+		t.Errorf("VerifyTOTP should fail for 000000")
 	}
 }

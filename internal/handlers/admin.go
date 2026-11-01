@@ -22,6 +22,7 @@ var (
 func (s *Server) HandleAdminGate(w http.ResponseWriter, r *http.Request) {
 	ip := s.GetClientIP(r)
 	now := time.Now().Unix()
+	wantsJSON := r.URL.Query().Get("format") == "json" || strings.Contains(r.Header.Get("Accept"), "application/json") || r.Header.Get("X-Requested-With") == "XMLHttpRequest"
 
 	if r.Method == http.MethodPost {
 		_ = r.ParseForm()
@@ -31,35 +32,86 @@ func (s *Server) HandleAdminGate(w http.ResponseWriter, r *http.Request) {
 			sess.IsAdmin = false
 			sess.AuthTime = 0
 			s.SetSession(w, r, sess)
-			s.JSON(w, http.StatusOK, map[string]any{"status": "ok", "message": "logged out"})
+			if wantsJSON {
+				s.JSON(w, http.StatusOK, map[string]any{"status": "ok", "message": "logged out"})
+				return
+			}
+			http.Redirect(w, r, "/admin", http.StatusFound)
 			return
 		}
 
 		// Check cooldown (10s)
+		var cooldownRemaining int64
 		if val, ok := adminCooldowns.Load(ip); ok {
 			lastFailed := val.(int64)
 			if now-lastFailed < 10 {
-				rem := 10 - (now - lastFailed)
-				s.Error(w, http.StatusTooManyRequests, fmt.Sprintf("Too many failed attempts. Cooldown: %d seconds remaining.", rem))
-				return
+				cooldownRemaining = 10 - (now - lastFailed)
 			}
 		}
 
-		password := r.FormValue("password")
-		totpCode := r.FormValue("totp")
+		if cooldownRemaining > 0 {
+			if wantsJSON {
+				s.JSON(w, http.StatusTooManyRequests, map[string]any{
+					"status":   "error",
+					"message":  fmt.Sprintf("cooldown active. please wait %d seconds...", cooldownRemaining),
+					"cooldown": cooldownRemaining,
+				})
+				return
+			}
+			s.RenderHTML(w, http.StatusTooManyRequests, "admin_login.html", map[string]any{
+				"password_required": true,
+				"error":             fmt.Sprintf("cooldown active. please wait %d seconds...", cooldownRemaining),
+				"cooldown":          cooldownRemaining,
+			})
+			return
+		}
+
+		password := strings.TrimSpace(r.FormValue("password"))
+		if password == "" {
+			password = strings.TrimSpace(r.FormValue("admin_password"))
+		}
+
+		// Support both totp_code (used in admin_login.html) and totp (API / legacy)
+		totpCode := strings.TrimSpace(r.FormValue("totp_code"))
+		if totpCode == "" {
+			totpCode = strings.TrimSpace(r.FormValue("totp"))
+		}
 
 		// 1. Password check
-		pwdValid := subtle.ConstantTimeCompare([]byte(password), []byte(s.Config.AdminPassword)) == 1
+		pwdValid := true
+		if s.Config.AdminPassword != "" {
+			pwdValid = subtle.ConstantTimeCompare([]byte(password), []byte(s.Config.AdminPassword)) == 1
+		}
 
 		// 2. TOTP check (if configured)
 		totpValid := true
 		if s.Config.AdminTOTPSecret != "" {
-			totpValid = auth.VerifyTOTP(s.Config.AdminTOTPSecret, totpCode, 1)
+			totpValid = auth.VerifyTOTP(s.Config.AdminTOTPSecret, totpCode, 2)
 		}
 
 		if !pwdValid || !totpValid {
 			adminCooldowns.Store(ip, now)
-			s.Error(w, http.StatusUnauthorized, "invalid admin credentials or 2FA code")
+			errMsg := "incorrect 6-digit authenticator code or password."
+			if !pwdValid && totpValid {
+				errMsg = "incorrect security password."
+			} else if pwdValid && !totpValid {
+				errMsg = "incorrect 6-digit authenticator code."
+			}
+
+			if wantsJSON {
+				s.JSON(w, http.StatusUnauthorized, map[string]any{
+					"status":   "error",
+					"message":  errMsg,
+					"cooldown": 10,
+				})
+				return
+			}
+
+			s.RenderHTML(w, http.StatusUnauthorized, "admin_login.html", map[string]any{
+				"password_required": true,
+				"error":             errMsg,
+				"cooldown":          10,
+			})
 			return
 		}
 
@@ -69,16 +121,21 @@ func (s *Server) HandleAdminGate(w http.ResponseWriter, r *http.Request) {
 		sess.AuthTime = now
 		s.SetSession(w, r, sess)
 
-		s.JSON(w, http.StatusOK, map[string]any{
-			"status":  "ok",
-			"message": "admin authenticated",
-		})
+		if wantsJSON {
+			s.JSON(w, http.StatusOK, map[string]any{
+				"status":  "ok",
+				"message": "admin authenticated",
+			})
+			return
+		}
+
+		http.Redirect(w, r, "/admin_dashboard", http.StatusFound)
 		return
 	}
 
 	// GET request: return auth status or render login page
 	sess := s.GetSession(r)
-	if r.URL.Query().Get("format") == "json" {
+	if wantsJSON {
 		s.JSON(w, http.StatusOK, map[string]any{
 			"is_admin": sess.IsAdmin,
 		})
@@ -88,9 +145,18 @@ func (s *Server) HandleAdminGate(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/admin_dashboard", http.StatusFound)
 		return
 	}
+
+	var cooldownRemaining int64
+	if val, ok := adminCooldowns.Load(ip); ok {
+		lastFailed := val.(int64)
+		if now-lastFailed < 10 {
+			cooldownRemaining = 10 - (now - lastFailed)
+		}
+	}
+
 	s.RenderHTML(w, http.StatusOK, "admin_login.html", map[string]any{
 		"password_required": true,
-		"cooldown":          0,
+		"cooldown":          cooldownRemaining,
 	})
 }
 
@@ -107,7 +173,11 @@ func (s *Server) HandleAdminSessionCheck(w http.ResponseWriter, r *http.Request)
 func (s *Server) HandleAdminDashboard(w http.ResponseWriter, r *http.Request) {
 	sess := s.GetSession(r)
 	if !sess.IsAdmin {
-		s.Error(w, http.StatusUnauthorized, "admin access required")
+		if r.URL.Query().Get("format") == "json" || strings.Contains(r.Header.Get("Accept"), "application/json") {
+			s.JSON(w, http.StatusUnauthorized, map[string]any{"error": "admin access required"})
+			return
+		}
+		http.Redirect(w, r, "/admin", http.StatusFound)
 		return
 	}
 

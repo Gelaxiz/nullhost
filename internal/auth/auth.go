@@ -80,8 +80,13 @@ func (am *AdminManager) VerifyPassword(provided string) bool {
 	return subtle.ConstantTimeCompare(providedBytes, expectedBytes) == 1
 }
 
-// VerifyTOTP verifies a 6-digit TOTP token against the base32 secret (window ±1 step)
+// VerifyTOTP verifies a 6-digit TOTP token against the base32 secret (window ±2 steps)
 func (am *AdminManager) VerifyTOTP(tokenStr string) bool {
+	return am.VerifyTOTPWithWindow(tokenStr, 2)
+}
+
+// VerifyTOTPWithWindow verifies a 6-digit TOTP token against base32 secret with custom step window
+func (am *AdminManager) VerifyTOTPWithWindow(tokenStr string, window int) bool {
 	tokenStr = strings.TrimSpace(tokenStr)
 	if len(tokenStr) != 6 {
 		return false
@@ -101,9 +106,13 @@ func (am *AdminManager) VerifyTOTP(tokenStr string) bool {
 		}
 	}
 
+	if window < 1 {
+		window = 2
+	}
+
 	currentStep := time.Now().Unix() / 30
-	// Check current step and adjacent steps (window = 1)
-	for offset := int64(-1); offset <= 1; offset++ {
+	// Check current step and adjacent steps (window = ±window)
+	for offset := int64(-window); offset <= int64(window); offset++ {
 		step := currentStep + offset
 		if computeHOTP(key, step) == expectedCode {
 			return true
@@ -323,7 +332,7 @@ func GenerateTOTP(secret string, timestamp int64, digits int) (string, error) {
 // VerifyTOTP verifies a TOTP code against a base32 secret
 func VerifyTOTP(secret, tokenStr string, window int) bool {
 	am := NewAdminManager("", secret, "", "")
-	return am.VerifyTOTP(tokenStr)
+	return am.VerifyTOTPWithWindow(tokenStr, window)
 }
 
 func bigInt(val int64) *big.Int {
