@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -38,6 +39,10 @@ func (s *Server) routes() {
 	// Web Landing & Static
 	r.Get("/", s.HandleIndex)
 	r.Get("/lite", s.HandleIndex)
+	r.Get("/uploads", s.HandlePublicUploads)
+	r.Get("/uploads/", s.HandlePublicUploads)
+	r.Get("/public", s.HandlePublicUploads)
+	r.Get("/public/", s.HandlePublicUploads)
 	r.Get("/robots.txt", s.HandleRobots)
 	r.Get("/favicon.ico", s.HandleFavicon)
 	r.Get("/download-app", s.HandleDownloadApp)
@@ -323,4 +328,62 @@ func (s *Server) HandleAbout(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) HandleAppPage(w http.ResponseWriter, r *http.Request) {
 	s.RenderHTML(w, http.StatusOK, "app.html", nil)
+}
+
+// HandlePublicUploads handles GET /uploads, /uploads/, /public, /public/
+func (s *Server) HandlePublicUploads(w http.ResponseWriter, r *http.Request) {
+	now := time.Now().Unix()
+	rows, err := s.DB.Conn().QueryContext(r.Context(), `
+		SELECT id, type, COALESCE(filename, ''), size, created_at, expires_at, views, is_partial
+		FROM items
+		WHERE is_public = 1 AND expires_at > ?
+		ORDER BY created_at DESC`, now)
+
+	var items []map[string]any
+	if err == nil {
+		defer rows.Close()
+		for rows.Next() {
+			var id, itType, fname string
+			var size, createdAt, expiresAt, views int64
+			var isPartial int
+			if err := rows.Scan(&id, &itType, &fname, &size, &createdAt, &expiresAt, &views, &isPartial); err == nil {
+				if fname == "" {
+					if itType == "paste" {
+						fname = "paste.txt"
+					} else {
+						fname = "file"
+					}
+				}
+				displayType := "file"
+				if itType == "paste" {
+					displayType = "paste"
+				} else if strings.HasSuffix(strings.ToLower(fname), ".jpg") || strings.HasSuffix(strings.ToLower(fname), ".png") || strings.HasSuffix(strings.ToLower(fname), ".webp") {
+					displayType = "image"
+				}
+
+				items = append(items, map[string]any{
+					"id":           id,
+					"type":         itType,
+					"filename":     fname,
+					"size":         size,
+					"created_at":   createdAt,
+					"expires_at":   expiresAt,
+					"views":        views,
+					"is_partial":   isPartial == 1,
+					"display_type": displayType,
+				})
+			}
+		}
+	}
+
+	isLegacy := s.IsLegacyBrowser(r)
+	tplName := "public.html"
+	if isLegacy {
+		tplName = "public_legacy.html"
+	}
+
+	s.RenderHTML(w, http.StatusOK, tplName, map[string]any{
+		"items":       items,
+		"legacy_mode": isLegacy,
+	})
 }

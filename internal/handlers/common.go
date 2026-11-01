@@ -228,3 +228,37 @@ func (s *Server) AuthenticateMobile(r *http.Request) bool {
 
 	return hmac.Equal([]byte(sig), []byte(expectedSig))
 }
+
+var legacyBrowserMarkers = []string{
+	"nokiabrowser", "nokia", "symbian", "series40", "series60",
+	"s40ovibrowser", "midp", "cldc", "opera mini", "operamini",
+	"belle", "meego", "maemo", "symbos",
+}
+
+// IsLegacyBrowser detects whether the client is a vintage mobile phone (Nokia, Symbian, Opera Mini)
+func (s *Server) IsLegacyBrowser(r *http.Request) bool {
+	if strings.HasPrefix(r.URL.Path, "/lite") {
+		return true
+	}
+	ref := strings.ToLower(r.Header.Get("Referer"))
+	if strings.Contains(ref, "/lite") {
+		return true
+	}
+	override := r.URL.Query().Get("lite")
+	if override == "1" {
+		return true
+	}
+	if override == "0" {
+		return false
+	}
+	ua := strings.ToLower(r.Header.Get("User-Agent"))
+	if strings.Contains(ua, "android") {
+		return false
+	}
+	for _, m := range legacyBrowserMarkers {
+		if strings.Contains(ua, m) {
+			return true
+		}
+	}
+	return false
+}

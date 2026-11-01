@@ -93,11 +93,22 @@ body {
 .nav-brand {
     display: inline-flex;
     align-items: center;
-    font-weight: 600;
-    font-size: 0.95rem;
     line-height: 1;
-    color: var(--text-1);
-    letter-spacing: -0.02em;
+    text-decoration: none;
+}
+
+.nav-logo {
+    width: 24px;
+    height: 24px;
+    display: block;
+    object-fit: contain;
+    border-radius: 5px;
+    transition: transform 0.15s ease, opacity 0.15s ease;
+}
+
+.nav-brand:hover .nav-logo {
+    transform: scale(1.08);
+    opacity: 0.85;
 }
 
 .nav-links {

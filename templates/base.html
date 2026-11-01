@@ -275,7 +275,9 @@
     -->
     <div class="nav-container">
         <div class="nav">
-            <span class="nav-brand">nullhost</span>
+            <a href="/" class="nav-brand" aria-label="nullhost home">
+                <img src="{{ url_for('static', filename='logo.png') }}" alt="nullhost" class="nav-logo" width="24" height="24">
+            </a>
             <div class="nav-links">
                 <a href="/">[upload]</a>
                 <a href="/uploads/">[public]</a>
