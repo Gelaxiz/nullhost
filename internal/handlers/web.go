@@ -20,6 +20,7 @@ func (s *Server) routes() {
 	r.Use(middleware.RealIP)
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
+	r.Use(middleware.GetHead)
 
 	// Static assets serving
 	staticDir := "static"
