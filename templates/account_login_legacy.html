@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block header_title %}Account{% endblock %}
+{% block content %}
+
+<!-- Log In Section -->
+<div data-role="collapsible" data-collapsed="false" data-theme="a" data-content-theme="a">
+    <h3>Log In to Account</h3>
+    <form action="/a" method="post" data-ajax="false">
+        <input type="hidden" name="action" value="login">
+        <div data-role="fieldcontain">
+            <label for="account_id">Account Number (16 or 24 digits):</label>
+            <input type="text" name="account_id" id="account_id" placeholder="e.g. 1234567890123456" pattern="\d{16}|\d{24}" inputmode="numeric" required />
+        </div>
+        <button type="submit" data-theme="b" data-icon="check">Log In</button>
+    </form>
+</div>
+
+<!-- Create New Account Section -->
+<div data-role="collapsible" data-collapsed="false" data-theme="a" data-content-theme="a">
+    <h3>Create New Account</h3>
+    <p style="font-size: 13px; line-height: 1.45; color: #a1a1aa;">
+        Nullhost accounts require zero personal data: no email, no password, no tracking. You are assigned a private account number that lets you manage and group your uploads.
+    </p>
+    <form action="/a" method="post" data-ajax="false">
+        <input type="hidden" name="action" value="create">
+        <button type="submit" data-theme="a" data-icon="plus">Generate New Account Number</button>
+    </form>
+</div>
+
+<!-- Session Uploads (if any exist) -->
+{% if items %}
+<div data-role="collapsible" data-theme="a" data-content-theme="a">
+    <h3>Anonymous Session Uploads ({{ items|length }})</h3>
+    <p style="font-size: 12px; color: #a1a1aa;">Files uploaded during this browser session. Log in or create an account to claim them permanently.</p>
+    <ul data-role="listview" data-inset="true">
+        {% for item in items %}
+        <li>
+            <a href="/v/{{ item['id'] }}">
+                <h3>{% if item['type'] == 'file' %}{{ item['filename'] }}{% else %}Paste {{ item['id'] }}{% endif %}</h3>
+                <p>ID: <code>{{ item['id'] }}</code> &middot; {{ item['display_type'] }} &middot; {{ (item['size'] / 1024) | round(1) }} KB</p>
+                <span class="ui-li-count">{{ item['views'] }} views</span>
+            </a>
+        </li>
+        {% endfor %}
+    </ul>
+</div>
+{% endif %}
+
+<div style="margin-top: 15px;">
+    <a href="/" data-role="button" data-icon="home">Back to Home</a>
+</div>
+
+{% endblock %}

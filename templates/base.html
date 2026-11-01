@@ -9,162 +9,220 @@
     {% if legacy_mode %}
     <meta name="HandheldFriendly" content="true">
     <meta name="MobileOptimized" content="360">
+    <link rel="stylesheet" href="{{ url_for('static', filename='jqm/jquery.mobile-1.2.1.min.css') }}">
     <style type="text/css">
+        /* Centering container for desktop / tablet while filling screen on vintage mobile */
         html, body {
+            background-color: #000000 !important;
             margin: 0;
             padding: 0;
-            width: 100%;
-            min-height: 100%;
-            background-color: #0c0d10 !important;
-            color: #d4d4d8 !important;
-            font-family: Arial, Helvetica, sans-serif;
-            font-size: 14px;
-            line-height: 1.45;
         }
-        body {
-            width: 100%;
-            max-width: 580px;
+        .ui-mobile [data-role="page"] {
+            max-width: 600px;
             margin: 0 auto;
-            padding: 10px 12px 32px;
-            box-sizing: border-box;
-            background-color: #0c0d10 !important;
+            min-height: 100vh;
+            border-left: 1px solid #27272a;
+            border-right: 1px solid #27272a;
+            background: #090a0d !important;
+            box-shadow: 0 0 24px rgba(0,0,0,0.6);
+            position: relative;
         }
+        /* Refined dark theme styling matching Nullhost */
+        .ui-body-a, .ui-overlay-a {
+            background-color: #090a0d !important;
+            color: #e4e4e7 !important;
+            text-shadow: 0 1px 0 #000 !important;
+        }
+        .ui-header, .ui-footer {
+            background: #141416 !important;
+            border-color: #27272a !important;
+        }
+        .ui-bar-a {
+            background: #18181b !important;
+            border-color: #27272a !important;
+            color: #ffffff !important;
+        }
+
+        /* Tactile transitions for all interactive elements */
+        .ui-btn,
+        .ui-btn-inner,
+        .ui-btn-text,
+        .ui-navbar a,
+        .ui-listview > li > a,
+        .ui-collapsible-heading a,
         a {
-            color: #e4e4e7;
-            text-decoration: underline;
+            transition: background 0.15s ease-out, background-color 0.15s ease-out, border-color 0.15s ease-out, color 0.15s ease-out, box-shadow 0.15s ease-out, transform 0.1s ease-out;
         }
-        a:hover, a:focus {
-            color: #ffffff;
-            text-decoration: underline;
+
+        /* Standard neutral button (theme a) base & hover */
+        .ui-btn-up-a {
+            background: #1f1f23 !important;
+            border-color: #333338 !important;
+            color: #f4f4f5 !important;
         }
-        .nav-container, .content, .footer-links {
-            width: 100%;
-            box-sizing: border-box;
+        .ui-btn-up-a:hover,
+        .ui-btn-hover-a,
+        .ui-btn-a:hover {
+            background: #2a2a30 !important;
+            border-color: #52525b !important;
+            color: #ffffff !important;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4) !important;
         }
-        .nav {
-            border-bottom: 1px solid #27272a;
-            padding-bottom: 8px;
-            margin-bottom: 12px;
-            display: block;
+        .ui-btn-up-a:hover .ui-btn-text,
+        .ui-btn-hover-a .ui-btn-text {
+            color: #ffffff !important;
         }
-        .nav-brand {
+        .ui-btn-up-a:active,
+        .ui-btn-down-a {
+            background: #121214 !important;
+            border-color: #3b82f6 !important;
+            color: #ffffff !important;
+            transform: translateY(1px);
+        }
+
+        /* Primary button (theme b) base & hover */
+        .ui-btn-up-b {
+            background: #2563eb !important;
+            border-color: #1d4ed8 !important;
+            color: #ffffff !important;
+            text-shadow: 0 1px 0 #1e40af !important;
+        }
+        .ui-btn-up-b:hover,
+        .ui-btn-hover-b,
+        .ui-btn-b:hover {
+            background: #3b82f6 !important;
+            border-color: #60a5fa !important;
+            color: #ffffff !important;
+            box-shadow: 0 0 14px rgba(59, 130, 246, 0.5) !important;
+        }
+        .ui-btn-up-b:hover .ui-btn-text,
+        .ui-btn-hover-b .ui-btn-text {
+            color: #ffffff !important;
+        }
+        .ui-btn-up-b:active,
+        .ui-btn-down-b {
+            background: #1d4ed8 !important;
+            border-color: #1e40af !important;
+            transform: translateY(1px);
+        }
+
+        /* Header and Footer buttons hover */
+        .ui-header .ui-btn:hover,
+        .ui-footer .ui-btn:hover {
+            border-color: #52525b !important;
+            background: #27272a !important;
+        }
+
+        /* Navbar link hover */
+        .ui-navbar li a:hover,
+        .ui-navbar li a.ui-btn-hover-a {
+            background: #27272a !important;
+            border-color: #3f3f46 !important;
+            color: #ffffff !important;
+        }
+        .ui-navbar li a.ui-btn-active {
+            background: #1e3a8a !important;
+            border-color: #2563eb !important;
+            color: #93c5fd !important;
+        }
+        .ui-navbar li a.ui-btn-active:hover {
+            background: #2563eb !important;
+            color: #ffffff !important;
+        }
+
+        /* Listview row hover */
+        .ui-listview > li > a:hover {
+            background: #1c1c20 !important;
+            border-left: 3px solid #3b82f6 !important;
+            box-shadow: inset 0 0 12px rgba(59, 130, 246, 0.08) !important;
+        }
+        .ui-listview > li > a:hover h3 {
+            color: #7aa2ff !important;
+        }
+        .ui-listview > li > a:active {
+            background: #141417 !important;
+        }
+
+        /* Collapsible header hover */
+        .ui-collapsible-heading a:hover {
+            background: #222227 !important;
+            border-color: #3f3f46 !important;
+            color: #ffffff !important;
+        }
+        .ui-collapsible-heading a:hover .ui-btn-text {
+            color: #ffffff !important;
+        }
+
+        /* Footer navbar items hover */
+        .ui-footer .ui-navbar a:hover {
+            background: #27272a !important;
+            color: #60a5fa !important;
+        }
+        .ui-footer .ui-navbar a:hover .ui-btn-text {
+            color: #60a5fa !important;
+        }
+
+        /* Text links hover */
+        a:hover {
+            color: #93c5fd !important;
+        }
+        /* Listview styling */
+        .ui-listview-inset {
+            margin: 1em 0;
+        }
+        .ui-li-divider {
+            font-size: 11px !important;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            background: #18181b !important;
+            color: #a1a1aa !important;
+            border-color: #27272a !important;
+        }
+        /* Item code hero box */
+        .item-code-box {
+            text-align: center;
+            padding: 16px 12px;
+            margin: 12px 0;
+            background: #141416;
+            border: 2px dashed #3f3f46;
+            border-radius: 8px;
+        }
+        .item-code-text {
+            font-family: monospace, Courier, sans-serif;
+            font-size: 26px;
+            letter-spacing: 3px;
             font-weight: bold;
-            font-size: 15px;
-            color: #ffffff;
-            margin-right: 12px;
-            text-decoration: none;
-        }
-        .nav-links {
-            display: inline;
-        }
-        .nav-links a {
-            margin-right: 8px;
-            color: #a1a1aa;
-            text-decoration: none;
-        }
-        .nav-links a:hover {
-            color: #ffffff;
-            text-decoration: underline;
-        }
-        .footer-links {
-            border-top: 1px solid #27272a;
-            margin-top: 20px;
-            padding-top: 10px;
-            font-size: 12px;
-        }
-        .footer-links a {
-            margin-right: 10px;
-            color: #a1a1aa;
-            text-decoration: none;
-        }
-        .footer-links a:hover {
-            color: #ffffff;
-            text-decoration: underline;
-        }
-        h1, h2, h3 {
-            margin: 12px 0 6px;
-            color: #ffffff;
-            font-weight: 600;
-        }
-        h1 { font-size: 18px; }
-        h2 { font-size: 15px; border-bottom: 1px solid #27272a; padding-bottom: 4px; }
-        h3 { font-size: 13px; }
-        p, ul, ol {
+            color: #7aa2ff;
             margin: 6px 0;
         }
-        ul, ol {
-            padding-left: 20px;
-        }
-        li {
-            margin: 4px 0;
-        }
-        hr {
-            border: 0;
-            border-top: 1px solid #27272a;
-            margin: 14px 0;
-        }
-        table {
-            border-collapse: collapse;
-            width: 100%;
-            margin: 10px 0;
-        }
-        th, td {
-            border: 1px solid #27272a;
-            padding: 6px 8px;
-            text-align: left;
-            vertical-align: top;
-        }
-        th {
-            background-color: #18181b;
-            color: #ffffff;
-        }
-        .card {
-            background: #141416;
-            border: 1px solid #27272a;
-            border-radius: 4px;
-            padding: 12px;
-            margin: 10px 0;
-            box-sizing: border-box;
-        }
-        input, select, textarea, button {
-            font: inherit;
-            box-sizing: border-box;
-        }
-        input[type="text"], input[type="password"], select, textarea {
-            width: 100%;
-            background: #09090b;
-            color: #ffffff;
-            border: 1px solid #3f3f46;
-            border-radius: 4px;
-            padding: 8px 10px;
-            margin: 4px 0 12px;
-            display: block;
-            min-height: 38px;
-        }
-        input[type="submit"], button.btn, .btn {
-            background: #27272a;
-            color: #ffffff;
-            border: 1px solid #3f3f46;
-            border-radius: 4px;
-            padding: 10px 14px;
-            font-size: 14px;
-            font-weight: 600;
-            cursor: pointer;
-            display: block;
-            width: 100%;
-            min-height: 40px;
+        .qr-container {
+            margin-top: 10px;
             text-align: center;
-            text-decoration: none;
-            box-sizing: border-box;
         }
-        input[type="submit"]:hover, button.btn:hover, .btn:hover {
-            background: #3f3f46;
-            border-color: #52525b;
-            color: #ffffff;
-            text-decoration: none;
+        .qr-image {
+            background: #ffffff;
+            padding: 6px;
+            border-radius: 6px;
+            display: inline-block;
         }
-        .theme-toggle { display: none; }
+        .legacy-content {
+            padding: 15px;
+        }
     </style>
+    <script src="{{ url_for('static', filename='jqm/jquery-1.8.3.min.js') }}"></script>
+    <script type="text/javascript">
+        // Crucial for vintage mobile stability: disable ajax hash history and transitions
+        $(document).bind("mobileinit", function(){
+            $.mobile.ajaxEnabled = false;
+            $.mobile.pushStateEnabled = false;
+            $.mobile.hashListeningEnabled = false;
+            $.mobile.defaultPageTransition = 'none';
+            $.mobile.defaultDialogTransition = 'none';
+            $.mobile.loadingMessage = "Loading...";
+            $.mobile.page.prototype.options.degradeInputs.date = true;
+        });
+    </script>
+    <script src="{{ url_for('static', filename='jqm/jquery.mobile-1.2.1.min.js') }}"></script>
     {% else %}
     <script>
         (function () {
@@ -179,14 +237,34 @@
     <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
     <link rel="apple-touch-icon" href="{{ url_for('static', filename='icon-192.png') }}">
     <link rel="icon" href="{{ url_for('favicon') }}" type="image/x-icon" sizes="any">
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css', v='20260814-nuke') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='ecosystem.css', v='20260802-oled') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css', v='20261101-fluid-widescreen') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='ecosystem.css', v='20261101-fluid-widescreen') }}">
     {% if turnstile_enabled %}
     <script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit" async defer></script>
     {% endif %}
     {% endif %}
 </head>
-<body>
+<body{% if legacy_mode %} class="ui-mobile-viewport ui-overlay-a"{% endif %}>
+    {% if legacy_mode %}
+    <div data-role="page" data-theme="a" id="nullhost-lite-page">
+        <!-- Header -->
+        <div data-role="header" data-theme="a" data-position="inline">
+            <a href="/" data-icon="home" data-iconpos="notext" class="ui-btn-left">Home</a>
+            <h1>{% block header_title %}nullhost lite{% endblock %}</h1>
+            <a href="/?lite=0" data-ajax="false" rel="external" data-icon="grid" class="ui-btn-right">Full Site</a>
+            <div data-role="navbar" data-iconpos="top">
+                <ul>
+                    <li><a href="/" {% if request.path in ('/', '/lite') %}class="ui-btn-active ui-state-persist"{% endif %} data-icon="home">Home</a></li>
+                    <li><a href="/uploads/" {% if request.path.startswith('/uploads') %}class="ui-btn-active ui-state-persist"{% endif %} data-icon="grid">Public</a></li>
+                    <li><a href="/app" {% if request.path.startswith('/app') %}class="ui-btn-active ui-state-persist"{% endif %} data-icon="star">Apps</a></li>
+                    <li><a href="/a" {% if request.path.startswith('/a') %}class="ui-btn-active ui-state-persist"{% endif %} data-icon="gear">Account</a></li>
+                </ul>
+            </div>
+        </div><!-- /header -->
+
+        <!-- Content -->
+        <div data-role="content" data-theme="a" class="legacy-content">
+    {% else %}
     <!--
     THESIS: nullhost is a quiet, trustworthy utility that gets out of the upload task's way.
     OWN-WORLD: Near-black canvas, graphite surfaces, cool-gray hierarchy, restrained blue links, soft borders.
@@ -197,23 +275,39 @@
     -->
     <div class="nav-container">
         <div class="nav">
-            <span class="nav-brand">nullhost{% if legacy_mode %} lite{% endif %}</span>
+            <span class="nav-brand">nullhost</span>
             <div class="nav-links">
-                {% if legacy_mode %}
-                <a href="/">[home]</a>
-                {% else %}
                 <a href="/">[upload]</a>
-                {% endif %}
                 <a href="/uploads/">[public]</a>
                 <a href="/app">[apps]</a>
                 <a href="/a">[account]</a>
-                {% if not legacy_mode %}<button type="button" class="theme-toggle" id="theme-toggle" aria-live="polite">[theme]</button>{% endif %}
+                <button type="button" class="theme-toggle" id="theme-toggle" aria-live="polite">[theme]</button>
             </div>
         </div>
     </div>
 
     <div class="content">
+    {% endif %}
         {% block content %}{% endblock %}
+    {% if legacy_mode %}
+        </div><!-- /content -->
+
+        <!-- Footer -->
+        <div data-role="footer" data-theme="a" style="text-align: center; padding: 10px 0 16px;">
+            <div data-role="navbar" data-iconpos="top">
+                <ul>
+                    <li><a href="/tos" data-icon="info">TOS</a></li>
+                    <li><a href="/privacy" data-icon="check">Privacy</a></li>
+                    <li><a href="/dmca" data-icon="alert">DMCA</a></li>
+                    <li><a href="/about" data-icon="star">About</a></li>
+                </ul>
+            </div>
+            <div style="margin: 12px 15px 4px;">
+                <a href="/?lite=0" data-ajax="false" rel="external" data-role="button" data-mini="true" data-theme="b" data-icon="forward">Switch to Full Site</a>
+            </div>
+        </div><!-- /footer -->
+    </div><!-- /page -->
+    {% else %}
     </div>
 
     <div class="footer-links">
@@ -221,12 +315,9 @@
         <a href="/privacy">[privacy]</a>
         <a href="/dmca">[dmca]</a>
         <a href="/about">[about]</a>
-        {% if legacy_mode %}
-        <a href="/?lite=0">[full version]</a>
-        {% else %}
         <a href="/?lite=1">[lite]</a>
-        {% endif %}
     </div>
+    {% endif %}
     {% if not legacy_mode %}
     <script>
         (function () {

@@ -9,7 +9,7 @@
     </details>
     {% endfor %}
     {% for item in node['items'] %}
-    {% set raw_link = '/v/' ~ item['id'] ~ '/' ~ item['filename'] if item['type'] == 'file' else '/v/' ~ item['id'] ~ '/paste.txt' %}
+    {% set raw_link = '/raw/' ~ item['id'] ~ '/' ~ item['filename'] if item['type'] == 'file' else '/raw/' ~ item['id'] ~ '/paste.txt' %}
     <div class="tree-file" style="--tree-depth: {{ depth }};">
         <label class="tree-file-select">
             <input type="checkbox" class="collection-item-checkbox" value="{{ item['id'] }}" data-download-url="{{ raw_link }}?dl=1">
@@ -68,7 +68,7 @@
             {% if available_items %}
             <form action="/collections/{{ collection['id'] }}/items" method="post">
                 <div class="inline-folder-row">
-                    <input id="collection-add-folder" type="text" name="folder_path" placeholder="optional folder" aria-label="Folder for added uploads">
+                    <input id="collection-add-folder" type="text" name="folder_path" placeholder="optional folder" aria-label="Folder for added uploads" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-1p-ignore="true" data-form-type="other">
                     <button type="submit" class="primary" id="available-add-button" disabled>add selected</button>
                 </div>
                 <div class="picker-heading">
@@ -93,11 +93,11 @@
         </section>
         <section>
             <h3>settings</h3>
-            <form action="/collections/{{ collection['id'] }}/settings" method="post" class="collection-settings-form">
+            <form action="/collections/{{ collection['id'] }}/settings" method="post" class="collection-settings-form" autocomplete="off" data-form-type="other">
                 <label for="collection-settings-name">name</label>
-                <input id="collection-settings-name" type="text" name="name" value="{{ collection['name'] }}" maxlength="80" required>
+                <input id="collection-settings-name" type="text" name="name" value="{{ collection['name'] }}" maxlength="80" required autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-1p-ignore="true" data-form-type="other">
                 <label for="collection-settings-password">new password</label>
-                <input id="collection-settings-password" type="password" name="password" placeholder="leave blank to keep current">
+                <input id="collection-settings-password" type="password" name="password" placeholder="leave blank to keep current" autocomplete="new-password" data-lpignore="true" data-1p-ignore="true" data-form-type="other">
                 {% if collection['password_hash'] %}
                 <label class="plain-checkbox"><input type="checkbox" name="remove_password" value="1"> remove collection password</label>
                 {% endif %}
@@ -123,7 +123,7 @@
 {% if raw_download_mode %}
 <div class="multi-download-warning" id="multi-download-warning" role="alertdialog" aria-labelledby="multi-download-title" aria-describedby="multi-download-description">
     <strong id="multi-download-title">download {{ items|length }} files individually?</strong>
-    <p id="multi-download-description">Your browser may show a prompt asking whether nullhost.gelaxiz.xyz can download multiple files. Choose <strong>Allow</strong> in that browser prompt. Otherwise, choose <strong>abort mission</strong> below.</p>
+    <p id="multi-download-description">Your browser may show a prompt asking whether {{ site_domain }} can download multiple files. Choose <strong>Allow</strong> in that browser prompt. Otherwise, choose <strong>abort mission</strong> below.</p>
     <div class="btn-row">
         <button type="button" class="primary" id="allow-collection-downloads">start downloads</button>
         <a class="button" href="{{ url_for('collection_view', collection_id=collection['id']) }}">abort mission</a>

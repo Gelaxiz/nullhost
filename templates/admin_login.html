@@ -2,7 +2,7 @@
 {% block content %}
 
 <h2>admin login</h2>
-<p class="meta">restricted. totp 2fa required. attempts are rate limited.</p>
+<p class="meta">restricted. {% if password_required %}security password + {% endif %}totp 2fa required. attempts are rate limited.</p>
 
 {% if error %}
 <div class="alert alert-danger" style="margin-bottom:20px;">
@@ -20,15 +20,53 @@
 </div>
 {% endif %}
 
-<form action="/admin" method="post" style="max-width:320px;">
-    <label>6-digit totp code</label>
-    <input type="text" name="totp_code" id="totp_code" required autofocus
-        maxlength="6" pattern="\d{6}" placeholder="000000"
-        autocomplete="one-time-code"
-        style="letter-spacing:0.2em; font-size:1.2rem; max-width:160px;">
+<form action="/admin" method="post" style="max-width:340px;">
+    {% if password_required %}
+    <div style="margin-bottom:16px;">
+        <label for="admin_password">security password</label>
+        <input type="password" name="password" id="admin_password" required autofocus
+            placeholder="enter security password" autocomplete="current-password"
+            style="width:100%; box-sizing:border-box; font-size:1rem; padding:10px 12px; border-radius:var(--radius); border:1px solid var(--border); background:var(--surface); color:var(--text-1);">
+    </div>
+    {% endif %}
+
+    <div style="margin-bottom:18px;">
+        <label for="totp_code">6-digit authenticator code (6fa)</label>
+        <input type="text" name="totp_code" id="totp_code" required {% if not password_required %}autofocus{% endif %}
+            maxlength="6" pattern="\d{6}" placeholder="000000"
+            autocomplete="one-time-code" inputmode="numeric"
+            style="letter-spacing:0.25em; font-size:1.25rem; font-weight:700; width:160px; text-align:center; padding:8px 12px; border-radius:var(--radius); border:1px solid var(--border); background:var(--surface); color:var(--text-1);">
+    </div>
+
+    {% if turnstile_enabled %}
+    <div class="turnstile-wrap" style="margin-bottom:18px;">
+        <div id="admin-turnstile" data-sitekey="{{ turnstile_site_key }}" data-action="{{ turnstile_action }}"></div>
+    </div>
+    {% endif %}
+
     <div class="btn-row">
         <button type="submit" id="login-btn" class="primary" {% if cooldown and cooldown > 0 %}disabled{% endif %}>authenticate</button>
     </div>
 </form>
+
+{% if turnstile_enabled and not legacy_mode %}
+<script>
+    function renderAdminTurnstile() {
+        if (!window.turnstile || !window.turnstile.render) {
+            window.setTimeout(renderAdminTurnstile, 150);
+            return;
+        }
+        var target = document.getElementById('admin-turnstile');
+        if (target && !target.dataset.widgetId) {
+            target.dataset.widgetId = window.turnstile.render(target, {
+                sitekey: {{ turnstile_site_key|tojson }},
+                action: {{ turnstile_action|tojson }},
+                theme: 'auto'
+            });
+        }
+    }
+    renderAdminTurnstile();
+</script>
+{% endif %}
 
 {% endblock %}

@@ -16,8 +16,8 @@
 <!-- Search -->
 <div class="section">
     <h3>find</h3>
-    <form action="/search" method="get">
-        <input type="text" name="id" placeholder="8-letter code or custom link...">
+    <form action="/search" method="get" autocomplete="off">
+        <input type="text" name="id" placeholder="8-letter code or custom link..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-1p-ignore="true" data-form-type="other">
         <div class="btn-row">
             <button type="submit">search</button>
         </div>
@@ -29,9 +29,9 @@
 <!-- File upload -->
 <div class="section">
     <h3>upload file</h3>
-    <p class="meta">max 10 gb · multiple files automatically create a collection · chunked in 95 mb slices.</p>
+    <p class="meta">max 10 gb · multiple files automatically create a collection · chunked in 50 mb slices.</p>
 
-    <form id="file-upload-form" action="/upload" method="post" enctype="multipart/form-data" class="drop-zone">
+    <form id="file-upload-form" action="/upload" method="post" enctype="multipart/form-data" class="drop-zone" autocomplete="off" data-form-type="other">
         <div class="upload-source-picker">
             <div class="upload-type-selector" role="tablist" aria-label="Upload source">
                 <button type="button" class="upload-type-btn active" id="btn-mode-files" role="tab" aria-selected="true">
@@ -95,19 +95,19 @@
 
         <div id="adv-file" class="adv-section anim-reveal" aria-hidden="true">
             <label>custom filename</label>
-            <input type="text" name="custom_filename" placeholder="e.g. document.pdf">
+            <input type="text" name="custom_filename" placeholder="e.g. document.pdf" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-1p-ignore="true" data-form-type="other">
 
             <label>link format</label>
             <div class="radio-group">
                 <label class="inline"><input type="radio" name="url_format" value="both" checked onclick="window.nullhostMotion.setReveal(document.getElementById('custom_id_file'), false)"> numbers &amp; letters (default)</label>
                 <label class="inline"><input type="radio" name="url_format" value="numbers" onclick="window.nullhostMotion.setReveal(document.getElementById('custom_id_file'), false)"> numbers only</label>
                 <label class="inline"><input type="radio" name="url_format" value="letters" onclick="window.nullhostMotion.setReveal(document.getElementById('custom_id_file'), false)"> letters only</label>
-                <label class="inline"><input type="radio" name="url_format" value="custom" onclick="window.nullhostMotion.setReveal(document.getElementById('custom_id_file'), true)"> custom link</label>
+                <label class="inline"><input type="radio" name="url_format" value="custom" onclick="window.nullhostMotion.setReveal(document.getElementById('custom_id_file'), true); var inp = document.querySelector('#custom_id_file input[name=custom_id]'); if (inp) inp.focus();"> custom link</label>
             </div>
             <div id="custom_id_file" class="custom-link-block anim-reveal">
                 <span class="custom-link-label">custom link</span>
-                <input type="text" name="custom_id" placeholder="e.g. my-file (alphanumeric &amp; dashes)">
-                <span class="custom-link-hint">your link will be nullhost.gelaxiz.xyz/v/<em>your-link</em></span>
+                <input type="text" name="custom_id" placeholder="e.g. my-file (alphanumeric &amp; dashes)" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-1p-ignore="true" data-form-type="other">
+                <span class="custom-link-hint">your link will be {{ site_domain }}/v/<em>your-link</em></span>
             </div>
 
             {% if collections %}
@@ -119,11 +119,11 @@
                 {% endfor %}
             </select>
             <label for="collection_folder_file">collection folder</label>
-            <input type="text" name="collection_folder" id="collection_folder_file" placeholder="optional, e.g. photos/day-1">
+            <input type="text" name="collection_folder" id="collection_folder_file" placeholder="optional, e.g. photos/day-1" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-1p-ignore="true" data-form-type="other">
             {% endif %}
 
             <label>password (optional)</label>
-            <input type="password" name="password">
+            <input type="password" name="password" autocomplete="new-password" data-lpignore="true" data-1p-ignore="true" data-form-type="other">
 
             <label>burn limit — views before deletion (0 = off)</label>
             <input type="number" name="burn_limit" value="0" min="0">
@@ -180,7 +180,7 @@
                     </div>
                     <div id="early-link-qr-wrap" style="display:none; margin: 12px 0 6px; text-align: center;">
                         <img id="early-link-qr-img" src="" alt="Live QR code" width="130" height="130" style="background:#fff; padding:6px; border-radius:6px; border:1px solid var(--border); display:inline-block;">
-                        <div style="font-size:0.75rem; color:var(--text-3); margin-top:4px;">Scan with phone camera or Nullhost app</div>
+                        <div style="font-size:0.75rem; color:var(--text-3); margin-top:4px;">Scan with phone camera</div>
                     </div>
                     <div class="early-link-links-row">
                         <a id="early-link-view-anchor" href="#" target="_blank" rel="noopener" class="early-link-sublink">open overview ↗</a>
@@ -206,7 +206,7 @@
 <!-- Paste -->
 <div class="section">
     <h3>create paste</h3>
-    <form id="paste-upload-form" action="/upload" method="post">
+    <form id="paste-upload-form" action="/upload" method="post" autocomplete="off" data-form-type="other">
         <textarea name="paste_content" required placeholder="enter text here..."></textarea>
 
         <label>expiry</label>
@@ -235,12 +235,12 @@
                 <label class="inline"><input type="radio" name="url_format" value="both" checked onclick="window.nullhostMotion.setReveal(document.getElementById('custom_id_paste'), false)"> numbers &amp; letters (default)</label>
                 <label class="inline"><input type="radio" name="url_format" value="numbers" onclick="window.nullhostMotion.setReveal(document.getElementById('custom_id_paste'), false)"> numbers only</label>
                 <label class="inline"><input type="radio" name="url_format" value="letters" onclick="window.nullhostMotion.setReveal(document.getElementById('custom_id_paste'), false)"> letters only</label>
-                <label class="inline"><input type="radio" name="url_format" value="custom" onclick="window.nullhostMotion.setReveal(document.getElementById('custom_id_paste'), true)"> custom link</label>
+                <label class="inline"><input type="radio" name="url_format" value="custom" onclick="window.nullhostMotion.setReveal(document.getElementById('custom_id_paste'), true); var inp = document.querySelector('#custom_id_paste input[name=custom_id]'); if (inp) inp.focus();"> custom link</label>
             </div>
             <div id="custom_id_paste" class="custom-link-block anim-reveal">
                 <span class="custom-link-label">custom link</span>
-                <input type="text" name="custom_id" placeholder="e.g. my-paste (alphanumeric &amp; dashes)">
-                <span class="custom-link-hint">your link will be nullhost.gelaxiz.xyz/v/<em>your-link</em></span>
+                <input type="text" name="custom_id" placeholder="e.g. my-paste (alphanumeric &amp; dashes)" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-1p-ignore="true" data-form-type="other">
+                <span class="custom-link-hint">your link will be {{ site_domain }}/v/<em>your-link</em></span>
             </div>
 
             {% if collections %}
@@ -252,11 +252,11 @@
                 {% endfor %}
             </select>
             <label for="collection_folder_paste">collection folder</label>
-            <input type="text" name="collection_folder" id="collection_folder_paste" placeholder="optional, e.g. notes">
+            <input type="text" name="collection_folder" id="collection_folder_paste" placeholder="optional, e.g. notes" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-1p-ignore="true" data-form-type="other">
             {% endif %}
 
             <label>password (optional)</label>
-            <input type="password" name="password">
+            <input type="password" name="password" autocomplete="new-password" data-lpignore="true" data-1p-ignore="true" data-form-type="other">
 
             <label>burn limit — views before deletion (0 = off)</label>
             <input type="number" name="burn_limit" value="0" min="0">
@@ -648,7 +648,7 @@
         var earlyLinkStopBtn = document.getElementById('early-link-stop-btn');
         var earlyLinkQrWrap = document.getElementById('early-link-qr-wrap');
         var earlyLinkQrImg = document.getElementById('early-link-qr-img');
-        var CHUNK = 95 * 1024 * 1024;
+        var CHUNK = 50 * 1024 * 1024;
 
         progressContainer.classList.add('is-open');
         progressBar.value = 0;
@@ -866,6 +866,7 @@
                 }
 
                 var earlyData = null;
+                var uploadToken = '';
                 try {
                     var initRes = await fetch('/upload_init', {
                         method: 'POST',
@@ -873,6 +874,7 @@
                     });
                     if (initRes.ok) {
                         earlyData = await initRes.json();
+                        uploadToken = earlyData.upload_token || '';
                         latestRegisteredItem = earlyData;
                         if (!isCollection) {
                             var fullUrl = window.location.origin + earlyData.url;
@@ -910,6 +912,9 @@
 
                 // Step 2: Upload chunks
                 var chunk = 0;
+                var chunkRetries = 0;
+                var MAX_CHUNK_RETRIES = 3;
+
                 function next() {
                     if (uploadAbortedByUser) {
                         resolve(earlyData);
@@ -924,6 +929,9 @@
                     fd.append('filename', file.name);
                     fd.append('mimetype', file.type || 'application/octet-stream');
                     fd.append('batch_id', batchId);
+                    if (uploadToken) {
+                        fd.append('upload_token', uploadToken);
+                    }
                     fd.append('file', blob, file.name);
 
                     var xhr = new XMLHttpRequest();
@@ -970,6 +978,7 @@
                         if (xhr.readyState !== 4) return;
                         currentXhr = null;
                         if (xhr.status === 200) {
+                            chunkRetries = 0;
                             try {
                                 var resp = JSON.parse(xhr.responseText);
                                 if (chunk < totalChunks - 1) {
@@ -985,6 +994,12 @@
                         } else {
                             if (uploadAbortedByUser) {
                                 resolve(earlyData);
+                            } else if ((xhr.status === 0 || xhr.status === 408 || xhr.status >= 500) && chunkRetries < MAX_CHUNK_RETRIES) {
+                                chunkRetries++;
+                                if (progressChunks) {
+                                    progressChunks.textContent = 'connection blip · retrying chunk ' + (chunk + 1) + ' (' + chunkRetries + '/' + MAX_CHUNK_RETRIES + ')...';
+                                }
+                                setTimeout(next, 1000 * chunkRetries);
                             } else {
                                 reject(new Error(xhr.responseText || xhr.statusText || 'Upload interrupted. Partial data is saved at the share link.'));
                             }
@@ -1123,6 +1138,78 @@
             showSelectionSummary('📄', dropped[0].name, formatBytes(totalBytes));
         }
     });
+
+    /* Real-time custom ID availability check */
+    function attachCustomIdValidator(containerId) {
+        var container = document.getElementById(containerId);
+        if (!container) return;
+        var input = container.querySelector('input[name="custom_id"]');
+        var hint = container.querySelector('.custom-link-hint');
+        if (!input || !hint) return;
+
+        var defaultHtml = hint.innerHTML;
+        var timer = null;
+        var activeReq = 0;
+
+        function validate() {
+            var val = (input.value || '').trim();
+            if (!val) {
+                hint.className = 'custom-link-hint';
+                hint.innerHTML = defaultHtml;
+                return;
+            }
+
+            var clean = val.replace(/[-_]/g, '');
+            if (!clean || !/^[a-zA-Z0-9]+$/.test(clean) || val.length > 32) {
+                hint.className = 'custom-link-hint is-invalid';
+                hint.textContent = '✗ invalid link: letters, numbers and dashes only (max 32 chars)';
+                return;
+            }
+
+            hint.className = 'custom-link-hint is-checking';
+            hint.textContent = 'checking availability...';
+
+            var reqId = ++activeReq;
+            fetch('/api/check_id/' + encodeURIComponent(val))
+                .then(function(res) { return res.json(); })
+                .then(function(data) {
+                    if (reqId !== activeReq) return;
+                    if (data.available) {
+                        hint.className = 'custom-link-hint is-valid';
+                        hint.textContent = '✓ link available (' + {{ site_domain|tojson }} + '/v/' + val + ')';
+                    } else if (data.status === 'retired') {
+                        hint.className = 'custom-link-hint is-invalid';
+                        hint.textContent = '✗ this link was previously used and permanently retired';
+                    } else if (data.status === 'in_use') {
+                        hint.className = 'custom-link-hint is-invalid';
+                        hint.textContent = '✗ this link is already in use';
+                    } else if (data.status === 'reserved') {
+                        hint.className = 'custom-link-hint is-invalid';
+                        hint.textContent = '✗ reserved link name';
+                    } else {
+                        hint.className = 'custom-link-hint is-invalid';
+                        hint.textContent = '✗ ' + (data.message || 'link unavailable');
+                    }
+                })
+                .catch(function() {
+                    if (reqId !== activeReq) return;
+                    hint.className = 'custom-link-hint';
+                    hint.innerHTML = defaultHtml;
+                });
+        }
+
+        input.addEventListener('input', function() {
+            clearTimeout(timer);
+            timer = setTimeout(validate, 180);
+        });
+
+        input.addEventListener('focus', function() {
+            if (input.value.trim()) validate();
+        });
+    }
+
+    attachCustomIdValidator('custom_id_file');
+    attachCustomIdValidator('custom_id_paste');
 </script>
 
 {% endblock %}

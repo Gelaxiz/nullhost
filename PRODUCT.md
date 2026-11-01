@@ -8,7 +8,7 @@ web
 
 ## Users
 
-Niilo and friends sharing temporary files, text, and links.
+Users and authorized guests sharing temporary files, text, and links.
 
 ## Product Purpose
 

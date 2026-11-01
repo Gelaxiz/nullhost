@@ -1,13 +1,26 @@
 {% extends "base.html" %}
+{% block header_title %}Public Uploads{% endblock %}
 {% block content %}
-<h1>public files</h1>
-{% if items %}
-<ul>
-{% for item in items %}
-    <li><a href="/v/{{ item['id'] }}">{% if item['type'] == 'file' %}{{ item['filename'] }}{% else %}paste {{ item['id'] }}{% endif %}</a> ({{ (item['size'] / 1024) | round(1) }} KB)</li>
-{% endfor %}
+
+<ul data-role="listview" data-inset="true" data-filter="true" data-filter-placeholder="Filter public files...">
+    <li data-role="list-divider">Public Uploads ({{ items|length }})</li>
+    {% if items %}
+    {% for item in items %}
+    <li>
+        <a href="/v/{{ item['id'] }}">
+            <h3>{% if item['type'] == 'file' %}{{ item['filename'] }}{% else %}Paste {{ item['id'] }}{% endif %}</h3>
+            <p>ID: <code>{{ item['id'] }}</code> &middot; {{ item['display_type'] or item['type'] }}</p>
+            <span class="ui-li-count">{{ (item['size'] / 1024) | round(1) }} KB</span>
+        </a>
+    </li>
+    {% endfor %}
+    {% else %}
+    <li>No public files available.</li>
+    {% endif %}
 </ul>
-{% else %}
-<p>no public files.</p>
-{% endif %}
+
+<div style="margin-top: 15px;">
+    <a href="/" data-role="button" data-icon="home">Back to Home</a>
+</div>
+
 {% endblock %}

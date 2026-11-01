@@ -1,33 +1,50 @@
 {% extends "base.html" %}
+{% block header_title %}nullhost lite{% endblock %}
 {% block content %}
-<div class="card">
-    <h1 style="margin-top: 0; font-size: 1.15rem;">nullhost lite</h1>
-    <p style="color: #a1a1aa; font-size: 0.85rem; margin-bottom: 0;">Simple read-only interface optimized for vintage Nokia Symbian, Series 40/60, Java phones, and low-bandwidth mobile browsers.</p>
-</div>
 
-<!-- Uploads disabled notice & Native App solution -->
-<div class="card">
-    <h2 style="margin-top: 0; font-size: 0.95rem;">Uploads & Mobile Application</h2>
-    <p style="font-size: 0.85rem; color: #d4d4d8; line-height: 1.45;">
-        Web browser uploads are disabled in Lite mode because browser uploads require Cloudflare Turnstile verification, which vintage mobile browsers cannot execute.
+<!-- Native Mobile App (Zero Captcha) -->
+<div data-role="collapsible" data-collapsed="false" data-theme="a" data-content-theme="a">
+    <h3>Nokia & Symbian Mobile Client</h3>
+    <p style="font-size: 13px; line-height: 1.45; color: #d4d4d8;">
+        Web browser uploads are disabled in Lite mode because vintage mobile browsers cannot run Cloudflare Turnstile verification.
     </p>
-    <p style="font-size: 0.85rem; color: #a1a1aa; line-height: 1.45;">
-        To upload photos and files directly from your phone <strong>without any captcha or setup</strong>, download and use the official native Java ME mobile app:
+    <p style="font-size: 13px; line-height: 1.45; color: #a1a1aa;">
+        You can upload photos and files directly from your phone <strong>without any captcha or account</strong> using the official native Java ME mobile app:
     </p>
-    <div style="margin: 10px 0 6px;">
-        <a href="/download-app?platform=j2me" class="btn" style="text-align: center; margin-bottom: 8px;">Download Nullhost Mobile (.JAR)</a>
-        <a href="/download-app?platform=jad" class="btn" style="text-align: center; background: transparent; border-color: #3f3f46;">Download .JAD Descriptor</a>
-    </div>
-    <p style="font-size: 0.78rem; color: #71717a; margin-top: 6px; margin-bottom: 0;">Runs natively on Nokia 808 PureView (Belle FP2), N8, E7, C7, Series 60, and Series 40 devices.</p>
+    <ul data-role="listview" data-inset="true">
+        <li>
+            <a href="/download-app?platform=j2me" data-icon="arrow-d">
+                <h3>Download Nullhost Mobile (.JAR)</h3>
+                <p>Nokia 808, N8, E7, C7, Series 60, Series 40</p>
+                <span class="ui-li-count">v1.9.8</span>
+            </a>
+        </li>
+        <li>
+            <a href="/download-app?platform=jad" data-icon="arrow-d">
+                <h3>Download .JAD Descriptor</h3>
+                <p>Application descriptor for legacy devices</p>
+            </a>
+        </li>
+        <li>
+            <a href="/app" data-icon="star">
+                <h3>Windows Desktop Client (.EXE)</h3>
+                <p>Native desktop client and downloads</p>
+            </a>
+        </li>
+    </ul>
+    <p style="font-size: 11px; color: #71717a; margin: 4px 0 0;">Runs natively on Nokia Symbian and S40 via the phone's built-in JVM (zero python, zero setup).</p>
 </div>
 
 <!-- Find File or Paste -->
-<div class="card">
-    <h2 style="margin-top: 0; font-size: 0.95rem;">Find File or Paste</h2>
+<div data-role="collapsible" data-collapsed="false" data-theme="a" data-content-theme="a">
+    <h3>Retrieve Item by Code</h3>
     <form action="/search" method="get">
-        <label style="font-weight: 600; font-size: 0.82rem; color: #a1a1aa;" for="item-id-input">Item Code or ID (8 characters):</label>
-        <input type="text" id="item-id-input" name="id" maxlength="32" placeholder="e.g. 7k9m2p4x" required>
-        <input type="submit" value="Retrieve File" class="btn">
+        <div data-role="fieldcontain">
+            <label for="item-id-input">Item Code (8 characters):</label>
+            <input type="search" name="id" id="item-id-input" placeholder="e.g. 7k9m2p4x" maxlength="32" required />
+        </div>
+        <button type="submit" data-theme="b" data-icon="search">Retrieve File</button>
     </form>
 </div>
+
 {% endblock %}

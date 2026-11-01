@@ -15,12 +15,10 @@ Universal Java ME application compatible with virtually any mobile phone support
   - About Nullhost (with live JVM heap memory and screen resolution display)
 
 ## Compilation & Packaging
-Compiled against MIDP 2.0 and JSR-75 standard APIs:
+Compiled against MIDP 2.0 and JSR-75 standard APIs with CLDC 1.1 preverification (StackMap generation via ProGuard):
 ```bash
-mkdir -p build
-javac -source 1.4 -target 1.4 -cp microemulator.jar:microemu-jsr-75.jar -d build src/*.java
-jar cfm Nullhost.jar Manifest.mf -C build .
+./build.sh
 ```
 Output:
-- `client/Nullhost.jar`
-- `client/Nullhost.jad`
+- `client/Nullhost.jar` (Preverified with CLDC 1.1 StackMap attributes)
+- `client/Nullhost.jad` (Updated with byte-accurate JAR size and optional permissions)

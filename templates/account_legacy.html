@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block header_title %}Account Workspace{% endblock %}
+{% block content %}
+
+<!-- Account Info & Recovery Key -->
+<div data-role="collapsible" data-collapsed="false" data-theme="a" data-content-theme="a">
+    <h3>Account Key & Settings</h3>
+    <p style="font-size: 13px; color: #a1a1aa; margin-bottom: 6px;">Your unique private recovery key:</p>
+    <div class="item-code-box" style="margin: 8px 0;">
+        <div class="item-code-text" style="font-size: 20px; letter-spacing: 2px;">{{ account_id }}</div>
+    </div>
+    <p style="font-size: 11px; color: #ef4444; margin: 4px 0 12px;">Keep this key safe! It cannot be recovered if lost.</p>
+    
+    <form action="/a" method="post" data-ajax="false">
+        <input type="hidden" name="action" value="logout">
+        <button type="submit" data-theme="a" data-icon="delete">Log Out</button>
+    </form>
+</div>
+
+<!-- Uploaded Items -->
+<div data-role="collapsible" data-collapsed="false" data-theme="a" data-content-theme="a">
+    <h3>Your Uploads ({{ items|length }})</h3>
+    {% if items %}
+    <ul data-role="listview" data-inset="true" data-filter="true" data-filter-placeholder="Filter your uploads...">
+        {% for item in items %}
+        <li>
+            <a href="/v/{{ item['id'] }}">
+                <h3>{% if item['type'] == 'file' %}{{ item['filename'] }}{% else %}Paste {{ item['id'] }}{% endif %}</h3>
+                <p>ID: <code>{{ item['id'] }}</code> &middot; {{ item['display_type'] }} &middot; {{ (item['size'] / 1024) | round(1) }} KB</p>
+                <span class="ui-li-count">{{ item['views'] }} views</span>
+            </a>
+        </li>
+        {% endfor %}
+    </ul>
+    {% else %}
+    <p style="font-size: 13px; color: #71717a;">No uploads found in this account.</p>
+    {% endif %}
+</div>
+
+<!-- Collections -->
+<div data-role="collapsible" data-theme="a" data-content-theme="a">
+    <h3>Collections ({{ collections|length }})</h3>
+    {% if collections %}
+    <ul data-role="listview" data-inset="true">
+        {% for c in collections %}
+        <li>
+            <a href="/c/{{ c['id'] }}">
+                <h3>{{ c['name'] }}</h3>
+                <p>Code: <code>{{ c['id'] }}</code> &middot; {{ c['item_count'] }} items</p>
+            </a>
+        </li>
+        {% endfor %}
+    </ul>
+    {% else %}
+    <p style="font-size: 13px; color: #71717a;">No collections created yet.</p>
+    {% endif %}
+    
+    <!-- Create Collection Form -->
+    <div style="margin-top: 15px;">
+        <h4>Create New Collection</h4>
+        <form action="/collections" method="post" data-ajax="false">
+            <div data-role="fieldcontain">
+                <label for="collection-name">Collection Name:</label>
+                <input type="text" name="name" id="collection-name" maxlength="80" placeholder="e.g. Vacation Photos" required />
+            </div>
+            <div data-role="fieldcontain">
+                <label for="collection-pwd">Password (optional):</label>
+                <input type="password" name="password" id="collection-pwd" placeholder="Optional password" />
+            </div>
+            <button type="submit" data-theme="b" data-icon="plus">Create Collection</button>
+        </form>
+    </div>
+</div>
+
+<div style="margin-top: 15px;">
+    <a href="/" data-role="button" data-icon="home">Back to Home</a>
+</div>
+
+{% endblock %}

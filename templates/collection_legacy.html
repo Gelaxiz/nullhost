@@ -1,18 +1,37 @@
 {% extends "base.html" %}
+{% block header_title %}{{ collection['name'] }}{% endblock %}
 {% block content %}
-<h1>{{ collection['name'] }}</h1>
-<p>{{ items|length }} file{% if items|length != 1 %}s{% endif %}</p>
-{% if items %}
-<ul>
-{% for item in items %}
-    {% if item['type'] == 'file' %}
-    <li>{{ item['label'] }}: <a href="/v/{{ item['id'] }}">link</a> | <a href="/v/{{ item['id'] }}/{{ item['filename'] }}">raw</a> | <a href="/v/{{ item['id'] }}/{{ item['filename'] }}?dl=1">download</a></li>
+
+<ul data-role="listview" data-inset="true">
+    <li data-role="list-divider">{{ collection['name'] }} ({{ items|length }} file{% if items|length != 1 %}s{% endif %})</li>
+    {% if items %}
+    {% for item in items %}
+    <li>
+        {% if item['type'] == 'file' %}
+        <a href="/v/{{ item['id'] }}">
+            <h3>{{ item['label'] or item['filename'] }}</h3>
+            <p>{{ item['filename'] }} &middot; {{ (item['size'] / 1024) | round(1) }} KB</p>
+        </a>
+        <a href="/v/{{ item['id'] }}/{{ item['filename'] }}/download" data-icon="arrow-d" title="Download">Download</a>
+        {% else %}
+        <a href="/v/{{ item['id'] }}">
+            <h3>{{ item['label'] or 'Paste ' ~ item['id'] }}</h3>
+            <p>Paste Snippet &middot; {{ (item['size'] / 1024) | round(1) }} KB</p>
+        </a>
+        <a href="/v/{{ item['id'] }}/paste.txt/download" data-icon="arrow-d" title="Download">Download</a>
+        {% endif %}
+    </li>
+    {% endfor %}
     {% else %}
-    <li>{{ item['label'] }}: <a href="/v/{{ item['id'] }}">link</a> | <a href="/v/{{ item['id'] }}/paste.txt">raw</a> | <a href="/v/{{ item['id'] }}/paste.txt?dl=1">download</a></li>
+    <li>Collection is empty.</li>
     {% endif %}
-{% endfor %}
 </ul>
-{% else %}
-<p>this collection is empty.</p>
-{% endif %}
+
+<div style="margin-top: 15px;">
+    {% if items and collection['zip_ready'] %}
+    <a href="/c/{{ collection['id'] }}/download" data-role="button" data-theme="b" data-icon="arrow-d">Download Collection as ZIP</a>
+    {% endif %}
+    <a href="/" data-role="button" data-icon="home">Back to Home</a>
+</div>
+
 {% endblock %}

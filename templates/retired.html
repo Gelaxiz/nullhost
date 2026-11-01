@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div style="max-width:520px; margin-top:40px;">
+    <h2>link retired</h2>
+    <p class="meta">link <code>{{ item_id }}</code> is permanently retired.</p>
+
+    <div class="alert alert-danger" style="margin: 20px 0;">
+        <strong>status:</strong><br>
+        this link was deleted or expired and can never be reused.
+    </div>
+
+    <p style="font-size:0.83rem; color:var(--text-3);">
+        to protect user privacy and prevent link recycling, nullhost permanently retires all used link identifiers without retaining any file data.
+    </p>
+
+    <div class="btn-row" style="margin-top:24px;">
+        <a href="/"><button type="button">← back to home</button></a>
+    </div>
+</div>
+
+{% endblock %}

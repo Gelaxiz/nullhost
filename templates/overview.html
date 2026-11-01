@@ -4,7 +4,7 @@
 {% set info_url = url_for('overview', item_id=item['id'], _external=True) %}
 {% set raw_url = url_for('raw', item_id=item['id'], filename=item['filename'], _external=True) if item['type'] == 'file' else url_for('raw', item_id=item['id'], filename='paste.txt', _external=True) %}
 {% set download_url = url_for('download', item_id=item['id'], filename=item['filename'] if item['type'] == 'file' else 'paste.txt', _external=True) %}
-{% set raw_link = '/v/' ~ item['id'] ~ '/' ~ item['filename'] if item['type'] == 'file' else '/v/' ~ item['id'] ~ '/paste.txt' %}
+{% set raw_link = '/raw/' ~ item['id'] ~ '/' ~ item['filename'] if item['type'] == 'file' else '/raw/' ~ item['id'] ~ '/paste.txt' %}
 <div class="code-hero-card">
     <div class="code-hero-header">
         <span class="code-hero-tag">
@@ -48,7 +48,7 @@
             {% if item['type'] == 'file' %}
             <tr><th>filename</th><td>{{ item['filename'] }}</td></tr>
             {% endif %}
-            <tr><th>size</th><td>{{ (item['size'] / 1048576) | round(2) }} mb{% if item['is_partial'] %} <span style="color:var(--amber); font-size:0.85em;">(partial size)</span>{% endif %}</td></tr>
+            <tr><th>size</th><td>{{ (item['size'] / 1048576) | round(2) }} MB <span style="color:var(--text-2); font-size:0.85em;">({{ (item['size'] / 1000000) | round(1) }} Mt)</span>{% if item['is_partial'] %} <span style="color:var(--amber); font-size:0.85em;">(partial size)</span>{% endif %}</td></tr>
             <tr><th>views</th><td>{{ item['views'] }}</td></tr>
             <tr class="more-info" style="display:none;"><th>uploaded</th><td><script>document.write(new Date({{ item['created_at'] }} * 1000).toLocaleString())</script></td></tr>
             <tr class="more-info" style="display:none;">
@@ -79,7 +79,8 @@
 {% set dl_link = url_for('download', item_id=item['id'], filename=item['filename'] if item['type'] == 'file' else 'paste.txt') %}
 <div class="item-action-row">
     <a href="{{ dl_link }}" class="download-primary-action{% if item['is_partial'] %} warning-action{% endif %}">{% if item['is_partial'] %}download partial file (broken){% else %}download{% endif %}</a>
-    <a href="{{ raw_link }}" class="button">view raw{% if item['is_partial'] %} (partial){% endif %}</a>
+    <a href="{{ raw_link }}" class="button" target="_blank" rel="noopener">view raw ↗{% if item['is_partial'] %} (partial){% endif %}</a>
+    <button type="button" class="button" id="btn-copy-raw-link" data-raw-url="{{ raw_url }}">copy raw link</button>
     <button type="button" id="more-btn" onclick="toggleMore()" aria-expanded="false">more info</button>
 </div>
 
@@ -88,8 +89,8 @@
     <div class="qr-box-wrapper" style="margin: 14px 0 16px; display: flex; align-items: center; gap: 18px; flex-wrap: wrap; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px;">
         <img id="item-qr" src="/v/{{ item['id'] }}/qr.png?target=info" alt="QR code for this item" width="160" height="160" style="display: block; width: 160px; height: 160px; padding: 6px; background: #ffffff; border-radius: 6px;">
         <div class="qr-meta-wrap" style="flex: 1; min-width: 200px;">
-            <strong style="color: var(--text-1); font-size: 0.95rem; display: block; margin-bottom: 4px;">Scan with Camera or Phone App</strong>
-            <p class="meta" id="qr-caption" style="margin: 0 0 10px; color: var(--text-2); font-size: 0.82rem; line-height: 1.4;">Scan with your smartphone camera or the Nullhost mobile app to open immediately.</p>
+            <strong style="color: var(--text-1); font-size: 0.95rem; display: block; margin-bottom: 4px;">Scan with Camera</strong>
+            <p class="meta" id="qr-caption" style="margin: 0 0 10px; color: var(--text-2); font-size: 0.82rem; line-height: 1.4;">Scan with your phone camera to open immediately.</p>
             <div class="qr-destination" role="group" aria-label="QR code destination">
                 <button type="button" class="active" data-qr-target="info" aria-pressed="true">info page</button>
                 <button type="button" data-qr-target="raw" aria-pressed="false">raw file</button>
@@ -260,6 +261,33 @@ if (copyUrlBtn) {
             }, 1800);
         } catch (e) {
             prompt('Copy link:', url);
+        }
+    });
+}
+var copyRawBtn = document.getElementById('btn-copy-raw-link');
+if (copyRawBtn) {
+    copyRawBtn.addEventListener('click', async function() {
+        var rawUrl = copyRawBtn.dataset.rawUrl;
+        var orig = copyRawBtn.textContent;
+        try {
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                await navigator.clipboard.writeText(rawUrl);
+            } else {
+                var ta = document.createElement('textarea');
+                ta.value = rawUrl;
+                document.body.appendChild(ta);
+                ta.select();
+                document.execCommand('copy');
+                ta.remove();
+            }
+            copyRawBtn.textContent = 'raw link copied!';
+            copyRawBtn.classList.add('copied');
+            setTimeout(function() {
+                copyRawBtn.textContent = orig;
+                copyRawBtn.classList.remove('copied');
+            }, 1800);
+        } catch (e) {
+            prompt('Copy raw link:', rawUrl);
         }
     });
 }

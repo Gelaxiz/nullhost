@@ -4,10 +4,11 @@
 <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:12px; margin-bottom:24px;">
     <div>
         <h2>admin dashboard</h2>
-        <p class="meta">sysadmin · authenticated via totp</p>
+        <p class="meta">sysadmin · authenticated via {% if stats.password_active %}password + {% endif %}totp 6fa · session active</p>
     </div>
     <form action="/admin" method="post" class="form-inline">
         <input type="hidden" name="action" value="logout">
+        <input type="hidden" name="admin_csrf" value="{{ admin_csrf }}">
         <button type="submit">logout</button>
     </form>
 </div>
@@ -15,23 +16,23 @@
 <!-- Stats -->
 <div class="stat-grid">
     <div class="stat-card">
-        <div class="stat-value">{{ stats.items_count }}</div>
+        <div class="stat-value" id="stat-items">{{ stats.items_count }}</div>
         <div class="stat-label">items</div>
     </div>
     <div class="stat-card">
-        <div class="stat-value">{{ stats.files_count }}</div>
+        <div class="stat-value" id="stat-files">{{ stats.files_count }}</div>
         <div class="stat-label">files</div>
     </div>
     <div class="stat-card">
-        <div class="stat-value">{{ stats.pastes_count }}</div>
+        <div class="stat-value" id="stat-pastes">{{ stats.pastes_count }}</div>
         <div class="stat-label">pastes</div>
     </div>
     <div class="stat-card">
-        <div class="stat-value">{{ stats.accs_count }}</div>
+        <div class="stat-value" id="stat-accounts">{{ stats.accs_count }}</div>
         <div class="stat-label">accounts</div>
     </div>
     <div class="stat-card">
-        <div class="stat-value danger">{{ stats.tomb_count }}</div>
+        <div class="stat-value danger" id="stat-tombstones">{{ stats.tomb_count }}</div>
         <div class="stat-label">tombstones</div>
     </div>
     <div class="stat-card">
@@ -44,15 +45,15 @@
 <div class="section">
     <h3>takedown</h3>
     <p class="meta">removes item immediately and quarantines the link for 7 days.</p>
-    <form action="" method="post" id="takedown-form" onsubmit="var id=document.getElementById('tk-id').value.trim();if(!id)return false;this.action='/admin/takedown_item/'+id;return confirm('takedown '+id+'?');">
+    <form action="" method="post" id="takedown-form" autocomplete="off" data-form-type="other" onsubmit="var id=document.getElementById('tk-id').value.trim();if(!id)return false;this.action='/admin/takedown_item/'+id;return confirm('takedown '+id+'?');">
         <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:flex-end;">
             <div style="flex:1; min-width:140px;">
                 <label>item id</label>
-                <input type="text" id="tk-id" placeholder="8x9a2b1c" required style="margin:0;">
+                <input type="text" id="tk-id" placeholder="8x9a2b1c" required autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-1p-ignore="true" data-form-type="other" style="margin:0;max-width:100%;">
             </div>
             <div style="flex:2; min-width:200px;">
                 <label>reason</label>
-                <input type="text" name="reason" placeholder="reason" value="Third-party takedown / Legal Notice" style="margin:0;">
+                <input type="text" name="reason" placeholder="reason" value="Third-party takedown / Legal Notice" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-1p-ignore="true" data-form-type="other" style="margin:0;max-width:100%;">
             </div>
             <button type="submit" class="danger" style="margin-bottom:0;">execute</button>
         </div>
@@ -86,12 +87,12 @@
             </thead>
             <tbody>
                 {% for t in tombstones %}
-                <tr>
+                <tr data-tomb-row="{{ t.id }}">
                     <td><strong>{{ t.id }}</strong></td>
                     <td>
                         <div style="margin-bottom:4px;">{{ t.reason }}</div>
-                        <form action="/admin/update_tombstone_reason/{{ t.id }}" method="post" style="display:flex;gap:4px;margin:0;">
-                            <input type="text" name="reason" placeholder="new reason..." style="font-size:0.78rem;padding:4px 8px;margin:0;max-width:160px;">
+                        <form action="/admin/update_tombstone_reason/{{ t.id }}" method="post" autocomplete="off" data-form-type="other" style="display:flex;gap:4px;margin:0;">
+                            <input type="text" name="reason" placeholder="new reason..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-1p-ignore="true" data-form-type="other" style="font-size:0.78rem;padding:4px 8px;margin:0;max-width:160px;">
                             <button type="submit" class="btn-small">update</button>
                         </form>
                     </td>
@@ -120,17 +121,16 @@
 <!-- Items list -->
 <div class="section">
     <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:14px;">
-        <h3 style="margin:0;border:none;padding:0;">hosted items {% if q %}<span style="font-weight:400;">(results for "{{ q }}")</span>{% else %}<span style="font-weight:400;">(recent 100)</span>{% endif %}</h3>
-        <form action="/admin_dashboard" method="get" style="display:flex;gap:6px;margin:0;">
-            <input type="text" name="q" value="{{ q or '' }}" placeholder="search id, filename, acc..." style="margin:0;font-size:0.82rem;padding:6px 10px;">
-            <button type="submit" class="btn-small">search</button>
-            {% if q %}<a href="/admin_dashboard" style="font-size:0.82rem;align-self:center;">[clear]</a>{% endif %}
+        <h3 id="admin-items-heading" style="margin:0;border:none;padding:0;">hosted items {% if q %}<span style="font-weight:400;">(results for "{{ q }}")</span>{% else %}<span style="font-weight:400;">(recent 100)</span>{% endif %}</h3>
+        <form action="/admin_dashboard" method="get" id="admin-search-form" autocomplete="off" data-form-type="other" style="display:flex;gap:6px;margin:0;">
+            <input type="text" name="q" id="admin-search-input" value="{{ q or '' }}" placeholder="search id, filename, acc..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-1p-ignore="true" data-form-type="other" style="margin:0;font-size:0.82rem;padding:6px 10px;min-width:240px;">
+            <button type="submit" class="btn-small" id="admin-search-btn" style="display:none;">search</button>
+            <a href="/admin_dashboard" id="admin-search-clear" style="font-size:0.82rem;align-self:center;display:{% if q %}inline{% else %}none{% endif %};">[clear]</a>
         </form>
     </div>
 
-    {% if items %}
-    <div class="table-wrapper">
-        <table>
+    <div class="table-wrapper" id="admin-items-wrapper">
+        <table id="admin-items-table">
             <thead>
                 <tr>
                     <th>id</th>
@@ -143,8 +143,9 @@
                 </tr>
             </thead>
             <tbody>
+                {% if items %}
                 {% for i in items %}
-                <tr>
+                <tr data-item-row="{{ i.id }}" data-type="{{ i.type }}">
                     <td><a href="/v/{{ i.id }}" target="_blank">{{ i.id }}</a></td>
                     <td>{{ i.type }}</td>
                     <td>{% if i.account_id %}{{ i.account_id }}{% else %}<span style="color:var(--text-3)">anon</span>{% endif %}</td>
@@ -168,12 +169,12 @@
                     </td>
                 </tr>
                 {% endfor %}
+                {% else %}
+                <tr><td colspan="7" style="text-align:center;color:var(--text-3);padding:24px;">no items hosted.</td></tr>
+                {% endif %}
             </tbody>
         </table>
     </div>
-    {% else %}
-    <p>no items hosted.</p>
-    {% endif %}
 </div>
 
 <hr>
@@ -195,7 +196,7 @@
             </thead>
             <tbody>
                 {% for a in accounts %}
-                <tr>
+                <tr data-account-row="{{ a.account_id }}">
                     <td><code>{{ a.account_id }}</code></td>
                     <td><script>document.write(new Date({{ a.created_at }} * 1000).toLocaleDateString())</script></td>
                     <td>{{ a.item_count }}</td>
@@ -215,6 +216,368 @@
     {% endif %}
 </div>
 
+<script>
+(function() {
+    var justLoggedIn = {{ just_logged_in|tojson }};
+    if (justLoggedIn) {
+        sessionStorage.setItem('nullhost_admin_active', '1');
+    } else if (!sessionStorage.getItem('nullhost_admin_active')) {
+        // Tab was closed or opened without logging in -> clear and redirect
+        window.location.replace('/admin/logout');
+        return;
+    }
 
+    window.nullhostInternalNav = false;
+
+    // Detect internal navigation and keyboard reloads
+    window.addEventListener('keydown', function(e) {
+        if ((e.key === 'r' && (e.ctrlKey || e.metaKey)) || e.key === 'F5') {
+            window.nullhostInternalNav = true;
+        }
+    });
+
+    document.querySelectorAll('form').forEach(function(f) {
+        f.addEventListener('submit', function() {
+            window.nullhostInternalNav = true;
+        });
+    });
+
+    // When closing the page or navigating away, terminate admin session immediately
+    window.addEventListener('pagehide', function() {
+        if (!window.nullhostInternalNav) {
+            sessionStorage.removeItem('nullhost_admin_active');
+            navigator.sendBeacon('/admin/logout');
+        }
+    });
+
+    var csrfToken = "{{ admin_csrf }}";
+
+    function showAdminToast(msg, isError) {
+        var existing = document.getElementById('admin-toast');
+        if (existing) existing.remove();
+        var toast = document.createElement('div');
+        toast.id = 'admin-toast';
+        toast.textContent = msg;
+        toast.style.cssText = 'position:fixed; bottom:24px; right:24px; padding:12px 18px; border-radius:var(--radius); ' +
+            'background:' + (isError ? 'var(--red)' : 'var(--surface-2)') + '; color:var(--text-1); ' +
+            'border:1px solid ' + (isError ? 'rgba(239,68,68,0.5)' : 'var(--border-h)') + '; ' +
+            'box-shadow:0 8px 24px rgba(0,0,0,0.5); font-size:0.85rem; z-index:9999; ' +
+            'transition:opacity 0.2s ease, transform 0.2s ease; transform:translateY(10px); opacity:0;';
+        document.body.appendChild(toast);
+        requestAnimationFrame(function() {
+            toast.style.transform = 'translateY(0)';
+            toast.style.opacity = '1';
+        });
+        setTimeout(function() {
+            toast.style.opacity = '0';
+            toast.style.transform = 'translateY(10px)';
+            setTimeout(function() { toast.remove(); }, 220);
+        }, 3200);
+    }
+
+    function decrementStat(id) {
+        var el = document.getElementById(id);
+        if (!el) return;
+        var num = parseInt(el.textContent.trim(), 10);
+        if (!isNaN(num) && num > 0) el.textContent = num - 1;
+    }
+
+    function incrementStat(id) {
+        var el = document.getElementById(id);
+        if (!el) return;
+        var num = parseInt(el.textContent.trim(), 10);
+        if (!isNaN(num)) el.textContent = num + 1;
+    }
+
+    // Inject CSRF and handle all admin forms via AJAX without page reload
+    function bindAdminForm(form) {
+        if (!form || !form.method || form.method.toLowerCase() !== 'post') return;
+        if (form.dataset.adminBound) return;
+        form.dataset.adminBound = '1';
+
+        if (!form.querySelector('input[name="admin_csrf"]')) {
+            var inp = document.createElement('input');
+            inp.type = 'hidden';
+            inp.name = 'admin_csrf';
+            inp.value = csrfToken;
+            form.appendChild(inp);
+        }
+
+        form.addEventListener('submit', function(e) {
+            var actionInput = form.querySelector('input[name="action"]');
+            if (actionInput && actionInput.value === 'logout') return; // let logout proceed normally
+
+            e.preventDefault();
+
+            // First verify session validity
+            fetch('/admin/session_check', {
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            }).then(function(r) {
+                if (!r.ok) {
+                    alert('Admin-istunto on vanhentunut tai virheellinen. Kirjaudu uudelleen.');
+                    window.location.href = '/admin';
+                    return;
+                }
+                return r.json();
+            }).then(function(sessionData) {
+                if (!sessionData) return;
+
+                var targetUrl = form.action || window.location.pathname;
+                var fd = new FormData(form);
+                if (!fd.get('admin_csrf')) {
+                    fd.append('admin_csrf', csrfToken);
+                }
+
+                fetch(targetUrl, {
+                    method: 'POST',
+                    body: fd,
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'Accept': 'application/json'
+                    }
+                }).then(function(res) {
+                    if (!res.ok) {
+                        if (res.status === 401 || res.status === 403) {
+                            alert('Admin-istunto on vanhentunut. Kirjaudu uudelleen.');
+                            window.location.href = '/admin';
+                            return;
+                        }
+                        return res.text().then(function(t) {
+                            showAdminToast(t || 'Action failed (' + res.status + ')', true);
+                        });
+                    }
+                    return res.json().catch(function() { return { status: 'ok' }; });
+                }).then(function(data) {
+                    if (!data) return;
+
+                    var tr = form.closest('tr');
+                    // 1. Delete item
+                    if (targetUrl.includes('/admin/delete_item/')) {
+                        var itemId = targetUrl.split('/admin/delete_item/')[1].split('?')[0];
+                        if (tr) {
+                            tr.style.transition = 'opacity 0.2s ease, transform 0.2s ease';
+                            tr.style.opacity = '0';
+                            tr.style.transform = 'scale(0.97)';
+                            setTimeout(function() { tr.remove(); }, 200);
+                        }
+                        decrementStat('stat-items');
+                        if (tr && tr.dataset.type === 'file') decrementStat('stat-files');
+                        else if (tr && tr.dataset.type === 'paste') decrementStat('stat-pastes');
+                        showAdminToast('Deleted item ' + itemId);
+                    }
+                    // 2. Takedown item (ban)
+                    else if (targetUrl.includes('/admin/takedown_item/')) {
+                        var itemId = targetUrl.split('/admin/takedown_item/')[1].split('?')[0];
+                        if (tr) {
+                            tr.style.transition = 'opacity 0.2s ease, transform 0.2s ease';
+                            tr.style.opacity = '0';
+                            tr.style.transform = 'scale(0.97)';
+                            setTimeout(function() { tr.remove(); }, 200);
+                        }
+                        // If executed from top takedown form, look for matching row in items table
+                        var matchedRow = document.querySelector('tr[data-item-row="' + itemId + '"]');
+                        if (matchedRow && matchedRow !== tr) {
+                            matchedRow.style.transition = 'opacity 0.2s ease, transform 0.2s ease';
+                            matchedRow.style.opacity = '0';
+                            matchedRow.style.transform = 'scale(0.97)';
+                            setTimeout(function() { matchedRow.remove(); }, 200);
+                        }
+                        decrementStat('stat-items');
+                        incrementStat('stat-tombstones');
+                        showAdminToast('Item ' + itemId + ' banned & quarantined');
+                        var tkInput = document.getElementById('tk-id');
+                        if (tkInput) tkInput.value = '';
+                    }
+                    // 3. Revoke tombstone
+                    else if (targetUrl.includes('/admin/revoke_tombstone/')) {
+                        var tombId = targetUrl.split('/admin/revoke_tombstone/')[1].split('?')[0];
+                        if (tr) {
+                            tr.style.transition = 'opacity 0.2s ease, transform 0.2s ease';
+                            tr.style.opacity = '0';
+                            tr.style.transform = 'scale(0.97)';
+                            setTimeout(function() { tr.remove(); }, 200);
+                        }
+                        decrementStat('stat-tombstones');
+                        showAdminToast('Revoked quarantine for ' + tombId);
+                    }
+                    // 4. Delete account
+                    else if (targetUrl.includes('/admin/delete_account/')) {
+                        var accId = targetUrl.split('/admin/delete_account/')[1].split('?')[0];
+                        if (tr) {
+                            tr.style.transition = 'opacity 0.2s ease, transform 0.2s ease';
+                            tr.style.opacity = '0';
+                            tr.style.transform = 'scale(0.97)';
+                            setTimeout(function() { tr.remove(); }, 200);
+                        }
+                        decrementStat('stat-accounts');
+                        showAdminToast('Deleted account ' + accId);
+                    }
+                    // 5. Update tombstone reason
+                    else if (targetUrl.includes('/admin/update_tombstone_reason/')) {
+                        var reasonVal = fd.get('reason') || '';
+                        if (tr) {
+                            var reasonDiv = tr.querySelector('td:nth-child(2) > div');
+                            if (reasonDiv && reasonVal) reasonDiv.textContent = reasonVal;
+                            var btn = form.querySelector('button');
+                            if (btn) {
+                                var origTxt = btn.textContent;
+                                btn.textContent = '✓';
+                                setTimeout(function() { btn.textContent = origTxt; }, 1500);
+                            }
+                        }
+                        showAdminToast('Tombstone reason updated');
+                    }
+                    // 6. Run cleanup
+                    else if (targetUrl.includes('/admin/run_cleanup')) {
+                        var btn = form.querySelector('button');
+                        if (btn) {
+                            var orig = btn.textContent;
+                            btn.textContent = '✓ finished';
+                            setTimeout(function() { btn.textContent = orig; }, 2000);
+                        }
+                        showAdminToast('Cleanup completed successfully');
+                    }
+                }).catch(function(err) {
+                    showAdminToast('Request failed: ' + err.message, true);
+                });
+            }).catch(function() {
+                alert('Network error checking admin session.');
+            });
+        });
+    }
+
+    document.querySelectorAll('form').forEach(bindAdminForm);
+
+    /* Instant Live Search in Admin Items */
+    function escapeHtml(str) {
+        if (!str) return '';
+        return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+    }
+
+    var searchInput = document.getElementById('admin-search-input');
+    var searchClear = document.getElementById('admin-search-clear');
+    var searchForm = document.getElementById('admin-search-form');
+    var itemsHeading = document.getElementById('admin-items-heading');
+    var itemsTbody = document.querySelector('#admin-items-table tbody');
+    var searchDebounceTimer = null;
+    var activeSearchController = null;
+
+    function renderItems(itemsList, query) {
+        if (!itemsTbody) return;
+        itemsTbody.innerHTML = '';
+        if (!itemsList || itemsList.length === 0) {
+            itemsTbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text-3);padding:24px;">' + (query ? 'no matching items found for "' + escapeHtml(query) + '"' : 'no items hosted.') + '</td></tr>';
+            return;
+        }
+        itemsList.forEach(function(i) {
+            var tr = document.createElement('tr');
+            tr.dataset.itemRow = i.id;
+            tr.dataset.type = i.type;
+            var sizeKb = (i.size / 1024).toFixed(1) + ' kb';
+            var nameText = (i.type === 'file' ? escapeHtml(i.filename) : 'paste') + ' · ' + sizeKb;
+            var expiresText = i.expires_at > 2000000000 ? '<span style="color:var(--green);">never</span>' : new Date(i.expires_at * 1000).toLocaleDateString();
+            var accountText = i.account_id ? escapeHtml(i.account_id) : '<span style="color:var(--text-3)">anon</span>';
+
+            tr.innerHTML = '<td><a href="/v/' + encodeURIComponent(i.id) + '" target="_blank">' + escapeHtml(i.id) + '</a></td>' +
+                '<td>' + escapeHtml(i.type) + '</td>' +
+                '<td>' + accountText + '</td>' +
+                '<td>' + nameText + '</td>' +
+                '<td>' + i.views + '</td>' +
+                '<td>' + expiresText + '</td>' +
+                '<td style="white-space:nowrap;">' +
+                '<form action="/admin/delete_item/' + encodeURIComponent(i.id) + '" method="post" class="form-inline" onsubmit="return confirm(\'delete ' + escapeHtml(i.id) + '?\');">' +
+                '<input type="hidden" name="admin_csrf" value="' + csrfToken + '">' +
+                '<button type="submit" class="btn-small">del</button>' +
+                '</form> ' +
+                '<form action="/admin/takedown_item/' + encodeURIComponent(i.id) + '" method="post" class="form-inline" onsubmit="return confirm(\'ban ' + escapeHtml(i.id) + '?\');">' +
+                '<input type="hidden" name="admin_csrf" value="' + csrfToken + '">' +
+                '<input type="hidden" name="reason" value="Admin Takedown / TOS Violation">' +
+                '<button type="submit" class="btn-small danger">ban</button>' +
+                '</form>' +
+                '</td>';
+
+            itemsTbody.appendChild(tr);
+            tr.querySelectorAll('form').forEach(bindAdminForm);
+        });
+    }
+
+    function doLiveSearch(immediate) {
+        if (!searchInput) return;
+        var q = searchInput.value.trim();
+        if (searchClear) searchClear.style.display = q ? 'inline' : 'none';
+
+        // 1. Instant client-side DOM filter on currently loaded rows
+        if (itemsTbody) {
+            var qLower = q.toLowerCase();
+            var rows = itemsTbody.querySelectorAll('tr[data-item-row]');
+            rows.forEach(function(r) {
+                var txt = r.textContent.toLowerCase();
+                r.style.display = txt.includes(qLower) ? '' : 'none';
+            });
+        }
+
+        // 2. Debounced deep server fetch
+        clearTimeout(searchDebounceTimer);
+        var delay = immediate ? 0 : 150;
+        searchDebounceTimer = setTimeout(function() {
+            if (activeSearchController) {
+                activeSearchController.abort();
+            }
+            activeSearchController = new AbortController();
+
+            fetch('/admin_dashboard?q=' + encodeURIComponent(q) + '&format=json', {
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                signal: activeSearchController.signal
+            }).then(function(r) {
+                if (!r.ok) return null;
+                return r.json();
+            }).then(function(data) {
+                if (!data || data.q !== searchInput.value.trim()) return;
+                renderItems(data.items, q);
+                if (itemsHeading) {
+                    itemsHeading.innerHTML = q ? 'hosted items <span style="font-weight:400;">(results for "' + escapeHtml(q) + '")</span>' : 'hosted items <span style="font-weight:400;">(recent 100)</span>';
+                }
+            }).catch(function(err) {
+                if (err.name !== 'AbortError') console.error('Search error:', err);
+            });
+        }, delay);
+    }
+
+    if (searchInput) {
+        searchInput.addEventListener('input', function() {
+            doLiveSearch(false);
+        });
+    }
+
+    if (searchForm) {
+        searchForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            doLiveSearch(true);
+        });
+    }
+
+    if (searchClear) {
+        searchClear.addEventListener('click', function(e) {
+            e.preventDefault();
+            if (searchInput) {
+                searchInput.value = '';
+                doLiveSearch(true);
+                searchInput.focus();
+            }
+        });
+    }
+
+    // Periodic session health check every 60s
+    setInterval(function() {
+        fetch('/admin/session_check', {
+            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        }).then(function(r) {
+            if (!r.ok) {
+                console.warn('Admin session expired.');
+            }
+        }).catch(function() {});
+    }, 60000);
+})();
+</script>
 
 {% endblock %}

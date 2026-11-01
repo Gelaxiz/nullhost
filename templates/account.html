@@ -35,25 +35,26 @@
 
     <details class="collection-create-panel" id="collection-create-panel">
         <summary>create a collection</summary>
-        <form action="/collections" method="post" class="collection-create-form">
+        <form action="/collections" method="post" class="collection-create-form" autocomplete="off" data-form-type="other">
             <div class="form-row compact-row">
                 <div>
                     <label for="collection-name">name</label>
-                    <input id="collection-name" type="text" name="name" maxlength="80" placeholder="trip photos" required>
+                    <input id="collection-name" type="text" name="name" maxlength="80" placeholder="trip photos" required autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-1p-ignore="true" data-form-type="other">
                 </div>
                 <div>
                     <label for="collection-password">password</label>
-                    <input id="collection-password" type="password" name="password" placeholder="optional">
+                    <input id="collection-password" type="password" name="password" placeholder="optional" autocomplete="new-password" data-lpignore="true" data-1p-ignore="true" data-form-type="other">
                 </div>
             </div>
             <div class="form-row compact-row" style="margin-top:6px;">
                 <div>
                     <label for="collection-custom-id">custom link (optional)</label>
-                    <input id="collection-custom-id" type="text" name="custom_id" placeholder="e.g. trip-photos (alphanumeric &amp; dashes)">
+                    <input id="collection-custom-id" type="text" name="custom_id" placeholder="e.g. trip-photos (alphanumeric &amp; dashes)" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-1p-ignore="true" data-form-type="other">
+                    <span class="custom-link-hint" id="collection-custom-id-hint" style="display:block; margin-top:4px;"></span>
                 </div>
                 <div>
                     <label for="collection-folder">put selected files in</label>
-                    <input id="collection-folder" type="text" name="folder_path" placeholder="optional folder, e.g. photos/day-1">
+                    <input id="collection-folder" type="text" name="folder_path" placeholder="optional folder, e.g. photos/day-1" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-1p-ignore="true" data-form-type="other">
                 </div>
             </div>
 
@@ -107,11 +108,11 @@
             <h2 id="items-heading">Uploads</h2>
             <p>Select files once, then add them to any collection.</p>
         </div>
-        {% if items %}<input type="search" id="item-search" class="item-search" placeholder="filter uploads" aria-label="Filter uploads">{% endif %}
+        {% if items %}<input type="search" id="item-search" class="item-search" placeholder="filter uploads" aria-label="Filter uploads" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-1p-ignore="true" data-form-type="other">{% endif %}
     </div>
 
     {% if items %}
-    <form id="account-bulk-form" action="/collections/add-items" method="post" class="account-bulk-bar">
+    <form id="account-bulk-form" action="/collections/add-items" method="post" class="account-bulk-bar" autocomplete="off">
         <div class="bulk-selection-summary">
             <button type="button" class="btn-small" id="library-select-all">select all</button>
             <span id="library-selection-count" aria-live="polite">0 selected</span>
@@ -121,7 +122,7 @@
             <option value="">add to collection…</option>
             {% for collection in collections %}<option value="{{ collection['id'] }}">{{ collection['name'] }}</option>{% endfor %}
         </select>
-        <input type="text" name="folder_path" placeholder="optional folder" aria-label="Folder in collection">
+        <input type="text" name="folder_path" placeholder="optional folder" aria-label="Folder in collection" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-1p-ignore="true" data-form-type="other">
         <button type="submit" class="primary" disabled id="library-add-button">add selected</button>
         {% else %}
         <button type="button" id="bulk-create-collection" class="primary">create a collection</button>
@@ -132,7 +133,7 @@
 
     <div class="account-item-list" id="account-item-list">
         {% for item in items %}
-        {% set raw_link = '/v/' ~ item['id'] ~ '/' ~ item['filename'] if item['type'] == 'file' else '/v/' ~ item['id'] ~ '/paste.txt' %}
+        {% set raw_link = '/raw/' ~ item['id'] ~ '/' ~ item['filename'] if item['type'] == 'file' else '/raw/' ~ item['id'] ~ '/paste.txt' %}
         <article class="account-item" data-search="{{ (item['filename'] or item['id'])|lower }} {{ item['display_type']|lower }}">
             <label class="account-item-select" aria-label="Select {% if item['filename'] %}{{ item['filename'] }}{% else %}paste {{ item['id'] }}{% endif %}">
                 <input type="checkbox" name="item_ids" value="{{ item['id'] }}" form="account-bulk-form" class="library-checkbox">
@@ -275,6 +276,59 @@
             window.getSelection().selectAllChildren(document.getElementById('account-key'));
         }
     });
+
+    var colInput = document.getElementById('collection-custom-id');
+    var colHint = document.getElementById('collection-custom-id-hint');
+    if (colInput && colHint) {
+        var colTimer = null;
+        var colReq = 0;
+        colInput.addEventListener('input', function() {
+            clearTimeout(colTimer);
+            colTimer = setTimeout(function() {
+                var val = (colInput.value || '').trim();
+                if (!val) {
+                    colHint.className = 'custom-link-hint';
+                    colHint.textContent = '';
+                    return;
+                }
+                var clean = val.replace(/[-_]/g, '');
+                if (!clean || !/^[a-zA-Z0-9]+$/.test(clean) || val.length > 32) {
+                    colHint.className = 'custom-link-hint is-invalid';
+                    colHint.textContent = '✗ invalid link: letters, numbers and dashes only (max 32 chars)';
+                    return;
+                }
+                colHint.className = 'custom-link-hint is-checking';
+                colHint.textContent = 'checking availability...';
+                var reqId = ++colReq;
+                fetch('/api/check_id/' + encodeURIComponent(val))
+                    .then(function(res) { return res.json(); })
+                    .then(function(data) {
+                        if (reqId !== colReq) return;
+                        if (data.available) {
+                            colHint.className = 'custom-link-hint is-valid';
+                            colHint.textContent = '✓ link available (' + {{ site_domain|tojson }} + '/c/' + val + ')';
+                        } else if (data.status === 'retired') {
+                            colHint.className = 'custom-link-hint is-invalid';
+                            colHint.textContent = '✗ this link was previously used and permanently retired';
+                        } else if (data.status === 'in_use') {
+                            colHint.className = 'custom-link-hint is-invalid';
+                            colHint.textContent = '✗ this link is already in use';
+                        } else if (data.status === 'reserved') {
+                            colHint.className = 'custom-link-hint is-invalid';
+                            colHint.textContent = '✗ reserved link name';
+                        } else {
+                            colHint.className = 'custom-link-hint is-invalid';
+                            colHint.textContent = '✗ ' + (data.message || 'link unavailable');
+                        }
+                    })
+                    .catch(function() {
+                        if (reqId !== colReq) return;
+                        colHint.className = 'custom-link-hint';
+                        colHint.textContent = '';
+                    });
+            }, 180);
+        });
+    }
 
 })();
 

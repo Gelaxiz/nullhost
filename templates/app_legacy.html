@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block header_title %}Client Apps{% endblock %}
+{% block content %}
+
+<div data-role="collapsible" data-collapsed="false" data-theme="a" data-content-theme="a">
+    <h3>Nokia & Symbian Mobile (.JAR / .JAD)</h3>
+    <p style="font-size: 13px; line-height: 1.45; color: #d4d4d8;">
+        Official standalone mobile client (v1.9.8). Runs natively out-of-the-box on Nokia 808 PureView (Belle FP2), N8, E7, C7, Series 60, and Series 40 devices via the built-in Nokia JVM.
+        <strong>100% dependency-free: zero Python, zero Qt, zero setup required.</strong>
+    </p>
+    <ul data-role="listview" data-inset="true">
+        <li>
+            <a href="/download-app?platform=j2me&v=1.9.8" data-icon="arrow-d">
+                <h3>Download Nullhost.jar (v1.9.8)</h3>
+                <p>Nokia 808, N8, E7, C7, S60, S40</p>
+                <span class="ui-li-count">.JAR</span>
+            </a>
+        </li>
+        <li>
+            <a href="/download-app?platform=jad&v=1.9.8" data-icon="arrow-d">
+                <h3>Download .JAD Descriptor</h3>
+                <p>JAD Descriptor for direct mobile install</p>
+            </a>
+        </li>
+    </ul>
+</div>
+
+<div data-role="collapsible" data-theme="a" data-content-theme="a">
+    <h3>Windows Desktop Client (.EXE)</h3>
+    <p style="font-size: 13px; line-height: 1.45; color: #d4d4d8;">
+        Native Windows desktop client in C#/.NET 4.5+. Explorer right-click context menu integration, fast chunked file uploads, and automatic clipboard copy.
+    </p>
+    <a href="/download-app?platform=windows&v=1.1.4" data-role="button" data-theme="b" data-icon="arrow-d">Download Nullhost.exe (v1.1.4)</a>
+</div>
+
+<div style="margin-top: 15px;">
+    <a href="/" data-role="button" data-icon="home">Back to Home</a>
+</div>
+
+{% endblock %}

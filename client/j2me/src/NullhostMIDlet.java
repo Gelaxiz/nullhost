@@ -28,7 +28,7 @@ import javax.microedition.rms.RecordStore;
  */
 public class NullhostMIDlet extends MIDlet implements CommandListener, ItemCommandListener {
 
-    private static final String APP_VERSION = "1.9.6";
+    private static final String APP_VERSION = "1.9.8";
     private static final String CLIENT_ID = "j2me-universal";
     private static final String MOBILE_SECRET = "nullhost_secret_mobile_app_key_2026";
     private static final String DEFAULT_SERVER = "http://nullhost.gelaxiz.xyz";
@@ -45,13 +45,28 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
     private int burnIndex = 0;   // Disabled default
     private String customPassword = "";
     private String customSlug = "";
-    private boolean fastUpload = false;        // Fast 1080p compression option
+    private int compressionIndex = 0;          // 0=Original, 1=1080p, 2=720p, 3=480p, 4=240p
+    private boolean fastUpload = false;        // Fast compression option (backward compatibility)
 
     private static final String[] EXPIRY_LABELS = {"1 Hour", "24 Hours", "7 Days", "30 Days", "Never Expire"};
     private static final String[] EXPIRY_VALS = {"1h", "24h", "7d", "30d", "never"};
 
     private static final String[] BURN_LABELS = {"Disabled", "1 View", "5 Views", "10 Views"};
     private static final String[] BURN_VALS = {"0", "1", "5", "10"};
+
+    private static final String[] COMPRESSION_LABELS = {
+        "Original (Full Quality)",
+        "1080p High (1920x1080, 85%)",
+        "720p Balanced (1280x720, 75%)",
+        "480p Mobile VGA (640x480, 70%)",
+        "240p Extreme Saver (320x240, 60%)"
+    };
+    private static final String[] COMPRESSION_SHORT_LABELS = {
+        "Original", "1080p High", "720p Balanced", "480p VGA", "240p Saver"
+    };
+    private static final String[] COMPRESSION_VALUES = {
+        "original", "1080p", "720p", "480p", "240p"
+    };
 
     // Current Selection
     private String selectedFilePath = null;
@@ -92,15 +107,18 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
     private TextField optPassword;
     private TextField optSlug;
     private TextField optAccount;
+    private ChoiceGroup optCompression;
     private ChoiceGroup optFastUpload;
 
     // Commands
     private Command cmdUpload;
     private Command cmdPhoto;
     private Command cmdBrowse;
+    private Command cmdQualityMenu;
     private Command cmdFindByCodeMenu;
     private Command cmdPublicFiles;
     private Command cmdMyUploads;
+    private Command cmdCheckUpdate;
     private Command cmdSettings;
     private Command cmdTerms;
     private Command cmdPrivacy;
@@ -166,14 +184,50 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
     }
 
     public void startApp() {
-        if (display == null) {
-            display = Display.getDisplay(this);
-            loadPersistentSettings();
-            initCommands();
-            initMainForm();
-            checkVersionQuietly(false);
+        try {
+            if (display == null) {
+                display = Display.getDisplay(this);
+                try {
+                    loadPersistentSettings();
+                } catch (Throwable t) {
+                    // Ignore RMS errors
+                }
+                try {
+                    initCommands();
+                } catch (Throwable t) {
+                    // Ignore command errors
+                }
+                initMainForm();
+            }
+            display.setCurrent(mainForm);
+            display.callSerially(new Runnable() {
+                public void run() {
+                    try {
+                        checkVersionQuietly(false);
+                    } catch (Throwable ignore) {}
+                }
+            });
+        } catch (Throwable t) {
+            showFatalError("Startup Error", t);
         }
-        display.setCurrent(mainForm);
+    }
+
+    private void showFatalError(String title, Throwable t) {
+        try {
+            Form errForm = new Form(title);
+            String msg = (t == null) ? "Unknown error" : (t.getClass().getName() + ": " + t.getMessage());
+            errForm.append(new StringItem("Error details:", msg));
+            Command exitCmd = new Command("Exit", Command.EXIT, 1);
+            errForm.addCommand(exitCmd);
+            errForm.setCommandListener(new CommandListener() {
+                public void commandAction(Command c, Displayable d) {
+                    notifyDestroyed();
+                }
+            });
+            if (display != null) {
+                display.setCurrent(errForm);
+            }
+        } catch (Throwable ignore) {}
     }
 
     public void pauseApp() {
@@ -187,15 +241,17 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
         cmdUpload = new Command("Upload File Now", Command.OK, 1);
         cmdPhoto = new Command("Choose Photo", Command.SCREEN, 2);
         cmdBrowse = new Command("Browse Storage", Command.SCREEN, 3);
+        cmdQualityMenu = new Command("Photo Compression", Command.SCREEN, 4);
         cmdFindByCodeMenu = new Command("Find by Code", Command.SCREEN, 5);
         cmdPublicFiles = new Command("Public Files", Command.SCREEN, 6);
         cmdMyUploads = new Command("Upload History", Command.SCREEN, 7);
-        cmdSettings = new Command("Settings", Command.SCREEN, 8);
-        cmdTerms = new Command("Terms of Service", Command.SCREEN, 9);
-        cmdPrivacy = new Command("Privacy Policy", Command.SCREEN, 10);
-        cmdAbout = new Command("About", Command.SCREEN, 11);
-        cmdExit = new Command("Exit", Command.SCREEN, 12);
-        cmdExitSoftkey = new Command("Exit", Command.EXIT, 13);
+        cmdCheckUpdate = new Command("Check for Updates", Command.SCREEN, 8);
+        cmdSettings = new Command("Settings", Command.SCREEN, 9);
+        cmdTerms = new Command("Terms of Service", Command.SCREEN, 10);
+        cmdPrivacy = new Command("Privacy Policy", Command.SCREEN, 11);
+        cmdAbout = new Command("About", Command.SCREEN, 12);
+        cmdExit = new Command("Exit", Command.SCREEN, 13);
+        cmdExitSoftkey = new Command("Exit", Command.EXIT, 14);
 
         cmdBack = new Command("Back", Command.BACK, 1);
         cmdSelect = new Command("Select", Command.OK, 1);
@@ -215,71 +271,86 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
 
         // 1. Upload Section
         fileStatusItem = new StringItem("Selected File:", "No file selected");
-        fileStatusItem.setLayout(Item.LAYOUT_EXPAND | Item.LAYOUT_NEWLINE_AFTER);
+        try {
+            fileStatusItem.setLayout(Item.LAYOUT_EXPAND | Item.LAYOUT_NEWLINE_AFTER);
+        } catch (Throwable ignore) {}
         mainForm.append(fileStatusItem);
 
-        previewImageItem = new ImageItem(null, null, Item.LAYOUT_CENTER | Item.LAYOUT_NEWLINE_BEFORE | Item.LAYOUT_NEWLINE_AFTER, "Preview");
-        mainForm.append(previewImageItem);
+        try {
+            previewImageItem = new ImageItem("", null, Item.LAYOUT_CENTER, "Preview");
+            mainForm.append(previewImageItem);
+        } catch (Throwable ignore) {
+            previewImageItem = null;
+        }
 
-        btnSelectPhoto = new StringItem(null, "Choose Photo", Item.BUTTON);
-        btnSelectPhoto.setLayout(Item.LAYOUT_EXPAND | Item.LAYOUT_NEWLINE_AFTER);
+        btnSelectPhoto = new StringItem("", "Choose Photo", Item.BUTTON);
+        try { btnSelectPhoto.setLayout(Item.LAYOUT_EXPAND | Item.LAYOUT_NEWLINE_AFTER); } catch (Throwable ignore) {}
         btnSelectPhoto.setDefaultCommand(cmdItemAction);
         btnSelectPhoto.setItemCommandListener(this);
         mainForm.append(btnSelectPhoto);
 
-        btnBrowseFiles = new StringItem(null, "Browse Files", Item.BUTTON);
-        btnBrowseFiles.setLayout(Item.LAYOUT_EXPAND | Item.LAYOUT_NEWLINE_AFTER);
+        btnBrowseFiles = new StringItem("", "Browse Files", Item.BUTTON);
+        try { btnBrowseFiles.setLayout(Item.LAYOUT_EXPAND | Item.LAYOUT_NEWLINE_AFTER); } catch (Throwable ignore) {}
         btnBrowseFiles.setDefaultCommand(cmdItemAction);
         btnBrowseFiles.setItemCommandListener(this);
         mainForm.append(btnBrowseFiles);
 
-        btnUploadNow = new StringItem(null, "Upload File Now", Item.BUTTON);
-        btnUploadNow.setLayout(Item.LAYOUT_EXPAND | Item.LAYOUT_NEWLINE_AFTER);
+        btnUploadNow = new StringItem("", "Upload File Now", Item.BUTTON);
+        try { btnUploadNow.setLayout(Item.LAYOUT_EXPAND | Item.LAYOUT_NEWLINE_AFTER); } catch (Throwable ignore) {}
         btnUploadNow.setDefaultCommand(cmdItemAction);
         btnUploadNow.setItemCommandListener(this);
         mainForm.append(btnUploadNow);
 
-        btnCreatePaste = new StringItem(null, "Create Paste", Item.BUTTON);
-        btnCreatePaste.setLayout(Item.LAYOUT_EXPAND | Item.LAYOUT_NEWLINE_AFTER);
+        btnCreatePaste = new StringItem("", "Create Paste", Item.BUTTON);
+        try { btnCreatePaste.setLayout(Item.LAYOUT_EXPAND | Item.LAYOUT_NEWLINE_AFTER); } catch (Throwable ignore) {}
         btnCreatePaste.setDefaultCommand(cmdItemAction);
         btnCreatePaste.setItemCommandListener(this);
         mainForm.append(btnCreatePaste);
 
-        mainForm.append(new Spacer(10, 8));
+        try { mainForm.append(new Spacer(10, 8)); } catch (Throwable ignore) {}
 
         // 2. Discover & Search Section
-        btnFindByCode = new StringItem(null, "Find by Code", Item.BUTTON);
-        btnFindByCode.setLayout(Item.LAYOUT_EXPAND | Item.LAYOUT_NEWLINE_AFTER);
+        btnFindByCode = new StringItem("", "Find by Code", Item.BUTTON);
+        try { btnFindByCode.setLayout(Item.LAYOUT_EXPAND | Item.LAYOUT_NEWLINE_AFTER); } catch (Throwable ignore) {}
         btnFindByCode.setDefaultCommand(cmdItemAction);
         btnFindByCode.setItemCommandListener(this);
         mainForm.append(btnFindByCode);
 
-        btnPublicFiles = new StringItem(null, "Browse Public Files", Item.BUTTON);
-        btnPublicFiles.setLayout(Item.LAYOUT_EXPAND | Item.LAYOUT_NEWLINE_AFTER);
+        btnPublicFiles = new StringItem("", "Browse Public Files", Item.BUTTON);
+        try { btnPublicFiles.setLayout(Item.LAYOUT_EXPAND | Item.LAYOUT_NEWLINE_AFTER); } catch (Throwable ignore) {}
         btnPublicFiles.setDefaultCommand(cmdItemAction);
         btnPublicFiles.setItemCommandListener(this);
         mainForm.append(btnPublicFiles);
 
-        btnMyUploads = new StringItem(null, "Upload History", Item.BUTTON);
-        btnMyUploads.setLayout(Item.LAYOUT_EXPAND | Item.LAYOUT_NEWLINE_AFTER);
+        btnMyUploads = new StringItem("", "Upload History", Item.BUTTON);
+        try { btnMyUploads.setLayout(Item.LAYOUT_EXPAND | Item.LAYOUT_NEWLINE_AFTER); } catch (Throwable ignore) {}
         btnMyUploads.setDefaultCommand(cmdItemAction);
         btnMyUploads.setItemCommandListener(this);
         mainForm.append(btnMyUploads);
 
-        mainForm.append(new Spacer(10, 8));
+        try { mainForm.append(new Spacer(10, 8)); } catch (Throwable ignore) {}
 
         // 3. Consolidated Settings Section
         settingsSummaryItem = new StringItem("Settings:", "Expiry " + EXPIRY_LABELS[expiryIndex] + ", Burn " + BURN_LABELS[burnIndex]);
-        settingsSummaryItem.setLayout(Item.LAYOUT_EXPAND | Item.LAYOUT_NEWLINE_AFTER);
+        try { settingsSummaryItem.setLayout(Item.LAYOUT_EXPAND | Item.LAYOUT_NEWLINE_AFTER); } catch (Throwable ignore) {}
         mainForm.append(settingsSummaryItem);
 
-        btnSettings = new StringItem(null, "Settings", Item.BUTTON);
-        btnSettings.setLayout(Item.LAYOUT_EXPAND | Item.LAYOUT_NEWLINE_AFTER);
+        btnSettings = new StringItem("", "Settings", Item.BUTTON);
+        try { btnSettings.setLayout(Item.LAYOUT_EXPAND | Item.LAYOUT_NEWLINE_AFTER); } catch (Throwable ignore) {}
         btnSettings.setDefaultCommand(cmdItemAction);
         btnSettings.setItemCommandListener(this);
         mainForm.append(btnSettings);
 
-        // Softkey Commands
+        // Softkey Commands (both primary actions and menus for keypad phones like Nokia E71)
+        mainForm.addCommand(cmdPhoto);
+        mainForm.addCommand(cmdBrowse);
+        mainForm.addCommand(cmdUpload);
+        mainForm.addCommand(cmdQualityMenu);
+        mainForm.addCommand(cmdFindByCodeMenu);
+        mainForm.addCommand(cmdPublicFiles);
+        mainForm.addCommand(cmdMyUploads);
+        mainForm.addCommand(cmdCheckUpdate);
+        mainForm.addCommand(cmdSettings);
         mainForm.addCommand(cmdTerms);
         mainForm.addCommand(cmdPrivacy);
         mainForm.addCommand(cmdAbout);
@@ -291,33 +362,17 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
     private void updateMainFormStatus() {
         if (selectedFilePath == null) {
             fileStatusItem.setText("No file selected");
-            if (previewImageItem != null) previewImageItem.setImage(null);
         } else {
             String fname = selectedFilePath.substring(selectedFilePath.lastIndexOf('/') + 1);
-            String lower = fname.toLowerCase();
-            boolean isImg = lower.endsWith(".jpg") || lower.endsWith(".jpeg") || lower.endsWith(".png") || lower.endsWith(".gif") || lower.endsWith(".bmp");
-            if (isImg) {
-                int[] dims = readImageDimensions(selectedFilePath);
-                if (dims != null && dims.length >= 2) {
-                    fileStatusItem.setText(fname + " (" + dims[0] + "x" + dims[1] + ", " + formatSize(selectedFileSize) + ")");
-                } else {
-                    fileStatusItem.setText(fname + " (" + formatSize(selectedFileSize) + ")");
-                }
-                if (previewImageItem != null) {
-                    Image prev = loadThumbnailSafe(selectedFilePath, 96);
-                    previewImageItem.setImage(prev);
-                }
-            } else {
-                fileStatusItem.setText(fname + " (" + formatSize(selectedFileSize) + ")");
-                if (previewImageItem != null) previewImageItem.setImage(null);
-            }
+            fileStatusItem.setText(fname + " (" + formatSize(selectedFileSize) + ")");
         }
         if (myUploads.isEmpty()) {
             btnMyUploads.setText("Upload History");
         } else {
             btnMyUploads.setText("Upload History: " + myUploads.size() + " items");
         }
-        settingsSummaryItem.setText("Expiry " + EXPIRY_LABELS[expiryIndex] + ", Burn " + BURN_LABELS[burnIndex] + (fastUpload ? ", 1080p Fast" : ""));
+        settingsSummaryItem.setText("Expiry " + EXPIRY_LABELS[expiryIndex] + ", Burn " + BURN_LABELS[burnIndex] +
+            (compressionIndex > 0 ? (", " + COMPRESSION_SHORT_LABELS[compressionIndex]) : ""));
     }
 
     public void commandAction(Command c, Item item) {
@@ -356,6 +411,10 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
             startFetchPublicFiles();
         } else if (c == cmdMyUploads) {
             openMyUploads();
+        } else if (c == cmdQualityMenu) {
+            openQuickCompressionForm();
+        } else if (c == cmdCheckUpdate) {
+            checkVersionQuietly(true);
         } else if (c == cmdSettings) {
             openSettingsForm();
         } else if (c == cmdAbout) {
@@ -397,6 +456,31 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
         }
     }
 
+    private void openQuickCompressionForm() {
+        final List list = new List("Photo Compression", Choice.IMPLICIT);
+        for (int i = 0; i < COMPRESSION_LABELS.length; i++) {
+            list.append(COMPRESSION_LABELS[i] + (i == compressionIndex ? " *" : ""), null);
+        }
+        final Command cmdSelectQual = new Command("Select", Command.OK, 1);
+        final Command cmdCancelQual = new Command("Back", Command.BACK, 2);
+        list.addCommand(cmdSelectQual);
+        list.addCommand(cmdCancelQual);
+        list.setCommandListener(new CommandListener() {
+            public void commandAction(Command c, Displayable d) {
+                if (c == List.SELECT_COMMAND || c == cmdSelectQual) {
+                    compressionIndex = list.getSelectedIndex();
+                    fastUpload = (compressionIndex > 0);
+                    savePersistentSettings();
+                    updateMainFormStatus();
+                    display.setCurrent(mainForm);
+                } else if (c == cmdCancelQual) {
+                    display.setCurrent(mainForm);
+                }
+            }
+        });
+        display.setCurrent(list);
+    }
+
     // ------------------------------------------------------------------------
     // RMS PERSISTENT SETTINGS (SAVE & LOAD)
     // ------------------------------------------------------------------------
@@ -413,7 +497,8 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
             dos.writeUTF(customPassword != null ? customPassword : "");
             dos.writeUTF(customSlug != null ? customSlug : "");
             dos.writeBoolean(false);
-            dos.writeBoolean(fastUpload);
+            dos.writeBoolean(compressionIndex > 0);
+            dos.writeInt(compressionIndex);
             dos.flush();
             byte[] data = baos.toByteArray();
             if (rs.getNumRecords() == 0) {
@@ -449,6 +534,14 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
                     }
                     if (dis.available() > 0) {
                         fastUpload = dis.readBoolean();
+                        compressionIndex = fastUpload ? 1 : 0;
+                    }
+                    if (dis.available() >= 4) {
+                        compressionIndex = dis.readInt();
+                        if (compressionIndex < 0 || compressionIndex >= COMPRESSION_LABELS.length) {
+                            compressionIndex = 0;
+                        }
+                        fastUpload = (compressionIndex > 0);
                     }
                 }
             }
@@ -837,57 +930,20 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
 
         Vector allPhotos = new Vector();
 
+        // Common camera directories on Symbian / Nokia (E: memory card preferred, then C: phone memory)
+        String[] candidateDirs = {
+            "file:///e:/Images/",
+            "file:///e:/DCIM/100NOKIA/",
+            "file:///e:/DCIM/",
+            "file:///c:/Data/Images/",
+            "file:///c:/Images/"
+        };
+
         try {
-            Enumeration roots = FileSystemRegistry.listRoots();
-            Vector rootList = new Vector();
-            while (roots.hasMoreElements()) {
-                rootList.addElement((String) roots.nextElement());
-            }
-
-            // Common camera and picture subdirectories on Symbian/J2ME
-            String[] subDirs = {
-                "DCIM/100NOKIA/",
-                "DCIM/",
-                "Images/Camera/",
-                "Images/",
-                "Data/Images/",
-                "Pictures/",
-                "My Pictures/",
-                "Photos/",
-                ""
-            };
-
-            for (int i = 0; i < rootList.size(); i++) {
-                String root = (String) rootList.elementAt(i);
-                String rootUrl = "file:///" + root;
-                if (!rootUrl.endsWith("/")) rootUrl += "/";
-
-                for (int j = 0; j < subDirs.length; j++) {
-                    String target = rootUrl + subDirs[j];
-                    scanSingleFolder(target, allPhotos);
-                    if (allPhotos.size() >= 120) break;
-                }
-                if (allPhotos.size() >= 120) break;
-            }
-
-            // Sort allPhotos descending by timestamp, then filename descending (newest first)
-            int total = allPhotos.size();
-            for (int i = 0; i < total - 1; i++) {
-                int maxIdx = i;
-                for (int j = i + 1; j < total; j++) {
-                    PhotoItem a = (PhotoItem) allPhotos.elementAt(maxIdx);
-                    PhotoItem b = (PhotoItem) allPhotos.elementAt(j);
-                    if (b.time > a.time) {
-                        maxIdx = j;
-                    } else if (b.time == a.time && b.name.compareTo(a.name) > 0) {
-                        maxIdx = j;
-                    }
-                }
-                if (maxIdx != i) {
-                    Object tmp = allPhotos.elementAt(i);
-                    allPhotos.setElementAt(allPhotos.elementAt(maxIdx), i);
-                    allPhotos.setElementAt(tmp, maxIdx);
-                }
+            for (int i = 0; i < candidateDirs.length; i++) {
+                scanSingleFolder(candidateDirs[i], allPhotos);
+                // Once photos are found in a primary camera directory, stop scanning to avoid repeated permission prompts
+                if (allPhotos.size() > 0) break;
             }
 
             for (int i = 0; i < allPhotos.size() && i < 100; i++) {
@@ -916,38 +972,28 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
     }
 
     private void scanSingleFolder(String folderUrl, Vector dest) {
+        FileConnection fc = null;
         try {
-            FileConnection fc = (FileConnection) Connector.open(folderUrl, Connector.READ);
+            fc = (FileConnection) Connector.open(folderUrl, Connector.READ);
             if (fc.exists() && fc.isDirectory()) {
                 Enumeration list = fc.list();
-                Vector foundNames = new Vector();
                 while (list.hasMoreElements()) {
                     String name = (String) list.nextElement();
                     if (!name.endsWith("/")) {
                         String lower = name.toLowerCase();
                         if (lower.endsWith(".jpg") || lower.endsWith(".jpeg") || lower.endsWith(".png") || lower.endsWith(".gif")) {
-                            foundNames.addElement(name);
+                            dest.addElement(new PhotoItem(folderUrl + name, name, 0));
+                            if (dest.size() >= 100) break;
                         }
                     }
                 }
-                fc.close();
-
-                for (int i = 0; i < foundNames.size(); i++) {
-                    String fname = (String) foundNames.elementAt(i);
-                    String fullUrl = folderUrl + fname;
-                    long modTime = 0;
-                    try {
-                        FileConnection itemFc = (FileConnection) Connector.open(fullUrl, Connector.READ);
-                        modTime = itemFc.lastModified();
-                        itemFc.close();
-                    } catch (Exception ex) {}
-                    dest.addElement(new PhotoItem(fullUrl, fname, modTime));
-                    if (dest.size() >= 120) break;
-                }
-            } else {
-                fc.close();
             }
-        } catch (Exception ex) {}
+        } catch (Exception ex) {
+        } finally {
+            if (fc != null) {
+                try { fc.close(); } catch (Exception ignore) {}
+            }
+        }
     }
 
     private void handleGallerySelect() {
@@ -1233,6 +1279,7 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
         conn.setRequestProperty("User-Agent", "Nullhost-J2ME/1.0");
         conn.setRequestProperty("Content-Type", "multipart/form-data; boundary=" + boundary);
         conn.setRequestProperty("X-Nullhost-App-Token", appToken);
+        conn.setRequestProperty("Connection", "close");
         if (accountId.length() > 0) {
             conn.setRequestProperty("X-Nullhost-Account", accountId);
         }
@@ -1868,19 +1915,261 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
         display.setCurrent(f);
     }
 
-    private void triggerFileDownload(UploadRecord rec, Form parentForm) {
+    private void triggerFileDownload(UploadRecord rec, Displayable parentForm) {
+        if (rec == null) return;
         String target = (rec.rawUrl != null && rec.rawUrl.length() > 0) ? rec.rawUrl :
                        ((rec.downloadUrl != null && rec.downloadUrl.length() > 0) ? rec.downloadUrl : rec.url);
-        if (target != null && target.length() > 0) {
-            if (rec.password != null && rec.password.length() > 0 && target.indexOf("password=") == -1) {
-                target += (target.indexOf('?') != -1 ? "&" : "?") + "password=" + urlEncode(rec.password);
-            }
-            try {
-                platformRequest(target);
-            } catch (Exception ex) {
-                showAlert("Download Error", "Could not start download: " + ex.getMessage(), AlertType.ERROR, parentForm);
-            }
+        if (target == null || target.length() == 0) {
+            showAlert("Download Error", "No download URL available for this file.", AlertType.ERROR, parentForm);
+            return;
         }
+        if (rec.password != null && rec.password.length() > 0 && target.indexOf("password=") == -1) {
+            target += (target.indexOf('?') != -1 ? "&" : "?") + "password=" + urlEncode(rec.password);
+        }
+        startInAppDownload(target, rec.filename, parentForm);
+    }
+
+    private String getDownloadFolder() {
+        String[] candidateFolders = new String[] {
+            "file:///e:/Download/",
+            "file:///e:/Others/",
+            "file:///e:/",
+            "file:///c:/Data/Download/",
+            "file:///c:/Data/",
+            "file:///c:/"
+        };
+        for (int i = 0; i < candidateFolders.length; i++) {
+            String folder = candidateFolders[i];
+            try {
+                FileConnection fc = (FileConnection) Connector.open(folder, Connector.READ_WRITE);
+                if (fc.exists() && fc.isDirectory()) {
+                    fc.close();
+                    return folder;
+                } else if (!fc.exists()) {
+                    try {
+                        fc.mkdir();
+                        fc.close();
+                        return folder;
+                    } catch (Exception e) {
+                        fc.close();
+                    }
+                } else {
+                    fc.close();
+                }
+            } catch (Throwable t) {}
+        }
+        try {
+            Enumeration roots = FileSystemRegistry.listRoots();
+            if (roots.hasMoreElements()) {
+                return "file:///" + roots.nextElement();
+            }
+        } catch (Throwable t) {}
+        return "file:///e:/";
+    }
+
+    private String getUniqueFilePath(String folder, String filename) {
+        String safeName = (filename != null && filename.trim().length() > 0) ? filename.trim() : "download.bin";
+        if (safeName.indexOf('/') != -1) safeName = safeName.substring(safeName.lastIndexOf('/') + 1);
+        if (safeName.indexOf('\\') != -1) safeName = safeName.substring(safeName.lastIndexOf('\\') + 1);
+
+        String baseName = safeName;
+        String ext = "";
+        int dot = safeName.lastIndexOf('.');
+        if (dot != -1) {
+            baseName = safeName.substring(0, dot);
+            ext = safeName.substring(dot);
+        }
+        String candidate = folder + safeName;
+        int count = 1;
+        while (count < 100) {
+            try {
+                FileConnection fc = (FileConnection) Connector.open(candidate, Connector.READ);
+                boolean exists = fc.exists();
+                fc.close();
+                if (!exists) {
+                    return candidate;
+                }
+            } catch (Throwable t) {
+                return candidate;
+            }
+            candidate = folder + baseName + "_" + count + ext;
+            count++;
+        }
+        return candidate;
+    }
+
+    private void startInAppDownload(final String targetUrl, final String rawFilename, final Displayable backTarget) {
+        String initName = (rawFilename != null && rawFilename.trim().length() > 0) ? rawFilename.trim() : "file";
+        if (initName.indexOf('/') != -1) initName = initName.substring(initName.lastIndexOf('/') + 1);
+        final String displayName = initName;
+
+        final Form dlForm = new Form("Downloading File");
+        final StringItem nameItem = new StringItem("File:", displayName);
+        final Gauge gauge = new Gauge(null, false, 100, 0);
+        final StringItem statusItem = new StringItem("Progress:", "Connecting to server...");
+
+        dlForm.append(nameItem);
+        dlForm.append(gauge);
+        dlForm.append(statusItem);
+
+        final boolean[] cancelled = new boolean[]{false};
+        final Command cmdCancelDl = new Command("Cancel", Command.CANCEL, 1);
+        dlForm.addCommand(cmdCancelDl);
+        dlForm.setCommandListener(new CommandListener() {
+            public void commandAction(Command c, Displayable d) {
+                if (c == cmdCancelDl) {
+                    cancelled[0] = true;
+                    display.setCurrent(backTarget != null ? backTarget : mainForm);
+                }
+            }
+        });
+        display.setCurrent(dlForm);
+
+        Thread t = new Thread(new Runnable() {
+            public void run() {
+                HttpConnection conn = null;
+                InputStream is = null;
+                FileConnection fc = null;
+                OutputStream os = null;
+                String savePath = null;
+                try {
+                    String downloadUrl = targetUrl;
+                    if (downloadUrl.startsWith("https://")) {
+                        downloadUrl = "http://" + downloadUrl.substring(8);
+                    }
+                    conn = (HttpConnection) Connector.open(downloadUrl, Connector.READ);
+                    conn.setRequestMethod(HttpConnection.GET);
+                    conn.setRequestProperty("User-Agent", "Nullhost-J2ME/" + APP_VERSION);
+                    conn.setRequestProperty("Connection", "close");
+
+                    int code = conn.getResponseCode();
+                    if (code == 301 || code == 302 || code == 307 || code == 308) {
+                        String loc = conn.getHeaderField("Location");
+                        conn.close();
+                        if (loc != null && loc.length() > 0) {
+                            if (loc.startsWith("https://")) loc = "http://" + loc.substring(8);
+                            conn = (HttpConnection) Connector.open(loc, Connector.READ);
+                            conn.setRequestMethod(HttpConnection.GET);
+                            conn.setRequestProperty("User-Agent", "Nullhost-J2ME/" + APP_VERSION);
+                            conn.setRequestProperty("Connection", "close");
+                            code = conn.getResponseCode();
+                        }
+                    }
+
+                    if (code != 200) {
+                        final int errCode = code;
+                        display.callSerially(new Runnable() {
+                            public void run() {
+                                showAlert("Download Failed", "Server returned HTTP " + errCode, AlertType.ERROR, backTarget != null ? backTarget : mainForm);
+                            }
+                        });
+                        return;
+                    }
+
+                    long totalBytes = conn.getLength();
+                    String folder = getDownloadFolder();
+                    savePath = getUniqueFilePath(folder, displayName);
+
+                    fc = (FileConnection) Connector.open(savePath, Connector.READ_WRITE);
+                    if (!fc.exists()) {
+                        fc.create();
+                    }
+                    os = fc.openOutputStream();
+                    is = conn.openInputStream();
+
+                    byte[] buf = new byte[2048];
+                    int read;
+                    long received = 0;
+                    long startTime = System.currentTimeMillis();
+                    long lastUpdate = 0;
+
+                    while (!cancelled[0] && (read = is.read(buf)) != -1) {
+                        os.write(buf, 0, read);
+                        received += read;
+                        long now = System.currentTimeMillis();
+                        if (now - lastUpdate >= 250 || received == totalBytes) {
+                            lastUpdate = now;
+                            int pct = totalBytes > 0 ? (int)((received * 100L) / totalBytes) : 0;
+                            if (pct > 100) pct = 100;
+                            final int fPct = pct;
+                            long elapsed = now - startTime;
+                            long kbps = elapsed > 200 ? ((received * 1000L / elapsed) / 1024L) : 0;
+                            long remBytes = totalBytes - received;
+                            long etaSec = (kbps > 0 && remBytes > 0) ? (remBytes / (kbps * 1024L)) : 0;
+                            final String statStr = (totalBytes > 0 ? (fPct + "% (") : "") + formatSize(received) + (totalBytes > 0 ? (" / " + formatSize(totalBytes) + ")") : "") + " - " + kbps + " KB/s" + (etaSec > 0 ? (" - " + etaSec + "s left") : "");
+                            display.callSerially(new Runnable() {
+                                public void run() {
+                                    gauge.setValue(fPct);
+                                    statusItem.setText(statStr);
+                                }
+                            });
+                        }
+                    }
+
+                    os.flush();
+                    os.close();
+                    os = null;
+                    fc.close();
+                    fc = null;
+                    is.close();
+                    is = null;
+                    conn.close();
+                    conn = null;
+
+                    if (cancelled[0]) {
+                        try {
+                            FileConnection delFc = (FileConnection) Connector.open(savePath, Connector.READ_WRITE);
+                            if (delFc.exists()) delFc.delete();
+                            delFc.close();
+                        } catch (Throwable ignore) {}
+                        return;
+                    }
+
+                    final String finalPath = savePath;
+                    final long finalSize = received;
+                    display.callSerially(new Runnable() {
+                        public void run() {
+                            showDownloadCompleteForm(finalPath, finalSize, backTarget);
+                        }
+                    });
+                } catch (final Throwable e) {
+                    if (savePath != null) {
+                        try {
+                            FileConnection delFc = (FileConnection) Connector.open(savePath, Connector.READ_WRITE);
+                            if (delFc.exists()) delFc.delete();
+                            delFc.close();
+                        } catch (Throwable ignore) {}
+                    }
+                    display.callSerially(new Runnable() {
+                        public void run() {
+                            showAlert("Download Error", "Download failed: " + e.getMessage(), AlertType.ERROR, backTarget != null ? backTarget : mainForm);
+                        }
+                    });
+                } finally {
+                    try { if (os != null) os.close(); } catch (Throwable ignore) {}
+                    try { if (fc != null) fc.close(); } catch (Throwable ignore) {}
+                    try { if (is != null) is.close(); } catch (Throwable ignore) {}
+                    try { if (conn != null) conn.close(); } catch (Throwable ignore) {}
+                }
+            }
+        });
+        t.start();
+    }
+
+    private void showDownloadCompleteForm(final String savedPath, final long savedBytes, final Displayable backTarget) {
+        final Form sf = new Form("Download Complete");
+        sf.append(new StringItem("File Saved!", "File successfully saved to phone storage:\n\n" + savedPath + "\n\nSize: " + formatSize(savedBytes)));
+
+        final Command cmdOk = new Command("OK", Command.OK, 1);
+        final Command cmdBack = new Command("Back", Command.BACK, 2);
+        sf.addCommand(cmdOk);
+        sf.addCommand(cmdBack);
+        sf.setCommandListener(new CommandListener() {
+            public void commandAction(Command c, Displayable d) {
+                display.setCurrent(backTarget != null ? backTarget : mainForm);
+            }
+        });
+        display.setCurrent(sf);
     }
 
     // ------------------------------------------------------------------------
@@ -1996,13 +2285,27 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
         textItem.setLayout(Item.LAYOUT_EXPAND | Item.LAYOUT_NEWLINE_AFTER);
         viewForm.append(textItem);
 
+        StringItem btnSaveText = new StringItem(null, "Save Text to Phone", Item.BUTTON);
+        btnSaveText.setLayout(Item.LAYOUT_EXPAND | Item.LAYOUT_NEWLINE_AFTER);
+        btnSaveText.setDefaultCommand(cmdItemAction);
+        btnSaveText.setItemCommandListener(new ItemCommandListener() {
+            public void commandAction(Command c, Item item) {
+                triggerFileDownload(rec, viewForm);
+            }
+        });
+        viewForm.append(btnSaveText);
+
         final Command cmdViewerBack = new Command("Back", Command.BACK, 1);
+        final Command cmdSaveTextMenu = new Command("Save to Phone", Command.SCREEN, 2);
         viewForm.addCommand(cmdViewerBack);
+        viewForm.addCommand(cmdSaveTextMenu);
 
         viewForm.setCommandListener(new CommandListener() {
             public void commandAction(Command c, Displayable d) {
                 if (c == cmdViewerBack) {
                     display.setCurrent(backTarget != null ? backTarget : mainForm);
+                } else if (c == cmdSaveTextMenu) {
+                    triggerFileDownload(rec, viewForm);
                 }
             }
         });
@@ -2120,6 +2423,16 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
         vf.append(new StringItem("Resolution:", img.getWidth() + " x " + img.getHeight() + " px"));
         vf.append(new StringItem("Size:", formatSize(rec.size)));
 
+        StringItem btnSaveImg = new StringItem(null, "Save Image to Phone", Item.BUTTON);
+        btnSaveImg.setLayout(Item.LAYOUT_EXPAND | Item.LAYOUT_NEWLINE_AFTER);
+        btnSaveImg.setDefaultCommand(cmdItemAction);
+        btnSaveImg.setItemCommandListener(new ItemCommandListener() {
+            public void commandAction(Command c, Item item) {
+                triggerFileDownload(rec, vf);
+            }
+        });
+        vf.append(btnSaveImg);
+
         StringItem btnOpen = new StringItem(null, "Open in Browser", Item.BUTTON);
         btnOpen.setLayout(Item.LAYOUT_EXPAND | Item.LAYOUT_NEWLINE_AFTER);
         btnOpen.setDefaultCommand(cmdItemAction);
@@ -2133,14 +2446,18 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
         vf.append(btnOpen);
 
         final Command cmdViewBack = new Command("Back", Command.BACK, 1);
-        final Command cmdViewBrowser = new Command("Open in Browser", Command.SCREEN, 2);
+        final Command cmdSaveImgMenu = new Command("Save to Phone", Command.SCREEN, 2);
+        final Command cmdViewBrowser = new Command("Open in Browser", Command.SCREEN, 3);
         vf.addCommand(cmdViewBack);
+        vf.addCommand(cmdSaveImgMenu);
         vf.addCommand(cmdViewBrowser);
 
         vf.setCommandListener(new CommandListener() {
             public void commandAction(Command c, Displayable d) {
                 if (c == cmdViewBack) {
                     display.setCurrent(backTarget);
+                } else if (c == cmdSaveImgMenu) {
+                    triggerFileDownload(rec, vf);
                 } else if (c == cmdViewBrowser) {
                     if (rec.url != null && rec.url.length() > 0) {
                         try { platformRequest(rec.url); } catch (Exception ex) {}
@@ -2362,6 +2679,7 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
         conn.setRequestProperty("User-Agent", "Nullhost-J2ME/1.0");
         conn.setRequestProperty("Content-Type", "multipart/form-data; boundary=" + boundary);
         conn.setRequestProperty("X-Nullhost-App-Token", appToken);
+        conn.setRequestProperty("Connection", "close");
         if (accountId.length() > 0) {
             conn.setRequestProperty("X-Nullhost-Account", accountId);
         }
@@ -2387,8 +2705,12 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
         if (accountId.length() > 0) {
             writeField(os, boundary, "account_id", accountId);
         }
-        if (fastUpload) {
-            writeField(os, boundary, "fast_resize", "1");
+        if (compressionIndex > 0) {
+            writeField(os, boundary, "compression", COMPRESSION_VALUES[compressionIndex]);
+            writeField(os, boundary, "resize_mode", COMPRESSION_VALUES[compressionIndex]);
+            if (compressionIndex == 1) {
+                writeField(os, boundary, "fast_resize", "1");
+            }
         }
 
         os.write(("--" + boundary + "\r\n").getBytes("UTF-8"));
@@ -2679,9 +3001,9 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
         optAccount = new TextField("Account ID (Optional):", accountId, 32, TextField.ANY);
         settingsForm.append(optAccount);
 
-        optFastUpload = new ChoiceGroup("Photo Quality:", Choice.EXCLUSIVE, new String[]{"Original (Full Quality)", "Fast Mobile (1080p Optimized)"}, null);
-        optFastUpload.setSelectedIndex(fastUpload ? 1 : 0, true);
-        settingsForm.append(optFastUpload);
+        optCompression = new ChoiceGroup("Photo Compression:", Choice.EXCLUSIVE, COMPRESSION_LABELS, null);
+        optCompression.setSelectedIndex(compressionIndex, true);
+        settingsForm.append(optCompression);
 
         settingsForm.addCommand(cmdSaveSettings);
         settingsForm.addCommand(cmdBack);
@@ -2714,7 +3036,8 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
         customPassword = optPassword.getString().trim();
         customSlug = optSlug.getString().trim();
         accountId = enteredAcc;
-        fastUpload = optFastUpload.getSelectedIndex() == 1;
+        compressionIndex = optCompression.getSelectedIndex();
+        fastUpload = (compressionIndex > 0);
 
         savePersistentSettings();
 
@@ -2774,7 +3097,7 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
 
     private void showTermsOfService() {
         Form f = new Form("Terms of Service");
-        f.append(new StringItem("1. Limits:", "By uploading, you agree to these rules. Max size 10 GB per upload. Files over 95 MB chunked. If you don't agree, please do not use the service.\n\n"));
+        f.append(new StringItem("1. Limits:", "By uploading, you agree to these rules. Max size 10 GB per upload. Files over 50 MB chunked. If you don't agree, please do not use the service.\n\n"));
         f.append(new StringItem("2. Responsibility:", "You own whatever you upload. Nullhost is a dumb pipe. We do not actively monitor uploads, but legal notices result in deletion.\n\n"));
         f.append(new StringItem("3. As-Is Service:", "Nullhost is provided as-is without uptime or retention guarantees. Do not use as sole backup for important files.\n\n"));
         f.append(new StringItem("4. Liability:", "Nullhost is not responsible for damages resulting from service usage or file loss.\n\n"));
@@ -2937,11 +3260,12 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
                         String json = new String(baos.toByteArray(), "UTF-8");
                         final String latestJ2me = extractJsonField(json, "j2me");
                         final String j2meUrl = extractJsonField(json, "j2me_url");
+                        final String jadUrl = extractJsonField(json, "jad_url");
 
                         if (latestJ2me != null && isNewerVersion(latestJ2me, APP_VERSION)) {
                             display.callSerially(new Runnable() {
                                 public void run() {
-                                    promptUpdateAvailable(latestJ2me, j2meUrl);
+                                    promptUpdateAvailable(latestJ2me, j2meUrl, jadUrl);
                                 }
                             });
                             return;
@@ -2972,26 +3296,19 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
         t.start();
     }
 
-    private void promptUpdateAvailable(final String newVer, final String downloadUrl) {
+    private void promptUpdateAvailable(final String newVer, final String downloadUrl, final String jadUrl) {
         final Form uf = new Form("Update Available");
         uf.append(new StringItem("New Version Available!",
             "A newer version of Nullhost (v" + newVer + ") is available.\n\n" +
             "Your current version: v" + APP_VERSION + "\n\n" +
-            "Would you like to download and install the update now?"));
+            "Would you like to download and install the update now directly in the app? (No browser required)"));
 
-        StringItem btnDownload = new StringItem(null, "Download Update (v" + newVer + ")", Item.BUTTON);
+        StringItem btnDownload = new StringItem(null, "Download & Install (v" + newVer + ")", Item.BUTTON);
         btnDownload.setLayout(Item.LAYOUT_EXPAND | Item.LAYOUT_NEWLINE_AFTER);
         btnDownload.setDefaultCommand(cmdItemAction);
         btnDownload.setItemCommandListener(new ItemCommandListener() {
             public void commandAction(Command c, Item item) {
-                try {
-                    String base = serverUrl.trim();
-                    if (base.endsWith("/")) base = base.substring(0, base.length() - 1);
-                    String target = (downloadUrl != null && downloadUrl.length() > 0) ? downloadUrl : base + "/download-app?platform=j2me";
-                    platformRequest(target);
-                } catch (Throwable ex) {
-                    showAlert("Download Error", "Could not launch update: " + ex.getMessage(), AlertType.ERROR, uf);
-                }
+                startInAppUpdate(newVer, downloadUrl, jadUrl);
             }
         });
         uf.append(btnDownload);
@@ -3003,20 +3320,241 @@ public class NullhostMIDlet extends MIDlet implements CommandListener, ItemComma
         uf.setCommandListener(new CommandListener() {
             public void commandAction(Command c, Displayable d) {
                 if (c == cmdUpdateNow) {
-                    try {
-                        String base = serverUrl.trim();
-                        if (base.endsWith("/")) base = base.substring(0, base.length() - 1);
-                        String target = (downloadUrl != null && downloadUrl.length() > 0) ? downloadUrl : base + "/download-app?platform=j2me";
-                        platformRequest(target);
-                    } catch (Throwable ex) {
-                        showAlert("Download Error", "Could not launch update: " + ex.getMessage(), AlertType.ERROR, uf);
-                    }
+                    startInAppUpdate(newVer, downloadUrl, jadUrl);
                 } else if (c == cmdDismiss) {
                     display.setCurrent(mainForm);
                 }
             }
         });
         display.setCurrent(uf);
+    }
+
+    private void startInAppUpdate(final String newVer, final String j2meUrl, final String jadUrl) {
+        final Form uf = new Form("Updating Nullhost");
+        final StringItem statusItem = new StringItem("Status:", "Starting in-app update to v" + newVer + "...");
+        final Gauge gauge = new Gauge(null, false, 100, 0);
+        uf.append(statusItem);
+        uf.append(gauge);
+
+        final Command cmdCancel = new Command("Cancel", Command.CANCEL, 1);
+        uf.addCommand(cmdCancel);
+        final boolean[] cancelled = new boolean[]{false};
+        uf.setCommandListener(new CommandListener() {
+            public void commandAction(Command c, Displayable d) {
+                if (c == cmdCancel) {
+                    cancelled[0] = true;
+                    display.setCurrent(mainForm);
+                }
+            }
+        });
+        display.setCurrent(uf);
+
+        Thread t = new Thread(new Runnable() {
+            public void run() {
+                HttpConnection conn = null;
+                InputStream is = null;
+                FileConnection fc = null;
+                OutputStream os = null;
+                try {
+                    String base = serverUrl.trim();
+                    if (base.endsWith("/")) base = base.substring(0, base.length() - 1);
+                    if (base.startsWith("https://")) base = "http://" + base.substring(8);
+
+                    String jarTarget = (j2meUrl != null && j2meUrl.length() > 0) ? j2meUrl : base + "/download-app?platform=j2me";
+                    if (jarTarget.startsWith("https://")) jarTarget = "http://" + jarTarget.substring(8);
+
+                    String jadTarget = (jadUrl != null && jadUrl.length() > 0) ? jadUrl : base + "/download-app?platform=jad";
+                    if (jadTarget.startsWith("https://")) jadTarget = "http://" + jadTarget.substring(8);
+
+                    String folder = getDownloadFolder();
+                    final String saveJarPath = folder + "Nullhost.jar";
+                    final String saveJadPath = folder + "Nullhost.jad";
+
+                    // 1. Download Nullhost.jar
+                    display.callSerially(new Runnable() {
+                        public void run() {
+                            statusItem.setText("Downloading Nullhost.jar (v" + newVer + ")...");
+                        }
+                    });
+
+                    conn = (HttpConnection) Connector.open(jarTarget, Connector.READ);
+                    conn.setRequestMethod(HttpConnection.GET);
+                    conn.setRequestProperty("User-Agent", "Nullhost-J2ME/" + APP_VERSION);
+                    conn.setRequestProperty("Connection", "close");
+
+                    int code = conn.getResponseCode();
+                    if (code == 301 || code == 302 || code == 307 || code == 308) {
+                        String loc = conn.getHeaderField("Location");
+                        conn.close();
+                        if (loc != null && loc.length() > 0) {
+                            if (loc.startsWith("https://")) loc = "http://" + loc.substring(8);
+                            conn = (HttpConnection) Connector.open(loc, Connector.READ);
+                            conn.setRequestMethod(HttpConnection.GET);
+                            conn.setRequestProperty("User-Agent", "Nullhost-J2ME/" + APP_VERSION);
+                            conn.setRequestProperty("Connection", "close");
+                            code = conn.getResponseCode();
+                        }
+                    }
+
+                    if (code != 200) {
+                        final int errCode = code;
+                        display.callSerially(new Runnable() {
+                            public void run() {
+                                showAlert("Update Error", "Server returned HTTP " + errCode + " downloading JAR.", AlertType.ERROR, mainForm);
+                            }
+                        });
+                        return;
+                    }
+
+                    long totalBytes = conn.getLength();
+                    fc = (FileConnection) Connector.open(saveJarPath, Connector.READ_WRITE);
+                    if (fc.exists()) {
+                        fc.delete();
+                    }
+                    fc.create();
+                    os = fc.openOutputStream();
+                    is = conn.openInputStream();
+
+                    byte[] buf = new byte[2048];
+                    int read;
+                    long received = 0;
+                    long startTime = System.currentTimeMillis();
+                    long lastUpdate = 0;
+
+                    while (!cancelled[0] && (read = is.read(buf)) != -1) {
+                        os.write(buf, 0, read);
+                        received += read;
+                        long now = System.currentTimeMillis();
+                        if (now - lastUpdate >= 250 || received == totalBytes) {
+                            lastUpdate = now;
+                            int pct = totalBytes > 0 ? (int)((received * 100L) / totalBytes) : 0;
+                            if (pct > 100) pct = 100;
+                            final int fPct = pct;
+                            long elapsed = now - startTime;
+                            long kbps = elapsed > 200 ? ((received * 1000L / elapsed) / 1024L) : 0;
+                            final String s = fPct + "% (" + formatSize(received) + " / " + formatSize(totalBytes) + ") - " + kbps + " KB/s";
+                            display.callSerially(new Runnable() {
+                                public void run() {
+                                    gauge.setValue(fPct);
+                                    statusItem.setText("Downloading Nullhost.jar: " + s);
+                                }
+                            });
+                        }
+                    }
+
+                    os.flush();
+                    os.close();
+                    os = null;
+                    fc.close();
+                    fc = null;
+                    is.close();
+                    is = null;
+                    conn.close();
+                    conn = null;
+
+                    if (cancelled[0]) return;
+
+                    // 2. Download Nullhost.jad descriptor
+                    display.callSerially(new Runnable() {
+                        public void run() {
+                            statusItem.setText("Downloading Nullhost.jad descriptor...");
+                        }
+                    });
+
+                    try {
+                        conn = (HttpConnection) Connector.open(jadTarget, Connector.READ);
+                        conn.setRequestMethod(HttpConnection.GET);
+                        conn.setRequestProperty("User-Agent", "Nullhost-J2ME/" + APP_VERSION);
+                        conn.setRequestProperty("Connection", "close");
+
+                        if (conn.getResponseCode() == 200) {
+                            fc = (FileConnection) Connector.open(saveJadPath, Connector.READ_WRITE);
+                            if (fc.exists()) fc.delete();
+                            fc.create();
+                            os = fc.openOutputStream();
+                            is = conn.openInputStream();
+                            while (!cancelled[0] && (read = is.read(buf)) != -1) {
+                                os.write(buf, 0, read);
+                            }
+                            os.flush();
+                            os.close();
+                            os = null;
+                            fc.close();
+                            fc = null;
+                            is.close();
+                            is = null;
+                        }
+                        conn.close();
+                        conn = null;
+                    } catch (Throwable ignoreJad) {}
+
+                    if (cancelled[0]) return;
+
+                    // 3. Trigger installation or notify user
+                    display.callSerially(new Runnable() {
+                        public void run() {
+                            finishUpdateInstall(newVer, saveJadPath, saveJarPath);
+                        }
+                    });
+
+                } catch (final Throwable ex) {
+                    display.callSerially(new Runnable() {
+                        public void run() {
+                            showAlert("Update Failed", "Could not download update: " + ex.getMessage(), AlertType.ERROR, mainForm);
+                        }
+                    });
+                } finally {
+                    try { if (os != null) os.close(); } catch (Throwable ignore) {}
+                    try { if (fc != null) fc.close(); } catch (Throwable ignore) {}
+                    try { if (is != null) is.close(); } catch (Throwable ignore) {}
+                    try { if (conn != null) conn.close(); } catch (Throwable ignore) {}
+                }
+            }
+        });
+        t.start();
+    }
+
+    private void finishUpdateInstall(final String newVer, final String jadPath, final String jarPath) {
+        boolean launched = false;
+        try {
+            launched = platformRequest(jadPath);
+            if (!launched) {
+                launched = platformRequest(jarPath);
+            }
+        } catch (Throwable t) {
+            launched = false;
+        }
+
+        if (launched) {
+            destroyApp(true);
+            notifyDestroyed();
+            return;
+        }
+
+        final Form inf = new Form("Update Downloaded");
+        inf.append(new StringItem("Update Ready (v" + newVer + ")",
+            "The update (v" + newVer + ") was downloaded directly to phone storage:\n\n" +
+            jarPath + "\n\n" +
+            "To install now:\n" +
+            "1. Press 'Exit to Install' below\n" +
+            "2. Open your phone's File Manager\n" +
+            "3. Tap Nullhost.jar to complete the installation!"));
+
+        final Command cmdExitToInstall = new Command("Exit to Install", Command.SCREEN, 1);
+        final Command cmdDone = new Command("OK", Command.BACK, 2);
+        inf.addCommand(cmdExitToInstall);
+        inf.addCommand(cmdDone);
+        inf.setCommandListener(new CommandListener() {
+            public void commandAction(Command c, Displayable d) {
+                if (c == cmdExitToInstall) {
+                    destroyApp(true);
+                    notifyDestroyed();
+                } else {
+                    display.setCurrent(mainForm);
+                }
+            }
+        });
+        display.setCurrent(inf);
     }
 
     private static int[] parseVersionParts(String v) {
