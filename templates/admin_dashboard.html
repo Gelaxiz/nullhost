@@ -1,19 +1,23 @@
 {% extends "base.html" %}
 {% block content %}
 
-<div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:12px; margin-bottom:24px;">
-    <div>
-        <h2>admin dashboard</h2>
-        <p class="meta">sysadmin · authenticated via {% if stats.password_active %}password + {% endif %}totp 6fa · session active</p>
+<!-- Admin Header -->
+<div class="admin-header">
+    <div class="admin-title-group">
+        <div class="admin-heading-row">
+            <h2>admin dashboard</h2>
+            <span class="status-badge"><span class="status-dot"></span> active</span>
+        </div>
+        <p class="meta">sysadmin · authenticated via {% if stats.password_active %}password + {% endif %}totp 6fa · live telemetry</p>
     </div>
-    <form action="/admin" method="post" class="form-inline">
+    <form action="/admin/logout" method="post" class="form-inline" style="margin:0;">
         <input type="hidden" name="action" value="logout">
         <input type="hidden" name="admin_csrf" value="{{ admin_csrf }}">
-        <button type="submit">logout</button>
+        <button type="submit" class="btn-logout">logout</button>
     </form>
 </div>
 
-<!-- Stats -->
+<!-- Stats Grid -->
 <div class="stat-grid">
     <div class="stat-card">
         <div class="stat-value" id="stat-items">{{ stats.items_count }}</div>
@@ -32,77 +36,89 @@
         <div class="stat-label">accounts</div>
     </div>
     <div class="stat-card">
-        <div class="stat-value danger" id="stat-tombstones">{{ stats.tomb_count }}</div>
+        <div class="stat-value {% if stats.tomb_count > 0 %}danger{% endif %}" id="stat-tombstones">{{ stats.tomb_count }}</div>
         <div class="stat-label">tombstones</div>
     </div>
     <div class="stat-card">
-        <div class="stat-value">{{ stats.total_size_mb }}</div>
+        <div class="stat-value" id="stat-storage">{{ stats.total_size_mb or '0.00' }}</div>
         <div class="stat-label">mb stored</div>
     </div>
 </div>
 
-<!-- Takedown tool -->
-<div class="section">
-    <h3>takedown</h3>
-    <p class="meta">removes item immediately and quarantines the link for 7 days.</p>
-    <form action="" method="post" id="takedown-form" autocomplete="off" data-form-type="other" onsubmit="var id=document.getElementById('tk-id').value.trim();if(!id)return false;this.action='/admin/takedown_item/'+id;return confirm('takedown '+id+'?');">
-        <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:flex-end;">
-            <div style="flex:1; min-width:140px;">
-                <label>item id</label>
-                <input type="text" id="tk-id" placeholder="8x9a2b1c" required autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-1p-ignore="true" data-form-type="other" style="margin:0;max-width:100%;">
-            </div>
-            <div style="flex:2; min-width:200px;">
-                <label>reason</label>
-                <input type="text" name="reason" placeholder="reason" value="Third-party takedown / Legal Notice" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-1p-ignore="true" data-form-type="other" style="margin:0;max-width:100%;">
-            </div>
-            <button type="submit" class="danger" style="margin-bottom:0;">execute</button>
+<!-- Admin Action Tools Grid -->
+<div class="admin-actions-grid">
+    <div class="admin-action-card">
+        <div class="admin-card-header">
+            <h3>quarantine takedown</h3>
+            <span class="badge danger-subtle">takedown</span>
         </div>
-    </form>
+        <p class="meta">Removes item immediately and permanently quarantines the link for 7 days.</p>
+        <form action="" method="post" id="takedown-form" autocomplete="off" data-form-type="other" onsubmit="var id=document.getElementById('tk-id').value.trim();if(!id)return false;this.action='/admin/takedown_item/'+id;return confirm('takedown '+id+'?');" class="admin-form-row">
+            <div class="form-group" style="width: 140px; min-width: 120px;">
+                <label for="tk-id">item id</label>
+                <input type="text" id="tk-id" placeholder="8x9a2b1c" required autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-1p-ignore="true" data-form-type="other" style="margin:0;width:100%;">
+            </div>
+            <div class="form-group" style="flex: 1; min-width: 200px;">
+                <label for="tk-reason">reason</label>
+                <input type="text" id="tk-reason" name="reason" placeholder="reason" value="Third-party takedown / Legal Notice" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-1p-ignore="true" data-form-type="other" style="margin:0;width:100%;">
+            </div>
+            <button type="submit" class="danger" style="margin:0;height:36px;">execute</button>
+        </form>
+    </div>
+
+    <div class="admin-action-card">
+        <div class="admin-card-header">
+            <h3>system maintenance</h3>
+            <span class="badge blue-subtle">worker</span>
+        </div>
+        <p class="meta">Purge expired items, remove orphaned chunk artifacts, and reclaim storage.</p>
+        <div class="maintenance-box">
+            <form action="/admin/run_cleanup" method="post" class="form-inline" style="margin:0;">
+                <button type="submit" class="btn-cleanup" onclick="return confirm('run cleanup worker now?');">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:4px;"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 21h5v-5"/></svg>
+                    run cleanup pass
+                </button>
+            </form>
+            <span style="font-size:0.75rem; color:var(--text-2);">auto-runs hourly</span>
+        </div>
+    </div>
 </div>
 
-<!-- System actions -->
-<div class="section">
-    <h3>system</h3>
-    <form action="/admin/run_cleanup" method="post" class="form-inline">
-        <button type="submit" onclick="return confirm('run cleanup worker now?');">run cleanup</button>
-    </form>
-</div>
-
-<hr>
-
-<!-- Tombstones -->
-<div class="section">
-    <h3>tombstones (active quarantine)</h3>
+<!-- Tombstones (Active Quarantine) -->
+<div class="section-card">
+    <div class="section-card-header">
+        <h3>tombstones (active quarantine) <span class="count-pill">({{ tombstones|length }})</span></h3>
+    </div>
     {% if tombstones %}
     <div class="table-wrapper">
         <table>
             <thead>
                 <tr>
-                    <th>id</th>
+                    <th style="width:120px;">id</th>
                     <th>reason</th>
-                    <th>deleted</th>
-                    <th>reusable in</th>
-                    <th>action</th>
+                    <th style="width:140px;">deleted</th>
+                    <th style="width:120px;">reusable in</th>
+                    <th style="width:90px;text-align:right;">action</th>
                 </tr>
             </thead>
             <tbody>
                 {% for t in tombstones %}
                 <tr data-tomb-row="{{ t.id }}">
-                    <td><strong>{{ t.id }}</strong></td>
+                    <td><strong style="color:var(--text-1);font-family:var(--font-mono, monospace);">{{ t.id }}</strong></td>
                     <td>
-                        <div style="margin-bottom:4px;">{{ t.reason }}</div>
-                        <form action="/admin/update_tombstone_reason/{{ t.id }}" method="post" autocomplete="off" data-form-type="other" style="display:flex;gap:4px;margin:0;">
-                            <input type="text" name="reason" placeholder="new reason..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-1p-ignore="true" data-form-type="other" style="font-size:0.78rem;padding:4px 8px;margin:0;max-width:160px;">
+                        <div style="margin-bottom:6px;color:var(--text-1);">{{ t.reason }}</div>
+                        <form action="/admin/update_tombstone_reason/{{ t.id }}" method="post" autocomplete="off" data-form-type="other" style="display:flex;gap:6px;margin:0;">
+                            <input type="text" name="reason" placeholder="new reason..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-1p-ignore="true" data-form-type="other" style="font-size:0.78rem;padding:4px 8px;margin:0;max-width:240px;flex:1;">
                             <button type="submit" class="btn-small">update</button>
                         </form>
                     </td>
                     <td><script>document.write(new Date({{ t.deleted_at }} * 1000).toLocaleDateString())</script></td>
                     <td>
                         {% set diff = t.expires_at - now %}
-                        {% if diff > 0 %}{{ (diff / 86400) | round(1) }}d{% else %}<span style="color:var(--green);">ready</span>{% endif %}
+                        {% if diff > 0 %}<span class="badge muted">{{ (diff / 86400) | round(1) }}d</span>{% else %}<span class="badge success">ready</span>{% endif %}
                     </td>
-                    <td>
-                        <form action="/admin/revoke_tombstone/{{ t.id }}" method="post" class="form-inline" onsubmit="return confirm('revoke {{ t.id }}?');">
+                    <td style="text-align:right;">
+                        <form action="/admin/revoke_tombstone/{{ t.id }}" method="post" class="form-inline" onsubmit="return confirm('revoke {{ t.id }}?');" style="margin:0;display:inline-block;">
                             <button type="submit" class="btn-small">revoke</button>
                         </form>
                     </td>
@@ -112,20 +128,21 @@
         </table>
     </div>
     {% else %}
-    <p>no active tombstones.</p>
+    <p style="padding:24px 18px;margin:0;color:var(--text-3);font-size:0.88rem;">no active tombstones in quarantine.</p>
     {% endif %}
 </div>
 
-<hr>
-
-<!-- Items list -->
-<div class="section">
-    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:14px;">
-        <h3 id="admin-items-heading" style="margin:0;border:none;padding:0;">hosted items {% if q %}<span style="font-weight:400;">(results for "{{ q }}")</span>{% else %}<span style="font-weight:400;">(recent 100)</span>{% endif %}</h3>
-        <form action="/admin_dashboard" method="get" id="admin-search-form" autocomplete="off" data-form-type="other" style="display:flex;gap:6px;margin:0;">
-            <input type="text" name="q" id="admin-search-input" value="{{ q or '' }}" placeholder="search id, filename, acc..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-1p-ignore="true" data-form-type="other" style="margin:0;font-size:0.82rem;padding:6px 10px;min-width:240px;">
+<!-- Hosted Items -->
+<div class="section-card">
+    <div class="section-card-header">
+        <h3 id="admin-items-heading">hosted items {% if q %}<span style="font-weight:400;color:var(--text-2);">(results for "{{ q }}")</span>{% else %}<span style="font-weight:400;color:var(--text-2);">(recent 100)</span>{% endif %}</h3>
+        <form action="/admin_dashboard" method="get" id="admin-search-form" autocomplete="off" data-form-type="other" style="display:flex;gap:8px;align-items:center;margin:0;">
+            <div class="admin-search-box">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--text-3);flex-shrink:0;"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                <input type="text" name="q" id="admin-search-input" value="{{ q or '' }}" placeholder="search id, filename, acc..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-1p-ignore="true" data-form-type="other" style="min-width:200px;">
+            </div>
             <button type="submit" class="btn-small" id="admin-search-btn" style="display:none;">search</button>
-            <a href="/admin_dashboard" id="admin-search-clear" style="font-size:0.82rem;align-self:center;display:{% if q %}inline{% else %}none{% endif %};">[clear]</a>
+            <a href="/admin_dashboard" id="admin-search-clear" style="font-size:0.82rem;color:var(--text-2);text-decoration:none;display:{% if q %}inline{% else %}none{% endif %};">[clear]</a>
         </form>
     </div>
 
@@ -133,36 +150,36 @@
         <table id="admin-items-table">
             <thead>
                 <tr>
-                    <th>id</th>
-                    <th>type</th>
-                    <th>account</th>
+                    <th style="width:110px;">id</th>
+                    <th style="width:80px;">type</th>
+                    <th style="width:160px;">account</th>
                     <th>name / size</th>
-                    <th>views</th>
-                    <th>expires</th>
-                    <th>actions</th>
+                    <th style="width:80px;">views</th>
+                    <th style="width:120px;">expires</th>
+                    <th style="width:110px;text-align:right;">actions</th>
                 </tr>
             </thead>
             <tbody>
                 {% if items %}
                 {% for i in items %}
                 <tr data-item-row="{{ i.id }}" data-type="{{ i.type }}">
-                    <td><a href="/v/{{ i.id }}" target="_blank">{{ i.id }}</a></td>
-                    <td>{{ i.type }}</td>
-                    <td>{% if i.account_id %}{{ i.account_id }}{% else %}<span style="color:var(--text-3)">anon</span>{% endif %}</td>
-                    <td>{% if i.type == 'file' %}{{ i.filename }}{% else %}paste{% endif %} · {{ (i.size / 1024) | round(1) }} kb</td>
-                    <td>{{ i.views }}</td>
+                    <td><a href="/v/{{ i.id }}" target="_blank" style="font-weight:600;">{{ i.id }}</a></td>
+                    <td><span class="badge {% if i.type == 'paste' %}blue-subtle{% else %}muted{% endif %}">{{ i.type }}</span></td>
+                    <td>{% if i.account_id %}<code style="font-size:0.78rem;color:var(--text-2);">{{ i.account_id }}</code>{% else %}<span style="color:var(--text-3)">anon</span>{% endif %}</td>
+                    <td style="color:var(--text-1);">{% if i.type == 'file' %}{{ i.filename }}{% else %}paste{% endif %} <span style="color:var(--text-3);font-size:0.78rem;">· {{ (i.size / 1024) | round(1) }} kb</span></td>
+                    <td style="font-variant-numeric:tabular-nums;">{{ i.views }}</td>
                     <td>
                         {% if i.expires_at > 2000000000 %}
-                        <span style="color:var(--green);">never</span>
+                        <span style="color:var(--green);font-weight:500;">never</span>
                         {% else %}
                         <script>document.write(new Date({{ i.expires_at }} * 1000).toLocaleDateString())</script>
                         {% endif %}
                     </td>
-                    <td style="white-space:nowrap;">
-                        <form action="/admin/delete_item/{{ i.id }}" method="post" class="form-inline" onsubmit="return confirm('delete {{ i.id }}?');">
+                    <td style="white-space:nowrap;text-align:right;">
+                        <form action="/admin/delete_item/{{ i.id }}" method="post" class="form-inline" onsubmit="return confirm('delete {{ i.id }}?');" style="margin:0;display:inline-block;">
                             <button type="submit" class="btn-small">del</button>
                         </form>
-                        <form action="/admin/takedown_item/{{ i.id }}" method="post" class="form-inline" onsubmit="return confirm('ban {{ i.id }}?');">
+                        <form action="/admin/takedown_item/{{ i.id }}" method="post" class="form-inline" onsubmit="return confirm('ban {{ i.id }}?');" style="margin:0;display:inline-block;">
                             <input type="hidden" name="reason" value="Admin Takedown / TOS Violation">
                             <button type="submit" class="btn-small danger">ban</button>
                         </form>
@@ -170,39 +187,39 @@
                 </tr>
                 {% endfor %}
                 {% else %}
-                <tr><td colspan="7" style="text-align:center;color:var(--text-3);padding:24px;">no items hosted.</td></tr>
+                <tr><td colspan="7" style="text-align:center;color:var(--text-3);padding:32px;">no items hosted.</td></tr>
                 {% endif %}
             </tbody>
         </table>
     </div>
 </div>
 
-<hr>
-
-<!-- Accounts -->
-<div class="section">
-    <h3>registered accounts</h3>
+<!-- Registered Accounts -->
+<div class="section-card">
+    <div class="section-card-header">
+        <h3>registered accounts <span class="count-pill">({{ accounts|length }})</span></h3>
+    </div>
     {% if accounts %}
     <div class="table-wrapper">
         <table>
             <thead>
                 <tr>
-                    <th>account id</th>
-                    <th>created</th>
-                    <th>items</th>
+                    <th style="width:200px;">account id</th>
+                    <th style="width:140px;">created</th>
+                    <th style="width:100px;">items</th>
                     <th>storage</th>
-                    <th>action</th>
+                    <th style="width:90px;text-align:right;">action</th>
                 </tr>
             </thead>
             <tbody>
                 {% for a in accounts %}
                 <tr data-account-row="{{ a.account_id }}">
-                    <td><code>{{ a.account_id }}</code></td>
+                    <td><code style="font-weight:600;color:var(--blue);">{{ a.account_id }}</code></td>
                     <td><script>document.write(new Date({{ a.created_at }} * 1000).toLocaleDateString())</script></td>
-                    <td>{{ a.item_count }}</td>
-                    <td>{% if a.total_size %}{{ (a.total_size / 1048576) | round(2) }} mb{% else %}0 mb{% endif %}</td>
-                    <td>
-                        <form action="/admin/delete_account/{{ a.account_id }}" method="post" class="form-inline" onsubmit="return confirm('delete account {{ a.account_id }} and all {{ a.item_count }} files?');">
+                    <td style="font-variant-numeric:tabular-nums;color:var(--text-1);">{{ a.item_count }}</td>
+                    <td style="font-variant-numeric:tabular-nums;color:var(--text-2);">{% if a.total_size %}{{ (a.total_size / 1048576) | round(2) }} mb{% else %}0 mb{% endif %}</td>
+                    <td style="text-align:right;">
+                        <form action="/admin/delete_account/{{ a.account_id }}" method="post" class="form-inline" onsubmit="return confirm('delete account {{ a.account_id }} and all {{ a.item_count }} files?');" style="margin:0;display:inline-block;">
                             <button type="submit" class="btn-small danger">delete</button>
                         </form>
                     </td>
@@ -212,7 +229,7 @@
         </table>
     </div>
     {% else %}
-    <p>no registered accounts.</p>
+    <p style="padding:24px 18px;margin:0;color:var(--text-3);font-size:0.88rem;">no registered accounts.</p>
     {% endif %}
 </div>
 
@@ -477,12 +494,12 @@
                 '<td>' + nameText + '</td>' +
                 '<td>' + i.views + '</td>' +
                 '<td>' + expiresText + '</td>' +
-                '<td style="white-space:nowrap;">' +
-                '<form action="/admin/delete_item/' + encodeURIComponent(i.id) + '" method="post" class="form-inline" onsubmit="return confirm(\'delete ' + escapeHtml(i.id) + '?\');">' +
+                '<td style="white-space:nowrap;text-align:right;">' +
+                '<form action="/admin/delete_item/' + encodeURIComponent(i.id) + '" method="post" class="form-inline" onsubmit="return confirm(\'delete ' + escapeHtml(i.id) + '?\');" style="margin:0;display:inline-block;">' +
                 '<input type="hidden" name="admin_csrf" value="' + csrfToken + '">' +
                 '<button type="submit" class="btn-small">del</button>' +
                 '</form> ' +
-                '<form action="/admin/takedown_item/' + encodeURIComponent(i.id) + '" method="post" class="form-inline" onsubmit="return confirm(\'ban ' + escapeHtml(i.id) + '?\');">' +
+                '<form action="/admin/takedown_item/' + encodeURIComponent(i.id) + '" method="post" class="form-inline" onsubmit="return confirm(\'ban ' + escapeHtml(i.id) + '?\');" style="margin:0;display:inline-block;">' +
                 '<input type="hidden" name="admin_csrf" value="' + csrfToken + '">' +
                 '<input type="hidden" name="reason" value="Admin Takedown / TOS Violation">' +
                 '<button type="submit" class="btn-small danger">ban</button>' +

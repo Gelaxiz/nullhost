@@ -3,6 +3,7 @@ package handlers
 import (
 	"crypto/subtle"
 	"fmt"
+	"math"
 	"net/http"
 	"strconv"
 	"strings"
@@ -243,13 +244,19 @@ func (s *Server) HandleAdminDashboard(w http.ResponseWriter, r *http.Request) {
 		rows.Close()
 	}
 
+	totalSizeMB := float64(0)
+	if totalSize > 0 {
+		totalSizeMB = math.Round((float64(totalSize)/1048576.0)*100) / 100
+	}
+
 	stats := map[string]any{
-		"items_count":  itemsCount,
-		"files_count":  filesCount,
-		"pastes_count": pastesCount,
-		"accs_count":   accsCount,
-		"tomb_count":   tombCount,
-		"total_size":   totalSize,
+		"items_count":   itemsCount,
+		"files_count":   filesCount,
+		"pastes_count":  pastesCount,
+		"accs_count":    accsCount,
+		"tomb_count":    tombCount,
+		"total_size":    totalSize,
+		"total_size_mb": fmt.Sprintf("%.2f", totalSizeMB),
 	}
 
 	// Fetch accounts
