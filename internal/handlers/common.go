@@ -60,6 +60,12 @@ func (s *Server) JSON(w http.ResponseWriter, status int, v any) {
 	_ = json.NewEncoder(w).Encode(v)
 }
 
+// ReadJSON reads and decodes JSON from request body into dest
+func (s *Server) ReadJSON(r *http.Request, dest any) error {
+	defer r.Body.Close()
+	return json.NewDecoder(r.Body).Decode(dest)
+}
+
 // Error writes a plain text error
 func (s *Server) Error(w http.ResponseWriter, status int, msg string) {
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")

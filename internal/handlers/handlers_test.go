@@ -276,3 +276,76 @@ func TestHandlers_AccountLifecycleAndNuke(t *testing.T) {
 		t.Errorf("expected 404 on nuked item, got %d", dlRec.Code)
 	}
 }
+
+func TestHandlers_SearchAndAdminLogout(t *testing.T) {
+	srv, cleanup := setupTestServer(t)
+	defer cleanup()
+
+	// 1. GET /admin/logout -> 302 to /admin
+	req := httptest.NewRequest(http.MethodGet, "/admin/logout", nil)
+	rec := httptest.NewRecorder()
+	srv.Router.ServeHTTP(rec, req)
+	if rec.Code != http.StatusFound || rec.Header().Get("Location") != "/admin" {
+		t.Errorf("expected 302 to /admin on logout, got %d, loc=%s", rec.Code, rec.Header().Get("Location"))
+	}
+
+	// 2. POST /admin/logout -> 302 to /admin
+	req2 := httptest.NewRequest(http.MethodPost, "/admin/logout", nil)
+	rec2 := httptest.NewRecorder()
+	srv.Router.ServeHTTP(rec2, req2)
+	if rec2.Code != http.StatusFound || rec2.Header().Get("Location") != "/admin" {
+		t.Errorf("expected 302 to /admin on logout POST, got %d, loc=%s", rec2.Code, rec2.Header().Get("Location"))
+	}
+
+	// 3. GET /search?id=!admin -> 302 to /admin
+	reqSearchAdmin := httptest.NewRequest(http.MethodGet, "/search?id=!admin", nil)
+	recSearchAdmin := httptest.NewRecorder()
+	srv.Router.ServeHTTP(recSearchAdmin, reqSearchAdmin)
+	if recSearchAdmin.Code != http.StatusFound || recSearchAdmin.Header().Get("Location") != "/admin" {
+		t.Errorf("expected 302 to /admin, got %d, loc=%s", recSearchAdmin.Code, recSearchAdmin.Header().Get("Location"))
+	}
+
+	// 4. GET /search?id=test1234 -> 302 to /v/test1234
+	reqSearchItem := httptest.NewRequest(http.MethodGet, "/search?id=test1234", nil)
+	recSearchItem := httptest.NewRecorder()
+	srv.Router.ServeHTTP(recSearchItem, reqSearchItem)
+	if recSearchItem.Code != http.StatusFound || recSearchItem.Header().Get("Location") != "/v/test1234" {
+		t.Errorf("expected 302 to /v/test1234, got %d, loc=%s", recSearchItem.Code, recSearchItem.Header().Get("Location"))
+	}
+}
+
+func TestHandlers_CollectionsAndQREndpoints(t *testing.T) {
+	srv, cleanup := setupTestServer(t)
+	defer cleanup()
+
+	// 1. POST /collections/init_batch
+	initReq := httptest.NewRequest(http.MethodPost, "/collections/init_batch", strings.NewReader("name=TestBatch&custom_id=mybatch"))
+	initReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	initRec := httptest.NewRecorder()
+	srv.Router.ServeHTTP(initRec, initReq)
+	if initRec.Code != http.StatusOK {
+		t.Fatalf("expected 200 on init_batch, got %d: %s", initRec.Code, initRec.Body.String())
+	}
+
+	var batchRes map[string]any
+	_ = json.Unmarshal(initRec.Body.Bytes(), &batchRes)
+	if batchRes["id"] != "mybatch" {
+		t.Errorf("expected id mybatch, got %v", batchRes["id"])
+	}
+
+	// 2. GET /c/mybatch/qr.png
+	qrReq := httptest.NewRequest(http.MethodGet, "/c/mybatch/qr.png", nil)
+	qrRec := httptest.NewRecorder()
+	srv.Router.ServeHTTP(qrRec, qrReq)
+	if qrRec.Code != http.StatusOK || qrRec.Header().Get("Content-Type") != "image/png" {
+		t.Errorf("expected 200 image/png for collection QR, got %d, ct=%s", qrRec.Code, qrRec.Header().Get("Content-Type"))
+	}
+
+	// 3. GET /api/mobile/public
+	pubReq := httptest.NewRequest(http.MethodGet, "/api/mobile/public", nil)
+	pubRec := httptest.NewRecorder()
+	srv.Router.ServeHTTP(pubRec, pubReq)
+	if pubRec.Code != http.StatusOK {
+		t.Errorf("expected 200 for /api/mobile/public, got %d", pubRec.Code)
+	}
+}

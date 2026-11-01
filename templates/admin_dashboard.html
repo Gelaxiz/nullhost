@@ -218,14 +218,7 @@
 
 <script>
 (function() {
-    var justLoggedIn = {{ just_logged_in|tojson }};
-    if (justLoggedIn) {
-        sessionStorage.setItem('nullhost_admin_active', '1');
-    } else if (!sessionStorage.getItem('nullhost_admin_active')) {
-        // Tab was closed or opened without logging in -> clear and redirect
-        window.location.replace('/admin/logout');
-        return;
-    }
+    sessionStorage.setItem('nullhost_admin_active', '1');
 
     window.nullhostInternalNav = false;
 

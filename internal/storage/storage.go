@@ -266,3 +266,14 @@ func DeleteFile(destPath string) error {
 	}
 	return os.Remove(destPath)
 }
+
+// FileExists returns true if the specified path exists and is not a directory
+func FileExists(path string) bool {
+	fi, err := os.Stat(path)
+	return err == nil && !fi.IsDir()
+}
+
+// MoveFile renames or moves a file from src to dest
+func MoveFile(src, dest string) error {
+	return os.Rename(src, dest)
+}

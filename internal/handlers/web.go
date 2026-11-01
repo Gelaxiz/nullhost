@@ -52,6 +52,7 @@ func (s *Server) routes() {
 	r.Get("/dmca", s.HandleDMCA)
 	r.Get("/about", s.HandleAbout)
 	r.Get("/app", s.HandleAppPage)
+	r.Get("/search", s.HandleSearch)
 
 	// API Endpoints (Nokia J2ME, Symbian & Desktop client compatible)
 	r.Get("/api/version", s.HandleAPIVersion)
@@ -60,10 +61,14 @@ func (s *Server) routes() {
 	r.Get("/api/check_id/{check_id}", s.HandleCheckID)
 	r.Post("/api/mobile/auth", s.HandleMobileAuth)
 	r.Get("/api/mobile/items", s.HandleMobileItems)
+	r.Get("/api/mobile/public", s.HandleMobilePublic)
 	r.Post("/api/mobile/upload", s.HandleUpload)
 	r.Post("/api/mobile/delete", s.HandleMobileDelete)
+	r.Get("/api/mobile/item/{id}", s.HandleMobileItemLookup)
+	r.Get("/api/mobile/preview/{id}", s.HandleMobilePreview)
 	r.Post("/api/delete", s.HandleMobileDelete)
 	r.Get("/api/client/update", s.HandleClientUpdate)
+	r.Post("/api/items/delete-uploaded", s.HandleItemsDeleteSelected)
 
 	// Upload routes
 	r.Post("/upload", s.HandleUpload)
@@ -84,13 +89,30 @@ func (s *Server) routes() {
 		s.HandleRawAndDownload(w, req, true)
 	})
 	r.Get("/v/{id}", s.HandleOverview)
+	r.Get("/v/{id}/qr.png", s.HandleItemQR)
 	r.Get("/v/{id}/{filename}", s.HandleOverview)
+	r.Get("/v/{id}/{filename}/download", func(w http.ResponseWriter, req *http.Request) {
+		s.HandleRawAndDownload(w, req, true)
+	})
 
 	// Collection routes
 	r.Get("/collections", s.HandleCollectionsList)
 	r.Post("/collections", s.HandleCollectionCreate)
+	r.Post("/collections/init_batch", s.HandleCollectionInitBatch)
+	r.Post("/collections/auto", s.HandleCollectionAuto)
+	r.Post("/collections/add-items", s.HandleCollectionAddItems)
+	r.Post("/collections/{id}/name", s.HandleCollectionRenameJSON)
+	r.Post("/collections/{id}/items", s.HandleCollectionAddItems)
+	r.Post("/collections/{id}/items/move", s.HandleCollectionItemsMove)
+	r.Post("/collections/{id}/items/remove-selected", s.HandleCollectionItemsRemoveSelected)
+	r.Post("/collections/{id}/items/{item_id}/rename", s.HandleCollectionItemRename)
+	r.Post("/collections/{id}/items/{item_id}/remove", s.HandleCollectionItemRemove)
+	r.Post("/collections/{id}/settings", s.HandleCollectionSettings)
+	r.Post("/collections/{id}/delete", s.HandleCollectionDelete)
 	r.Get("/c/{id}", s.HandleCollectionView)
+	r.Get("/c/{id}/qr.png", s.HandleCollectionQR)
 	r.Get("/c/{id}/download.zip", s.HandleCollectionZip)
+	r.Post("/c/{id}/download.zip", s.HandleCollectionZip)
 
 	// Account Workspace routes
 	r.Get("/a", s.HandleAccountPage)
@@ -101,17 +123,29 @@ func (s *Server) routes() {
 	r.Post("/account/login", s.HandleAccountLogin)
 	r.Post("/account/logout", s.HandleAccountLogout)
 	r.Post("/account/nuke", s.HandleAccountNuke)
+	r.Get("/delete/{id}", s.HandleDeleteRoute)
+	r.Post("/delete/{id}", s.HandleDeleteRoute)
+	r.Post("/rename/{id}", s.HandleRenameRoute)
+	r.Post("/items/delete-selected", s.HandleItemsDeleteSelected)
 
 	// Admin routes
 	r.Get("/admin", s.HandleAdminGate)
 	r.Post("/admin", s.HandleAdminGate)
 	r.Get("/gelaxiz_admin_gate", s.HandleAdminGate)
 	r.Post("/gelaxiz_admin_gate", s.HandleAdminGate)
+	r.Get("/admin/logout", s.HandleAdminLogout)
+	r.Post("/admin/logout", s.HandleAdminLogout)
 	r.Get("/admin/session_check", s.HandleAdminSessionCheck)
 	r.Get("/admin_dashboard", s.HandleAdminDashboard)
 	r.Post("/admin/delete", s.HandleAdminDelete)
 	r.Post("/admin/takedown", s.HandleAdminTakedown)
 	r.Post("/admin/cleanup", s.HandleAdminCleanup)
+	r.Post("/admin/run_cleanup", s.HandleAdminCleanup)
+	r.Post("/admin/delete_item/{id}", s.HandleAdminDeleteItem)
+	r.Post("/admin/takedown_item/{id}", s.HandleAdminTakedownItem)
+	r.Post("/admin/delete_account/{id}", s.HandleAdminDeleteAccount)
+	r.Post("/admin/revoke_tombstone/{id}", s.HandleAdminRevokeTombstone)
+	r.Post("/admin/update_tombstone_reason/{id}", s.HandleAdminUpdateTombstoneReason)
 
 	// Shortcode direct link redirect (e.g. /{id})
 	r.Get("/{id}", func(w http.ResponseWriter, req *http.Request) {

@@ -2,6 +2,7 @@ package templates
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -9,7 +10,9 @@ import (
 	"sync"
 
 	"github.com/nikolalohinski/gonja/v2"
+	"github.com/nikolalohinski/gonja/v2/builtins"
 	"github.com/nikolalohinski/gonja/v2/exec"
+	"github.com/nikolalohinski/gonja/v2/loaders"
 	"nullhost/internal/config"
 )
 
@@ -28,10 +31,29 @@ type Renderer struct {
 
 func NewRenderer(cfg *config.Config) *Renderer {
 	tplDir := "templates"
-	if _, err := os.Stat(tplDir); os.IsNotExist(err) {
-		if _, err := os.Stat(filepath.Join("..", "templates")); err == nil {
-			tplDir = filepath.Join("..", "templates")
+	for _, cand := range []string{"templates", "../templates", "../../templates", "/home/projects/nullhost/templates"} {
+		if _, err := os.Stat(filepath.Join(cand, "base.html")); err == nil {
+			if abs, err := filepath.Abs(cand); err == nil {
+				tplDir = abs
+			} else {
+				tplDir = cand
+			}
+			break
 		}
+	}
+
+	gonja.DefaultLoader = loaders.MustNewFileSystemLoader(tplDir)
+	if !builtins.Filters.Exists("tojson") {
+		_ = builtins.Filters.Register("tojson", func(e *exec.Evaluator, in *exec.Value, params *exec.VarArgs) *exec.Value {
+			if in == nil || in.IsNil() {
+				return exec.AsSafeValue("null")
+			}
+			b, err := json.Marshal(in.Interface())
+			if err != nil {
+				return exec.AsSafeValue("null")
+			}
+			return exec.AsSafeValue(string(b))
+		})
 	}
 
 	urlForMacro := exec.Macro(func(params *exec.VarArgs) *exec.Value {
@@ -93,15 +115,17 @@ func NewRenderer(cfg *config.Config) *Renderer {
 
 // Render executes a Jinja2 template and writes the result to w
 func (r *Renderer) Render(w io.Writer, templateName string, data map[string]any) error {
-	fullPath := filepath.Join(r.templateDir, templateName)
-
 	var tpl *exec.Template
 	if val, ok := r.cache.Load(templateName); ok {
 		tpl = val.(*exec.Template)
 	} else {
-		parsed, err := gonja.FromFile(fullPath)
+		parsed, err := gonja.FromFile(templateName)
 		if err != nil {
-			return fmt.Errorf("failed to parse template %s: %w", templateName, err)
+			fullPath := filepath.Join(r.templateDir, templateName)
+			parsed, err = gonja.FromFile(fullPath)
+			if err != nil {
+				return fmt.Errorf("failed to parse template %s: %w", templateName, err)
+			}
 		}
 		r.cache.Store(templateName, parsed)
 		tpl = parsed

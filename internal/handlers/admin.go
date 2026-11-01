@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/go-chi/chi/v5"
 	"nullhost/internal/auth"
 	"nullhost/internal/cleanup"
 	"nullhost/internal/storage"
@@ -251,22 +252,245 @@ func (s *Server) HandleAdminDashboard(w http.ResponseWriter, r *http.Request) {
 		"total_size":   totalSize,
 	}
 
+	// Fetch accounts
+	type DashboardAccount struct {
+		AccountID string `json:"account_id"`
+		CreatedAt int64  `json:"created_at"`
+		ItemCount int64  `json:"item_count"`
+		TotalSize int64  `json:"total_size"`
+	}
+	var accounts []DashboardAccount
+	accRows, err := s.DB.Conn().QueryContext(ctx, `
+		SELECT a.account_id, COALESCE(a.created_at, 0), COUNT(i.id), COALESCE(SUM(i.size), 0)
+		FROM accounts a
+		LEFT JOIN items i ON a.account_id = i.account_id
+		GROUP BY a.account_id
+		ORDER BY a.created_at DESC LIMIT 50`)
+	if err == nil {
+		for accRows.Next() {
+			var a DashboardAccount
+			if err := accRows.Scan(&a.AccountID, &a.CreatedAt, &a.ItemCount, &a.TotalSize); err == nil {
+				accounts = append(accounts, a)
+			}
+		}
+		accRows.Close()
+	}
+
+	// Fetch tombstones
+	type DashboardTombstone struct {
+		ID        string `json:"id"`
+		Reason    string `json:"reason"`
+		DeletedAt int64  `json:"deleted_at"`
+		ExpiresAt int64  `json:"expires_at"`
+	}
+	var tombstones []DashboardTombstone
+	tombRows, err := s.DB.Conn().QueryContext(ctx, `
+		SELECT id, COALESCE(reason, ''), COALESCE(deleted_at, 0), COALESCE(expires_at, 0)
+		FROM tombstones
+		ORDER BY deleted_at DESC LIMIT 50`)
+	if err == nil {
+		for tombRows.Next() {
+			var t DashboardTombstone
+			if err := tombRows.Scan(&t.ID, &t.Reason, &t.DeletedAt, &t.ExpiresAt); err == nil {
+				tombstones = append(tombstones, t)
+			}
+		}
+		tombRows.Close()
+	}
+
 	if r.URL.Query().Get("format") == "json" || r.Header.Get("Accept") == "application/json" {
 		s.JSON(w, http.StatusOK, map[string]any{
-			"status": "ok",
-			"stats":  stats,
-			"items":  items,
-			"q":      q,
+			"status":     "ok",
+			"stats":      stats,
+			"items":      items,
+			"accounts":   accounts,
+			"tombstones": tombstones,
+			"q":          q,
 		})
 		return
 	}
 
 	s.RenderHTML(w, http.StatusOK, "admin_dashboard.html", map[string]any{
-		"stats": stats,
-		"items": items,
-		"now":   now,
-		"q":     q,
+		"stats":          stats,
+		"items":          items,
+		"accounts":       accounts,
+		"tombstones":     tombstones,
+		"now":            now,
+		"q":              q,
+		"just_logged_in": true,
+		"admin_csrf":     "nullhost-admin-authenticated",
 	})
+}
+
+// HandleAdminLogout handles GET and POST /admin/logout
+func (s *Server) HandleAdminLogout(w http.ResponseWriter, r *http.Request) {
+	sess := s.GetSession(r)
+	sess.IsAdmin = false
+	sess.AuthTime = 0
+	s.SetSession(w, r, sess)
+	if r.URL.Query().Get("format") == "json" || strings.Contains(r.Header.Get("Accept"), "application/json") {
+		s.JSON(w, http.StatusOK, map[string]any{"status": "ok", "message": "logged out"})
+		return
+	}
+	http.Redirect(w, r, "/admin", http.StatusFound)
+}
+
+// HandleAdminDeleteItem handles POST /admin/delete_item/{id}
+func (s *Server) HandleAdminDeleteItem(w http.ResponseWriter, r *http.Request) {
+	sess := s.GetSession(r)
+	if !sess.IsAdmin {
+		s.Error(w, http.StatusUnauthorized, "admin access required")
+		return
+	}
+
+	id := chi.URLParam(r, "id")
+	if id == "" {
+		_ = r.ParseForm()
+		id = strings.TrimSpace(r.FormValue("id"))
+	}
+	if id == "" {
+		s.Error(w, http.StatusBadRequest, "id required")
+		return
+	}
+
+	item, err := s.DB.GetItem(r.Context(), id)
+	if err == nil && item != nil && item.Type == "file" && item.Filename != "" {
+		_ = storage.DeleteFile(storage.FilePath(s.UploadDir, item.ID, item.Filename))
+	}
+
+	_ = s.DB.DeleteItem(r.Context(), id)
+
+	if r.URL.Query().Get("format") == "json" || strings.Contains(r.Header.Get("Accept"), "application/json") || r.Header.Get("X-Requested-With") == "XMLHttpRequest" {
+		s.JSON(w, http.StatusOK, map[string]any{
+			"status":  "ok",
+			"message": fmt.Sprintf("Item %s deleted and ID permanently retired", id),
+		})
+		return
+	}
+	http.Redirect(w, r, "/admin_dashboard", http.StatusFound)
+}
+
+// HandleAdminTakedownItem handles POST /admin/takedown_item/{id}
+func (s *Server) HandleAdminTakedownItem(w http.ResponseWriter, r *http.Request) {
+	sess := s.GetSession(r)
+	if !sess.IsAdmin {
+		s.Error(w, http.StatusUnauthorized, "admin access required")
+		return
+	}
+
+	id := chi.URLParam(r, "id")
+	_ = r.ParseForm()
+	if id == "" {
+		id = strings.TrimSpace(r.FormValue("id"))
+	}
+	reason := strings.TrimSpace(r.FormValue("reason"))
+	if reason == "" {
+		reason = "Admin Takedown / TOS Violation"
+	}
+
+	item, err := s.DB.GetItem(r.Context(), id)
+	if err == nil && item != nil && item.Type == "file" && item.Filename != "" {
+		_ = storage.DeleteFile(storage.FilePath(s.UploadDir, item.ID, item.Filename))
+	}
+
+	_ = s.DB.TakedownItem(r.Context(), id, reason, 30)
+
+	if r.URL.Query().Get("format") == "json" || strings.Contains(r.Header.Get("Accept"), "application/json") || r.Header.Get("X-Requested-With") == "XMLHttpRequest" {
+		s.JSON(w, http.StatusOK, map[string]any{
+			"status":  "ok",
+			"message": fmt.Sprintf("Item %s taken down: %s", id, reason),
+		})
+		return
+	}
+	http.Redirect(w, r, "/admin_dashboard", http.StatusFound)
+}
+
+// HandleAdminDeleteAccount handles POST /admin/delete_account/{id}
+func (s *Server) HandleAdminDeleteAccount(w http.ResponseWriter, r *http.Request) {
+	sess := s.GetSession(r)
+	if !sess.IsAdmin {
+		s.Error(w, http.StatusUnauthorized, "admin access required")
+		return
+	}
+
+	accID := chi.URLParam(r, "id")
+	if accID == "" {
+		_ = r.ParseForm()
+		accID = strings.TrimSpace(r.FormValue("account_id"))
+	}
+
+	// Delete physical files and retire IDs
+	rows, err := s.DB.Conn().QueryContext(r.Context(), "SELECT id, filename, type FROM items WHERE account_id = ?", accID)
+	if err == nil {
+		for rows.Next() {
+			var itID, fname, itType string
+			if rows.Scan(&itID, &fname, &itType) == nil {
+				if itType == "file" && fname != "" {
+					_ = storage.DeleteFile(storage.FilePath(s.UploadDir, itID, fname))
+				}
+				_ = s.DB.RetireID(r.Context(), itID)
+			}
+		}
+		rows.Close()
+	}
+
+	_, _ = s.DB.Conn().ExecContext(r.Context(), "DELETE FROM items WHERE account_id = ?", accID)
+	_, _ = s.DB.Conn().ExecContext(r.Context(), "DELETE FROM collections WHERE account_id = ?", accID)
+	_, _ = s.DB.Conn().ExecContext(r.Context(), "DELETE FROM accounts WHERE account_id = ?", accID)
+
+	if r.URL.Query().Get("format") == "json" || strings.Contains(r.Header.Get("Accept"), "application/json") || r.Header.Get("X-Requested-With") == "XMLHttpRequest" {
+		s.JSON(w, http.StatusOK, map[string]any{"status": "ok", "message": "Account deleted"})
+		return
+	}
+	http.Redirect(w, r, "/admin_dashboard", http.StatusFound)
+}
+
+// HandleAdminRevokeTombstone handles POST /admin/revoke_tombstone/{id}
+func (s *Server) HandleAdminRevokeTombstone(w http.ResponseWriter, r *http.Request) {
+	sess := s.GetSession(r)
+	if !sess.IsAdmin {
+		s.Error(w, http.StatusUnauthorized, "admin access required")
+		return
+	}
+
+	id := chi.URLParam(r, "id")
+	if id == "" {
+		_ = r.ParseForm()
+		id = strings.TrimSpace(r.FormValue("id"))
+	}
+
+	_, _ = s.DB.Conn().ExecContext(r.Context(), "DELETE FROM tombstones WHERE id = ?", id)
+
+	if r.URL.Query().Get("format") == "json" || strings.Contains(r.Header.Get("Accept"), "application/json") || r.Header.Get("X-Requested-With") == "XMLHttpRequest" {
+		s.JSON(w, http.StatusOK, map[string]any{"status": "ok", "message": "Tombstone revoked"})
+		return
+	}
+	http.Redirect(w, r, "/admin_dashboard", http.StatusFound)
+}
+
+// HandleAdminUpdateTombstoneReason handles POST /admin/update_tombstone_reason/{id}
+func (s *Server) HandleAdminUpdateTombstoneReason(w http.ResponseWriter, r *http.Request) {
+	sess := s.GetSession(r)
+	if !sess.IsAdmin {
+		s.Error(w, http.StatusUnauthorized, "admin access required")
+		return
+	}
+
+	id := chi.URLParam(r, "id")
+	_ = r.ParseForm()
+	if id == "" {
+		id = strings.TrimSpace(r.FormValue("id"))
+	}
+	reason := strings.TrimSpace(r.FormValue("reason"))
+	if reason != "" {
+		_, _ = s.DB.Conn().ExecContext(r.Context(), "UPDATE tombstones SET reason = ? WHERE id = ?", reason, id)
+	}
+
+	if r.URL.Query().Get("format") == "json" || strings.Contains(r.Header.Get("Accept"), "application/json") || r.Header.Get("X-Requested-With") == "XMLHttpRequest" {
+		s.JSON(w, http.StatusOK, map[string]any{"status": "ok", "message": "Tombstone updated"})
+		return
+	}
+	http.Redirect(w, r, "/admin_dashboard", http.StatusFound)
 }
 
 // HandleAdminDelete handles POST /admin/delete
@@ -335,7 +559,7 @@ func (s *Server) HandleAdminTakedown(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// HandleAdminCleanup handles POST /admin/cleanup
+// HandleAdminCleanup handles POST /admin/cleanup and POST /admin/run_cleanup
 func (s *Server) HandleAdminCleanup(w http.ResponseWriter, r *http.Request) {
 	sess := s.GetSession(r)
 	if !sess.IsAdmin {
@@ -349,8 +573,12 @@ func (s *Server) HandleAdminCleanup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.JSON(w, http.StatusOK, map[string]any{
-		"status":        "ok",
-		"cleaned_count": count,
-	})
+	if r.URL.Query().Get("format") == "json" || strings.Contains(r.Header.Get("Accept"), "application/json") || r.Header.Get("X-Requested-With") == "XMLHttpRequest" {
+		s.JSON(w, http.StatusOK, map[string]any{
+			"status":        "ok",
+			"cleaned_count": count,
+		})
+		return
+	}
+	http.Redirect(w, r, "/admin_dashboard", http.StatusFound)
 }
