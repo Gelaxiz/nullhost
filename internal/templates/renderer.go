@@ -13,6 +13,12 @@ import (
 	"nullhost/internal/config"
 )
 
+var bufPool = sync.Pool{
+	New: func() any {
+		return new(bytes.Buffer)
+	},
+}
+
 type Renderer struct {
 	cfg         *config.Config
 	templateDir string
@@ -117,11 +123,14 @@ func (r *Renderer) Render(w io.Writer, templateName string, data map[string]any)
 	}
 
 	ctx := exec.NewContext(merged)
-	var buf bytes.Buffer
-	if err := tpl.Execute(&buf, ctx); err != nil {
+	buf := bufPool.Get().(*bytes.Buffer)
+	buf.Reset()
+	defer bufPool.Put(buf)
+
+	if err := tpl.Execute(buf, ctx); err != nil {
 		return fmt.Errorf("failed to execute template %s: %w", templateName, err)
 	}
 
-	_, err := io.Copy(w, &buf)
+	_, err := io.Copy(w, buf)
 	return err
 }

@@ -12,7 +12,7 @@ Authoritative port configuration is maintained in `kaytetyt_portit.txt` and on t
 
 | Port | Protocol / Bind | Public Hostname | Service / Path | Description & Technology |
 |---|---|---|---|---|
-| **4443** | TCP 127.0.0.1 | `nullhost.gelaxiz.xyz`<br>`nullhost.cc` | `nullhost.service`<br>`/home/projects/nullhost` | Nullhost v1.9.9 (Python Flask, Gunicorn 2 workers + 8 threads, SQLite WAL mode, J2ME / Symbian client API) |
+| **4443** | TCP 127.0.0.1 | `nullhost.gelaxiz.xyz`<br>`nullhost.cc` | `nullhost.service`<br>`/home/projects/nullhost` | Nullhost v2.0 (High-Performance Go micro-service, Chi v5, Gonja Jinja2 template rendering, SQLite WAL mode, J2ME / Symbian client API, ~5 MB RAM) |
 | **4970** | TCP 127.0.0.1 | *Internal only* | `ytdlp-web.service` | Outbound media proxy for YT-DLP downloader |
 | **4989** | TCP 127.0.0.1 | `yt.gelaxiz.xyz` | `ytdlp-web.service`<br>`/home/projects/ytdlp-web-app` | YouTube and media stream downloader web interface |
 | **4991** | TCP 127.0.0.1 | `abc.gelaxiz.xyz` | `abc.service`<br>`/home/projects/abc` | ABC Retro Media & retro nostalgia platform |
@@ -73,18 +73,20 @@ Authoritative port configuration is maintained in `kaytetyt_portit.txt` and on t
 - **Permissions**: Use `MIDlet-Permissions-Opt` in `Manifest.mf` and `Nullhost.jad` so unsigned builds execute without `SecurityException`.
 - **Legacy SSL Bypass**: Nokia E71 only supports SSLv3 / TLS 1.0. Modern Cloudflare TLS 1.3 blocks it. `is_legacy_browser()` in `app.py` exempts `/api/` and `Nullhost-J2ME` clients from HTTP-to-HTTPS redirect enforcement.
 
-### G. Nullhost High-Performance Go Backend (`go-backend/`)
-- **Location**: `/home/projects/nullhost/go-backend` (compiled binary: `nullhost`)
-- **Architecture**: Modular Go (Golang) micro-architecture:
+### G. Nullhost High-Performance Go Backend
+- **Location**: `/home/projects/nullhost` (compiled binary: `nullhost`)
+- **Architecture**: Modular Go (Golang 1.23+) micro-architecture:
   - `cmd/nullhost/main.go`: Server bootstrap, WAL pragma setup, OS signal shutdown handling.
   - `internal/database/db.go`: SQLite WAL mode with modernc pure-Go driver, collision-free `GenerateID`, permanent `retired_ids` guarantee, transaction-safe takedowns.
   - `internal/auth/auth.go`: Dual PBKDF2/scrypt password hashing (matching Python Werkzeug hashes), timing-safe admin password validation, RFC 6238 TOTP verification, signed HMAC session tokens.
   - `internal/storage/storage.go`: Directory traversal prevention, safe filename/path sanitization, atomic EXIF/camera metadata scrubbing, collection streaming ZIP archive generation.
   - `internal/cleanup/worker.go`: Background ticker (10-minute pass) pruning expired uploads, orphaned files, and retiring all associated IDs.
+  - `internal/templates/renderer.go`: Jinja2 template renderer with Gonja v2, macro `url_for` support, and buffer pooling.
   - `internal/handlers/`: Chi v5 HTTP router with modular routes (`upload.go`, `download.go`, `collections.go`, `accounts.go`, `admin.go`, `mobile_api.go`, `web.go`).
-- **Compatibility**: 100% byte-for-byte and API compatible with the live Python service, database schema, and Nokia J2ME / Symbian client protocols.
-- **Test Command**: `cd /home/projects/nullhost/go-backend && ~/.local/go/bin/go test -v ./...`
-- **Build Command**: `cd /home/projects/nullhost/go-backend && ~/.local/go/bin/go build -o nullhost cmd/nullhost/main.go`
+- **Compatibility**: 100% byte-for-byte and API compatible with the database schema and Nokia J2ME / Symbian client protocols.
+- **Service**: Managed by systemd user service `nullhost.service` running directly on port `4443`.
+- **Test Command**: `cd /home/projects/nullhost && go test -v ./...`
+- **Build Command**: `cd /home/projects/nullhost && go build -ldflags="-s -w" -trimpath -o nullhost cmd/nullhost/main.go`
 
 ---
 

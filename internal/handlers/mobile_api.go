@@ -227,6 +227,9 @@ func (s *Server) HandleMobileDelete(w http.ResponseWriter, r *http.Request) {
 	_ = r.ParseForm()
 	itemID := strings.TrimSpace(r.FormValue("id"))
 	if itemID == "" {
+		itemID = strings.TrimSpace(r.FormValue("item_id"))
+	}
+	if itemID == "" {
 		s.JSON(w, http.StatusBadRequest, map[string]any{"status": "error", "message": "Missing item ID"})
 		return
 	}

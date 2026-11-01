@@ -22,14 +22,18 @@ func (s *Server) routes() {
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.GetHead)
 
-	// Static assets serving
+	// Static assets serving with Cache-Control headers
 	staticDir := "static"
 	if _, err := os.Stat(staticDir); os.IsNotExist(err) {
 		if _, err := os.Stat(filepath.Join("..", "static")); err == nil {
 			staticDir = filepath.Join("..", "static")
 		}
 	}
-	r.Handle("/static/*", http.StripPrefix("/static/", http.FileServer(http.Dir(staticDir))))
+	fileServer := http.FileServer(http.Dir(staticDir))
+	r.Handle("/static/*", http.StripPrefix("/static/", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		w.Header().Set("Cache-Control", "public, max-age=604800, stale-while-revalidate=86400")
+		fileServer.ServeHTTP(w, req)
+	})))
 
 	// Web Landing & Static
 	r.Get("/", s.HandleIndex)
@@ -53,6 +57,7 @@ func (s *Server) routes() {
 	r.Get("/api/mobile/items", s.HandleMobileItems)
 	r.Post("/api/mobile/upload", s.HandleUpload)
 	r.Post("/api/mobile/delete", s.HandleMobileDelete)
+	r.Post("/api/delete", s.HandleMobileDelete)
 	r.Get("/api/client/update", s.HandleClientUpdate)
 
 	// Upload routes

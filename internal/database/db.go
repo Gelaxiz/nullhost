@@ -68,6 +68,8 @@ func (db *DB) initPragmasAndSchema() error {
 		"PRAGMA synchronous = NORMAL;",
 		"PRAGMA busy_timeout = 5000;",
 		"PRAGMA foreign_keys = ON;",
+		"PRAGMA cache_size = -4000;",
+		"PRAGMA temp_store = MEMORY;",
 	}
 
 	for _, p := range pragmas {
@@ -140,6 +142,9 @@ func (db *DB) initPragmasAndSchema() error {
 
 	CREATE INDEX IF NOT EXISTS idx_collections_account ON collections(account_id);
 	CREATE INDEX IF NOT EXISTS idx_collection_items_item ON collection_items(item_id);
+	CREATE INDEX IF NOT EXISTS idx_items_expires ON items(expires_at);
+	CREATE INDEX IF NOT EXISTS idx_items_account_created ON items(account_id, created_at);
+	CREATE INDEX IF NOT EXISTS idx_tombstones_expires ON tombstones(expires_at);
 	`
 
 	if _, err := db.conn.Exec(schema); err != nil {
